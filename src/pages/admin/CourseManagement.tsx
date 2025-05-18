@@ -13,6 +13,18 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { 
+  Play, 
+  Edit, 
+  Trash2, 
+  Video, 
+  GripVertical, 
+  Plus,
+  ArrowUp,
+  ArrowDown
+} from "lucide-react";
+import { toast } from "@/components/ui/use-toast";
 
 const defaultForm: TablesInsert<'courses'> = {
   title: '',
@@ -413,6 +425,187 @@ const CourseManagement = () => {
     });
   };
 
+  // 章节排序后的处理函数
+  const reorderSections = async (courseId: string, sectionId: string, newOrder: number) => {
+    try {
+      await supabase
+        .from('course_sections')
+        .update({ order: newOrder })
+        .eq('id', sectionId);
+      return true;
+    } catch (error) {
+      console.error('重新排序失败:', error);
+      return false;
+    }
+  };
+
+  // 处理章节拖拽结束事件
+  const handleDragEnd = async (result: any, courseId: string, sections: SectionWithVideo[]) => {
+    if (!result.destination) return;
+    
+    const { source, destination } = result;
+    if (source.index === destination.index) return;
+    
+    // 创建新的排序顺序
+    const reorderedSections = Array.from(sections);
+    const [removed] = reorderedSections.splice(source.index, 1);
+    reorderedSections.splice(destination.index, 0, removed);
+    
+    // 更新本地UI显示
+    const newCourses = courses.map(course => {
+      if (course.id === courseId) {
+        return {
+          ...course,
+          sections: reorderedSections.map((section, index) => ({
+            ...section,
+            order: index + 1
+          }))
+        };
+      }
+      return course;
+    });
+    setCourses(newCourses);
+    
+    // 保存到数据库
+    try {
+      // 为每个章节创建更新操作
+      const updatePromises = reorderedSections.map((section, index) => 
+        supabase
+          .from('course_sections')
+          .update({ order: index + 1 })
+          .eq('id', section.id)
+      );
+      
+      await Promise.all(updatePromises);
+      toast({
+        title: "排序更新成功",
+        description: "章节顺序已更新"
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "排序更新失败",
+        description: error.message || "更新章节顺序失败"
+      });
+    }
+  };
+
+  // 向上移动章节
+  const moveSectionUp = async (courseId: string, sectionIndex: number) => {
+    if (sectionIndex === 0) return; // 已经是第一个
+    
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+    
+    const sections = [...course.sections];
+    const currentSection = sections[sectionIndex];
+    const prevSection = sections[sectionIndex - 1];
+    
+    // 交换顺序
+    const tempOrder = currentSection.order;
+    
+    // 更新本地状态
+    const newCourses = courses.map(c => {
+      if (c.id === courseId) {
+        const newSections = [...c.sections];
+        newSections[sectionIndex].order = prevSection.order;
+        newSections[sectionIndex - 1].order = tempOrder;
+        
+        // 按新顺序排序
+        newSections.sort((a, b) => a.order - b.order);
+        
+        return {
+          ...c,
+          sections: newSections
+        };
+      }
+      return c;
+    });
+    setCourses(newCourses);
+    
+    // 保存到数据库
+    try {
+      await Promise.all([
+        supabase
+          .from('course_sections')
+          .update({ order: prevSection.order })
+          .eq('id', currentSection.id),
+        supabase
+          .from('course_sections')
+          .update({ order: tempOrder })
+          .eq('id', prevSection.id)
+      ]);
+      
+      toast({
+        title: "排序更新成功",
+        description: "章节顺序已更新"
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "排序更新失败",
+        description: error.message || "更新章节顺序失败"
+      });
+    }
+  };
+  
+  // 向下移动章节
+  const moveSectionDown = async (courseId: string, sectionIndex: number) => {
+    const course = courses.find(c => c.id === courseId);
+    if (!course || sectionIndex === course.sections.length - 1) return; // 已经是最后一个
+    
+    const sections = [...course.sections];
+    const currentSection = sections[sectionIndex];
+    const nextSection = sections[sectionIndex + 1];
+    
+    // 交换顺序
+    const tempOrder = currentSection.order;
+    
+    // 更新本地状态
+    const newCourses = courses.map(c => {
+      if (c.id === courseId) {
+        const newSections = [...c.sections];
+        newSections[sectionIndex].order = nextSection.order;
+        newSections[sectionIndex + 1].order = tempOrder;
+        
+        // 按新顺序排序
+        newSections.sort((a, b) => a.order - b.order);
+        
+        return {
+          ...c,
+          sections: newSections
+        };
+      }
+      return c;
+    });
+    setCourses(newCourses);
+    
+    // 保存到数据库
+    try {
+      await Promise.all([
+        supabase
+          .from('course_sections')
+          .update({ order: nextSection.order })
+          .eq('id', currentSection.id),
+        supabase
+          .from('course_sections')
+          .update({ order: tempOrder })
+          .eq('id', nextSection.id)
+      ]);
+      
+      toast({
+        title: "排序更新成功",
+        description: "章节顺序已更新"
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive", 
+        title: "排序更新失败",
+        description: error.message || "更新章节顺序失败"
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 md:p-8">
       <div className="flex justify-between items-center mb-4">
@@ -429,52 +622,163 @@ const CourseManagement = () => {
           ) : courses.length === 0 ? (
             <div>暂无课程</div>
           ) : (
-            <Accordion type="multiple" className="w-full">
+            <Accordion type="single" collapsible className="w-full">
               {courses.map((course) => (
                 <AccordionItem value={course.id} key={course.id}>
-                  <AccordionTrigger>
-                    <div className="flex flex-col md:flex-row md:items-center w-full justify-between">
-                      <span className="font-medium text-lg">{course.title}</span>
-                      <span className="ml-2 text-sm text-muted-foreground">{statusMap[course.status] || course.status}</span>
+                  <AccordionTrigger className="hover:bg-gray-50 px-4">
+                    <div className="flex justify-between items-center w-full mr-4">
+                      <div className="text-left font-medium">{course.title}</div>
+                      <div className="text-sm px-2 py-1 rounded bg-gray-100">
+                        {course.status === 'published' ? '已发布' : '草稿'}
+                      </div>
                     </div>
                   </AccordionTrigger>
+                  
                   <AccordionContent>
                     <div className="mb-2 text-gray-700">{course.description}</div>
                     {course.sections.length === 0 ? (
                       <div className="text-muted-foreground">暂无章节</div>
                     ) : (
-                      <table className="w-full text-sm border mt-2">
-                        <thead>
-                          <tr>
-                            <th className="py-1 px-2">序号</th>
-                            <th className="py-1 px-2">章节标题</th>
-                            <th className="py-1 px-2">视频</th>
-                            <th className="py-1 px-2">操作</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {course.sections.map((section, idx) => (
-                            <tr key={section.id} className="border-b">
-                              <td className="py-1 px-2">{section.order}</td>
-                              <td className="py-1 px-2">{section.title}</td>
-                              <td className="py-1 px-2">{section.video?.title || '无视频'}</td>
-                              <td className="py-1 px-2 flex flex-wrap gap-1">
-                                {section.video?.video_url ? (
-                                  <Button size="sm" onClick={() => handlePlayVideo(section.video!.video_url, section.video!.title)}>播放</Button>
-                                ) : (
-                                  <span className="text-muted-foreground">无视频</span>
-                                )}
-                                <Button size="sm" variant="outline" onClick={() => openSectionDialog('edit', course.id, section)}>编辑</Button>
-                                <Button size="sm" variant="destructive" onClick={() => handleDeleteSection(section.id)}>删除</Button>
-                                <Button size="sm" variant="secondary" onClick={() => openVideoDialog(section.id, course.id)}>视频</Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <DragDropContext onDragEnd={(result) => handleDragEnd(result, course.id, course.sections)}>
+                        <Droppable droppableId={`course-${course.id}`}>
+                          {(provided) => (
+                            <div
+                              {...provided.droppableProps}
+                              ref={provided.innerRef}
+                              className="w-full border rounded-md overflow-hidden"
+                            >
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="py-2 px-3 text-left">排序</th>
+                                    <th className="py-2 px-3 text-left">序号</th>
+                                    <th className="py-2 px-3 text-left">章节标题</th>
+                                    <th className="py-2 px-3 text-left">视频</th>
+                                    <th className="py-2 px-3 text-left">操作</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {course.sections.map((section, idx) => (
+                                    <Draggable 
+                                      key={section.id} 
+                                      draggableId={section.id} 
+                                      index={idx}
+                                    >
+                                      {(provided, snapshot) => (
+                                        <tr 
+                                          key={section.id} 
+                                          className={`border-b ${snapshot.isDragging ? 'bg-blue-50' : ''}`}
+                                          ref={provided.innerRef}
+                                          {...provided.draggableProps}
+                                        >
+                                          <td className="py-2 px-3 w-16" {...provided.dragHandleProps}>
+                                            <div className="flex items-center gap-1">
+                                              <GripVertical className="w-4 h-4 text-gray-400" />
+                                              <div className="flex flex-col">
+                                                <Button 
+                                                  size="icon" 
+                                                  variant="ghost" 
+                                                  className="h-6 w-6"
+                                                  disabled={idx === 0}
+                                                  onClick={() => moveSectionUp(course.id, idx)}
+                                                >
+                                                  <ArrowUp className="h-3 w-3" />
+                                                </Button>
+                                                <Button 
+                                                  size="icon" 
+                                                  variant="ghost" 
+                                                  className="h-6 w-6"
+                                                  disabled={idx === course.sections.length - 1}
+                                                  onClick={() => moveSectionDown(course.id, idx)}
+                                                >
+                                                  <ArrowDown className="h-3 w-3" />
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          </td>
+                                          <td className="py-2 px-3">{section.order}</td>
+                                          <td className="py-2 px-3">{section.title}</td>
+                                          <td className="py-2 px-3">
+                                            {section.video?.title || '无视频'}
+                                          </td>
+                                          <td className="py-2 px-3">
+                                            <div className="flex items-center gap-1">
+                                              {section.video?.video_url ? (
+                                                <Button 
+                                                  size="sm" 
+                                                  variant="secondary"
+                                                  className="h-8 gap-1"
+                                                  onClick={() => handlePlayVideo(section.video!.video_url, section.video!.title)}
+                                                >
+                                                  <Play className="h-3 w-3" />
+                                                  <span>播放</span>
+                                                </Button>
+                                              ) : (
+                                                <Button 
+                                                  size="sm" 
+                                                  variant="outline"
+                                                  className="h-8 gap-1"
+                                                  onClick={() => openVideoDialog(section.id, course.id)}
+                                                >
+                                                  <Video className="h-3 w-3" />
+                                                  <span>添加视频</span>
+                                                </Button>
+                                              )}
+                                              
+                                              <Button 
+                                                size="sm" 
+                                                variant="outline"
+                                                className="h-8 gap-1"
+                                                onClick={() => openSectionDialog('edit', course.id, section)}
+                                              >
+                                                <Edit className="h-3 w-3" />
+                                                <span>编辑</span>
+                                              </Button>
+                                              
+                                              {section.video?.video_url && (
+                                                <Button 
+                                                  size="sm" 
+                                                  variant="outline"
+                                                  className="h-8 gap-1"
+                                                  onClick={() => openVideoDialog(section.id, course.id)}
+                                                >
+                                                  <Video className="h-3 w-3" />
+                                                  <span>更换</span>
+                                                </Button>
+                                              )}
+                                              
+                                              <Button 
+                                                size="sm" 
+                                                variant="destructive"
+                                                className="h-8 gap-1"
+                                                onClick={() => handleDeleteSection(section.id)}
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                                <span>删除</span>
+                                              </Button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </Draggable>
+                                  ))}
+                                  {provided.placeholder}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
                     )}
                     <div className="mt-4">
-                      <Button size="sm" onClick={() => openSectionDialog('add', course.id)}>新增章节</Button>
+                      <Button 
+                        size="sm" 
+                        onClick={() => openSectionDialog('add', course.id)}
+                        className="gap-1"
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span>新增章节</span>
+                      </Button>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
