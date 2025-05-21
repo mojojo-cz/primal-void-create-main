@@ -24,9 +24,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const location = useLocation();
   const isRedirecting = useRef(false);
 
+  // 根据用户类型确定重定向路径
+  const getRedirectPath = (userType: string) => {
+    switch (userType) {
+      case "admin":
+        return "/admin/courses";
+      case "teacher":
+        return "/admin/accounts";
+      case "student":
+        return "/student";
+      case "registered":
+      default:
+        return "/dashboard";
+    }
+  };
+
+  // 执行重定向
+  const performRedirect = (userType: string) => {
+    const path = getRedirectPath(userType);
+    console.log(`[AUTH] 重定向用户(${userType})到:`, path);
+    navigate(path, { replace: true });
+  };
+
+  // 获取用户资料
   const fetchProfile = async (userId: string) => {
     try {
-      console.log("正在获取用户资料:", userId);
+      console.log("[AUTH] 获取用户资料:", userId);
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -34,46 +57,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .maybeSingle();
 
       if (error) {
-        console.error("获取用户资料失败:", error);
+        console.error("[AUTH] 获取用户资料失败:", error);
         throw error;
       }
       
-      console.log("成功获取用户资料:", data);
+      console.log("[AUTH] 获取到用户资料:", data);
       setProfile(data);
       
-      // 只有在获取到资料后才进行重定向
-      if (data && !isRedirecting.current) {
-        isRedirecting.current = true;
-        
-        const isAuthPage = location.pathname.includes("/auth/");
-        console.log("当前页面是否为登录页:", isAuthPage, "路径:", location.pathname);
-        
-        if (isAuthPage) {
-          console.log("准备重定向，用户类型:", data.user_type);
-          if (data.user_type === "admin") {
-            console.log("重定向到管理页面");
-            navigate("/admin");
-          } else if (data.user_type === "teacher") {
-            console.log("重定向到教师页面");
-            navigate("/teacher");
-          } else if (data.user_type === "student") {
-            console.log("重定向到学员页面");
-            navigate("/student");
-          } else {
-            console.log("重定向到用户页面");
-            navigate("/dashboard");
-          }
-        }
-        
-        // 设置延迟重置重定向标志
-        setTimeout(() => {
-          isRedirecting.current = false;
-        }, 500);
-      } else {
-        console.log("跳过重定向:", "数据是否存在:", !!data, "是否正在重定向:", isRedirecting.current);
+      // 如果在认证页面，执行重定向
+      const isAuthPage = location.pathname.startsWith("/auth/");
+      const isHomePage = location.pathname === "/";
+      
+      if (data && (isAuthPage || isHomePage)) {
+        console.log("[AUTH] 位于登录页或首页，准备重定向");
+        performRedirect(data.user_type);
       }
     } catch (error) {
-      console.error("获取资料时发生错误:", error);
+      console.error("[AUTH] 获取资料出错:", error);
     }
   };
 
@@ -81,23 +81,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 设置身份验证状态监听器
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log("身份验证状态变更:", event, session?.user?.id);
+        console.log("[AUTH] 身份验证状态变更:", event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          console.log("用户已登录，获取资料");
+          console.log("[AUTH] 用户已登录，获取资料");
             fetchProfile(session.user.id);
         } else {
-          console.log("用户未登录或已登出");
+          console.log("[AUTH] 用户未登录或已登出");
           setProfile(null);
-          // 只有在非验证页面上且未重定向时才重定向到登录页
-          if (!location.pathname.startsWith("/auth/") && !isRedirecting.current) {
-            isRedirecting.current = true;
-            navigate("/auth/login");
-            setTimeout(() => {
-              isRedirecting.current = false;
-            }, 500);
+          // 只有在非验证页面上时才重定向到登录页
+          if (!location.pathname.startsWith("/auth/")) {
+            console.log("[AUTH] 非登录页且未认证，重定向到登录页");
+            navigate("/auth/login", { replace: true });
           }
         }
       }
@@ -105,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 检查现有会话
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("检查现有会话:", !!session);
+      console.log("[AUTH] 检查现有会话:", !!session);
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -121,27 +118,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
-      console.log("注册新用户:", email);
+      console.log("[AUTH] 注册新用户，邮箱(虚拟):", email, "附加数据:", userData);
+      // The userData here is what we pass to options.data, which Supabase uses 
+      // to populate the public.profiles table via a trigger or function.
+      // Ensure userData includes all necessary fields for the profiles table, including full_name.
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: userData,
+          data: {
+            username: userData.username,
+            full_name: userData.full_name, // Ensure full_name is passed
+            phone_number: userData.phone_number,
+            user_type: userData.user_type || "registered", // Default to registered
+            // Include other optional fields if they are part of userData
+            school: userData.school,
+            department: userData.department,
+            major: userData.major,
+            grade: userData.grade,
+          },
         },
       });
 
-      if (error) throw error;
-      console.log("注册成功");
+      if (error) {
+        console.error("[AUTH] Supabase signUp 错误:", error);
+        throw error;
+      }
+      console.log("[AUTH] Supabase signUp 成功:", data);
+      
+      // Note: Supabase typically creates the profile entry via a trigger (`on_auth_user_created`).
+      // If that trigger isn't set up to handle all fields from options.data (like full_name),
+      // you might need to manually insert/update the profile here after successful signUp,
+      // or ensure the trigger handles all fields correctly.
+      // For now, assuming the trigger handles it or it's a new setup.
+
       return data;
     } catch (error: any) {
-      console.error("注册失败:", error.message);
+      console.error("[AUTH] 注册流程最终错误:", error.message);
       throw error;
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log("用户登录:", email);
+      console.log("[AUTH] 用户登录:", email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -149,28 +169,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) throw error;
       
-      console.log("登录成功，等待获取资料并重定向");
+      console.log("[AUTH] 登录成功，获取用户资料");
       
-      // 主动获取用户资料以触发重定向
+      // 获取用户资料
       if (data.user) {
-        fetchProfile(data.user.id);
+        try {
+          console.log("[AUTH] 获取登录用户资料:", data.user.id);
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", data.user.id)
+            .maybeSingle();
+            
+          if (profileError) throw profileError;
+          
+          console.log("[AUTH] 获取到用户资料:", profileData);
+          setProfile(profileData);
+          
+          // 立即执行重定向
+          if (profileData) {
+            performRedirect(profileData.user_type);
+          }
+        } catch (profileError) {
+          console.error("[AUTH] 获取资料出错:", profileError);
+        }
       }
       
       return data;
     } catch (error: any) {
-      console.error("登录失败:", error.message);
+      console.error("[AUTH] 登录失败:", error.message);
       throw error;
     }
   };
 
   const signOut = async () => {
     try {
-      console.log("用户登出");
+      console.log("[AUTH] 用户登出");
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       navigate("/auth/login");
     } catch (error: any) {
-      console.error("登出失败:", error.message);
+      console.error("[AUTH] 登出失败:", error.message);
     }
   };
 

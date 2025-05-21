@@ -21,15 +21,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Edit, Trash2, Search, X, User, Plus, FileEdit, Info } from "lucide-react";
+import { Edit, Trash2, Search, X, User, Plus, FileEdit, Info, AlertCircle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // 用户类型
 interface Profile {
   id: string;
   username: string;
+  full_name?: string;
   user_type: string;
   phone_number: string;
   school: string | null;
@@ -70,6 +72,9 @@ const AccountManagement = () => {
     username: ""
   });
 
+  // 判断当前用户是否为教师
+  const isTeacher = profile?.user_type === "teacher";
+
   // 调试日志
   const log = (message: string, data?: any) => {
     if (DEBUG_MODE) {
@@ -79,13 +84,26 @@ const AccountManagement = () => {
 
   // 获取用户列表
   const fetchProfiles = async () => {
+    if (!profile) {
+      log("用户未登录或资料未加载，跳过获取用户列表");
+      return;
+    }
+    
     setLoading(true);
     try {
-      log("开始获取用户列表");
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
+      log("开始获取用户列表，当前用户类型:", profile.user_type);
+      
+      // 准备查询
+      let query = supabase.from("profiles").select("*");
+      
+      // 如果是教师账号，在数据库查询级别进行过滤
+      if (profile.user_type === "teacher") {
+        log("教师账号查询: 添加用户类型过滤条件");
+        query = query.in("user_type", ["registered", "student"]);
+      }
+      
+      // 添加排序并执行查询
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (error) {
         log("获取用户列表失败", error);
@@ -112,21 +130,24 @@ const AccountManagement = () => {
       // 等待Supabase初始化完成
       await new Promise(resolve => setTimeout(resolve, 500));
       setAuthLoading(false);
-      
-      if (user) {
-        // 管理员信息加载完成后获取用户列表
-        fetchProfiles();
-      }
     };
     
     checkAuth();
-  }, [user]);
+  }, []);
+
+  // 监听用户资料变化，重新加载数据
+  useEffect(() => {
+    if (profile && !authLoading) {
+      log("用户资料变更，重新加载数据");
+      fetchProfiles();
+    }
+  }, [profile, authLoading]);
 
   // 编辑账号
   const handleEdit = (profile: Profile) => {
     setEditForm({
       ...profile,
-      // 确保所有可选字段都有值
+      full_name: profile.full_name || "",
       school: profile.school || "",
       department: profile.department || "",
       major: profile.major || "",
@@ -153,6 +174,15 @@ const AccountManagement = () => {
       return false;
     }
     
+    if (!editForm.full_name || editForm.full_name.trim() === "") {
+      toast({
+        variant: "destructive",
+        title: "验证失败",
+        description: "姓名不能为空"
+      });
+      return false;
+    }
+
     if (!editForm.phone_number || editForm.phone_number.trim() === "") {
       toast({
         variant: "destructive",
@@ -186,6 +216,7 @@ const AccountManagement = () => {
       // 构建更新数据，确保格式正确
       const updateData: Record<string, any> = {
         username: editForm.username?.trim(),
+        full_name: editForm.full_name?.trim(),
         user_type: editForm.user_type,
         phone_number: editForm.phone_number?.trim()
       };
@@ -294,10 +325,34 @@ const AccountManagement = () => {
 
   // 处理选择框
   const handleSelectChange = (name: string, value: string) => {
-    setEditForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setEditForm(prev => {
+      // 如果是用户类型变更，根据类型设置不同的访问过期时间
+      if (name === "user_type") {
+        const now = new Date();
+        let expiresAt = null;
+        
+        if (value === "student") {
+          // 学员设置为一年后过期
+          expiresAt = new Date(now.setFullYear(now.getFullYear() + 1));
+        } else if (value === "teacher") {
+          // 教师设置为20年后过期
+          expiresAt = new Date(now.setFullYear(now.getFullYear() + 20));
+        }
+        
+        return {
+          ...prev,
+          [name]: value,
+          // 如果选择了学员或教师，则更新过期时间
+          ...(expiresAt ? { access_expires_at: expiresAt.toISOString() } : {})
+        };
+      }
+      
+      // 其他选项正常处理
+      return {
+        ...prev,
+        [name]: value
+      };
+    });
   };
 
   // 改进日期时间处理 
@@ -323,11 +378,21 @@ const AccountManagement = () => {
     userTypeMap[profile.user_type]?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // 处理教师尝试删除账号的情况
+  const handleTeacherDeleteAttempt = (e) => {
+    e.preventDefault();
+    toast({
+      title: "操作受限",
+      description: "教师账号无权删除用户",
+      variant: "destructive"
+    });
+  };
+
   if (authLoading) {
     return <div className="container mx-auto p-4 md:p-8 text-center">加载用户信息中...</div>;
   }
 
-  if (!user || !profile || profile.user_type !== 'admin') {
+  if (!user || !profile || (profile.user_type !== 'admin' && profile.user_type !== 'teacher')) {
     return (
       <div className="container mx-auto p-4 md:p-8">
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
@@ -342,7 +407,7 @@ const AccountManagement = () => {
               <div className="text-sm text-yellow-700 mt-1">
                 {!user 
                   ? "您需要登录才能访问此页面" 
-                  : "只有管理员才能管理用户账号"}
+                  : "只有管理员和教师才能管理用户账号"}
               </div>
             </div>
           </div>
@@ -402,7 +467,7 @@ const AccountManagement = () => {
                     <th className="py-3 px-4 text-left">手机号</th>
                     <th className="py-3 px-4 text-left">用户类型</th>
                     <th className="py-3 px-4 text-left">学校</th>
-                    <th className="py-3 px-4 text-left">注册时间</th>
+                    <th className="py-3 px-4 text-left">过期时间</th>
                     <th className="py-3 px-4 text-right">操作</th>
                   </tr>
                 </thead>
@@ -417,7 +482,11 @@ const AccountManagement = () => {
                         </span>
                       </td>
                       <td className="py-3 px-4">{profile.school || "-"}</td>
-                      <td className="py-3 px-4">{new Date(profile.created_at).toLocaleDateString('zh-CN')}</td>
+                      <td className="py-3 px-4">
+                        {profile.access_expires_at ? 
+                          new Date(profile.access_expires_at).toLocaleDateString('zh-CN') : 
+                          "-"}
+                      </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2">
                           <Button
@@ -429,38 +498,63 @@ const AccountManagement = () => {
                             <FileEdit className="h-4 w-4 mr-1" />
                             编辑
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                className="h-8"
-                              >
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                删除
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>确认删除</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  确定要删除用户"{profile.username}"吗？此操作不可撤销。
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>取消</AlertDialogCancel>
-                                <AlertDialogAction 
-                                  onClick={() => setDeleteDialog({
-                                    open: true, 
-                                    profileId: profile.id, 
-                                    username: profile.username
-                                  })}
+                          
+                          {isTeacher ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    className="h-8 opacity-50 cursor-not-allowed"
+                                    onClick={handleTeacherDeleteAttempt}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                    删除
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="flex items-center">
+                                    <AlertCircle className="h-4 w-4 mr-1 text-amber-500" />
+                                    <span>教师账号无权删除用户</span>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="h-8"
                                 >
-                                  确认删除
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                  <Trash2 className="h-4 w-4 mr-1" />
+                                  删除
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    确定要删除用户"{profile.username}"吗？此操作不可撤销。
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>取消</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                    onClick={() => setDeleteDialog({
+                                      open: true, 
+                                      profileId: profile.id, 
+                                      username: profile.username
+                                    })}
+                                  >
+                                    确认删除
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -489,6 +583,15 @@ const AccountManagement = () => {
               />
             </div>
             <div>
+              <label className="block mb-1 font-medium">姓名</label>
+              <Input
+                name="full_name"
+                value={editForm.full_name || ""}
+                onChange={handleChange}
+                placeholder="请输入真实姓名"
+              />
+            </div>
+            <div>
               <label className="block mb-1 font-medium">手机号</label>
               <Input
                 name="phone_number"
@@ -509,8 +612,13 @@ const AccountManagement = () => {
                 <SelectContent>
                   <SelectItem value="registered">注册用户</SelectItem>
                   <SelectItem value="student">学员</SelectItem>
-                  <SelectItem value="teacher">教师</SelectItem>
-                  <SelectItem value="admin">管理员</SelectItem>
+                  {/* 教师只能将用户类型设为注册用户或学员 */}
+                  {!isTeacher && (
+                    <>
+                      <SelectItem value="teacher">教师</SelectItem>
+                      <SelectItem value="admin">管理员</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -552,12 +660,15 @@ const AccountManagement = () => {
             </div>
             <div>
               <label className="block mb-1 font-medium">访问过期时间</label>
-              <Input
-                name="access_expires_at"
-                type="datetime-local"
-                value={formatDateForInput(editForm.access_expires_at)}
-                onChange={handleChange}
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  name="access_expires_at"
+                  type="datetime-local"
+                  value={formatDateForInput(editForm.access_expires_at)}
+                  onChange={handleChange}
+                  className={`flex-1 ${editForm.user_type === "student" || editForm.user_type === "teacher" ? "border-blue-300 bg-blue-50" : ""}`}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
