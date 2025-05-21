@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -74,6 +73,7 @@ const Register = () => {
         department: values.department,
         major: values.major,
         grade: values.grade,
+        user_type: "registered"
       };
       
       await signUp(values.email, values.password, userData);

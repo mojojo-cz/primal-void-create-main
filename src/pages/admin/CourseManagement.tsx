@@ -4,6 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -22,7 +33,8 @@ import {
   GripVertical, 
   Plus,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  X
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
@@ -36,6 +48,11 @@ const defaultForm: TablesInsert<'courses'> = {
 const statusMap: Record<string, string> = {
   draft: '草稿',
   published: '已发布',
+};
+
+const statusColorMap: Record<string, string> = {
+  draft: 'bg-gray-200 text-gray-700',
+  published: 'bg-green-200 text-green-700',
 };
 
 // 章节类型
@@ -87,10 +104,29 @@ interface NewCourseForm extends TablesInsert<'courses'> {
   }[];
 }
 
+// 辅助函数：将SectionWithVideo[]转为form.sections需要的格式
+function mapSectionsForForm(sections: SectionWithVideo[]): NewCourseForm['sections'] {
+  return sections.map(s => ({
+    title: s.title,
+    description: s.description,
+    order: s.order,
+    video_id: s.video_id,
+    video: s.video ? {
+      id: s.video.id,
+      title: s.video.title,
+      description: '', // 编辑课程时章节视频只需id和title，其他字段可为空
+      video_url: s.video.video_url,
+      created_at: ''
+    } : null
+  }));
+}
+
 const CourseManagement = () => {
   const [courses, setCourses] = useState<CourseWithSections[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [editMode, setEditMode] = useState<'add' | 'edit'>("add");
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [form, setForm] = useState<NewCourseForm>({...defaultForm, sections: []});
   const [submitting, setSubmitting] = useState(false);
   const [videoDialog, setVideoDialog] = useState<{ open: boolean; url: string; title: string }>({ open: false, url: '', title: '' });
@@ -102,6 +138,10 @@ const CourseManagement = () => {
   const [selectedVideoId, setSelectedVideoId] = useState<string>('');
   const [uploadedVideoTitle, setUploadedVideoTitle] = useState('');
   const videoUploadRef = useRef<HTMLInputElement>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; courseId: string; title: string }>({ open: false, courseId: '', title: '' });
+  const [deleteSectionDialog, setDeleteSectionDialog] = useState<{ open: boolean; sectionId: string; title: string }>({ open: false, sectionId: '', title: '' });
+  const [previewCoverImage, setPreviewCoverImage] = useState(false);
+  const [activeCourseId, setActiveCourseId] = useState<string | undefined>(undefined);
 
   // 获取课程及章节和视频信息
   const fetchCourses = async () => {
@@ -160,6 +200,32 @@ const CourseManagement = () => {
     }
   };
 
+  // 局部刷新某课程的章节
+  const fetchSections = async (courseId: string) => {
+    const { data: sectionData, error: sectionError } = await supabase
+      .from("course_sections")
+      .select("id, title, description, order, course_id, video_id, videos(id, title, video_url)")
+      .eq("course_id", courseId)
+      .order("order", { ascending: true });
+    if (!sectionError && sectionData) {
+      setCourses(prev => prev.map(c => c.id === courseId ? {
+        ...c,
+        sections: sectionData.map((s: any) => ({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          order: s.order,
+          video_id: s.video_id,
+          video: s.videos ? {
+            id: s.videos.id,
+            title: s.videos.title,
+            video_url: s.videos.video_url,
+          } : null,
+        }))
+      } : c));
+    }
+  };
+
   useEffect(() => {
     fetchCourses();
     fetchVideoLibrary();
@@ -207,9 +273,18 @@ const CourseManagement = () => {
       
       setOpen(false);
       setForm({...defaultForm, sections: []});
+      setPreviewCoverImage(false);
       fetchCourses();
+      toast({
+        title: "添加成功",
+        description: "课程已成功添加"
+      });
     } catch (error: any) {
-      alert(error.message || '添加失败');
+      toast({
+        variant: "destructive",
+        title: "添加失败",
+        description: error.message || '添加失败'
+      });
     } finally {
       setSubmitting(false);
     }
@@ -254,7 +329,14 @@ const CourseManagement = () => {
   // 新增/编辑章节提交
   const handleSectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sectionForm.title) return alert('章节标题不能为空');
+    if (!sectionForm.title) {
+      toast({
+        variant: "destructive",
+        title: "验证失败",
+        description: "章节标题不能为空"
+      });
+      return;
+    }
     
     try {
       if (sectionDialog.mode === 'add') {
@@ -276,20 +358,36 @@ const CourseManagement = () => {
         }).eq('id', sectionForm.id);
       }
       closeSectionDialog();
-      fetchCourses();
+      // 只刷新当前课程的章节
+      fetchSections(sectionDialog.courseId);
+      toast({
+        title: "操作成功",
+        description: sectionDialog.mode === 'add' ? "章节已添加" : "章节已更新"
+      });
     } catch (error: any) {
-      alert(error.message || '操作失败');
+      toast({
+        variant: "destructive",
+        title: "操作失败",
+        description: error.message || '操作失败'
+      });
     }
   };
 
   // 删除章节
   const handleDeleteSection = async (sectionId: string) => {
-    if (!window.confirm('确定要删除该章节吗？')) return;
     try {
       await supabase.from('course_sections').delete().eq('id', sectionId);
       fetchCourses();
+      toast({
+        title: "删除成功",
+        description: "章节已删除"
+      });
     } catch (error: any) {
-      alert(error.message || '删除失败');
+      toast({
+        variant: "destructive",
+        title: "删除失败",
+        description: error.message || '删除失败'
+      });
     }
   };
 
@@ -309,8 +407,20 @@ const CourseManagement = () => {
   };
 
   // 视频选择
-  const handleVideoSelect = (videoId: string) => {
+  const handleVideoSelect = (videoId: string, videoUrl?: string) => {
     setSelectedVideoId(videoId);
+    
+    // 如果提供了视频URL，则预览视频
+    if (videoUrl) {
+      const selectedVideo = videoLibrary.find(v => v.id === videoId);
+      if (selectedVideo) {
+        setVideoDialog({
+          open: true,
+          url: selectedVideo.video_url,
+          title: selectedVideo.title
+        });
+      }
+    }
   };
 
   // 视频上传
@@ -320,24 +430,35 @@ const CourseManagement = () => {
     
     // 检查文件类型
     if (!file.type.startsWith('video/')) {
-      return alert('请选择视频文件');
+      toast({
+        variant: "destructive",
+        title: "文件类型错误",
+        description: "请选择视频文件"
+      });
+      return;
     }
     
     try {
       setUploadingVideo(true);
       
+      // 处理文件名，避免使用中文和特殊字符
+      const timestamp = Date.now();
+      // 提取文件扩展名
+      const fileExtension = file.name.split('.').pop() || '';
+      // 创建安全的文件名：时间戳 + 随机字符串 + 扩展名
+      const safeFileName = `${timestamp}_${Math.random().toString(36).substring(2, 10)}.${fileExtension}`;
+      
       // 1. 上传到 Storage
-      const videoName = `${Date.now()}_${file.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('videos') // 需要先在 Supabase 创建名为 videos 的 bucket
-        .upload(videoName, file);
+        .upload(safeFileName, file);
       
       if (uploadError) throw new Error('视频上传失败：' + uploadError.message);
       
       // 2. 获取公开URL
       const { data: urlData } = await supabase.storage
         .from('videos')
-        .getPublicUrl(videoName);
+        .getPublicUrl(safeFileName);
       
       const videoUrl = urlData?.publicUrl;
       
@@ -359,8 +480,17 @@ const CourseManagement = () => {
       if (event.target.files) {
         event.target.value = '';
       }
+      
+      toast({
+        title: "上传成功",
+        description: "视频已成功上传"
+      });
     } catch (error: any) {
-      alert(error.message || '上传失败');
+      toast({
+        variant: "destructive",
+        title: "上传失败",
+        description: error.message || '上传失败'
+      });
     } finally {
       setUploadingVideo(false);
     }
@@ -379,8 +509,16 @@ const CourseManagement = () => {
       
       fetchCourses();
       closeVideoDialog();
+      toast({
+        title: "设置成功",
+        description: "视频已成功应用到章节"
+      });
     } catch (error: any) {
-      alert(error.message || '设置视频失败');
+      toast({
+        variant: "destructive",
+        title: "设置失败",
+        description: error.message || '设置视频失败'
+      });
     }
   };
 
@@ -606,10 +744,118 @@ const CourseManagement = () => {
     }
   };
 
+  // 处理课程状态更改
+  const handleStatusChange = async (courseId: string, newStatus: string) => {
+    try {
+      await supabase
+        .from('courses')
+        .update({ status: newStatus })
+        .eq('id', courseId);
+      
+      // 更新本地状态
+      const newCourses = courses.map(course => {
+        if (course.id === courseId) {
+          return { ...course, status: newStatus };
+        }
+        return course;
+      });
+      
+      setCourses(newCourses);
+      toast({
+        title: "状态更新成功",
+        description: `课程状态已更改为${statusMap[newStatus] || newStatus}`
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "状态更新失败",
+        description: error.message || "更新课程状态失败"
+      });
+    }
+  };
+
+  // 删除课程
+  const handleDeleteCourse = async (courseId: string) => {
+    try {
+      // 1. 先获取课程的所有章节
+      const { data: sections } = await supabase
+        .from('course_sections')
+        .select('id')
+        .eq('course_id', courseId);
+      
+      // 2. 删除所有章节
+      if (sections && sections.length > 0) {
+        await supabase
+          .from('course_sections')
+          .delete()
+          .eq('course_id', courseId);
+      }
+      
+      // 3. 删除课程
+      await supabase
+        .from('courses')
+        .delete()
+        .eq('id', courseId);
+      
+      // 4. 更新本地状态
+      setCourses(courses.filter(course => course.id !== courseId));
+      toast({
+        title: "删除成功",
+        description: "课程及相关章节已删除"
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "删除失败",
+        description: error.message || "删除课程失败"
+      });
+    }
+  };
+
+  // 编辑课程提交
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCourseId) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('courses')
+        .update({
+          title: form.title,
+          description: form.description,
+          cover_image: form.cover_image,
+          status: form.status,
+        })
+        .eq('id', editingCourseId);
+      if (error) throw error;
+      setOpen(false);
+      setEditMode('add');
+      setEditingCourseId(null);
+      setForm({ ...defaultForm, sections: [] });
+      setPreviewCoverImage(false);
+      fetchCourses();
+      toast({
+        title: '保存成功',
+        description: '课程信息已更新'
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: '保存失败',
+        description: error.message || '保存失败'
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">课程管理</h2>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">课程管理</h1>
+          <p className="text-muted-foreground mt-1">创建和管理课程、章节和视频内容</p>
+        </div>
         <Button onClick={() => setOpen(true)}>新增课程</Button>
       </div>
       <Card>
@@ -622,15 +868,35 @@ const CourseManagement = () => {
           ) : courses.length === 0 ? (
             <div>暂无课程</div>
           ) : (
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion type="single" collapsible className="w-full" value={activeCourseId} onValueChange={setActiveCourseId}>
               {courses.map((course) => (
                 <AccordionItem value={course.id} key={course.id}>
                   <AccordionTrigger className="hover:bg-gray-50 px-4">
                     <div className="flex justify-between items-center w-full mr-4">
-                      <div className="text-left font-medium">{course.title}</div>
-                      <div className="text-sm px-2 py-1 rounded bg-gray-100">
-                        {course.status === 'published' ? '已发布' : '草稿'}
+                      <div className="text-left font-medium flex items-center gap-2">
+                        {course.title}
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${statusColorMap[course.status] || 'bg-gray-100 text-gray-500'}`}>{statusMap[course.status] || course.status}</span>
                       </div>
+{/* --- 课程状态与删除功能区开始 --- */}
+<div className="flex items-center gap-2">
+  <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setEditMode('edit'); setEditingCourseId(course.id); setForm({ ...course, sections: mapSectionsForForm(course.sections) }); setOpen(true); }}>编辑</Button>
+  <AlertDialog>
+    <AlertDialogTrigger asChild>
+      <Button size="sm" variant="destructive" onClick={e => { e.stopPropagation(); setDeleteDialog({ open: true, courseId: course.id, title: course.title }); }}>删除</Button>
+    </AlertDialogTrigger>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>确认删除</AlertDialogTitle>
+        <AlertDialogDescription>确定要删除课程"{course.title}"及其所有章节吗？此操作不可撤销。</AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>取消</AlertDialogCancel>
+        <AlertDialogAction onClick={() => { handleDeleteCourse(course.id); setDeleteDialog({ open: false, courseId: '', title: '' }); }}>确认删除</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+</div>
+{/* --- 课程状态与删除功能区结束 --- */}
                     </div>
                   </AccordionTrigger>
                   
@@ -654,7 +920,7 @@ const CourseManagement = () => {
                                     <th className="py-2 px-3 text-left">序号</th>
                                     <th className="py-2 px-3 text-left">章节标题</th>
                                     <th className="py-2 px-3 text-left">视频</th>
-                                    <th className="py-2 px-3 text-left">操作</th>
+                                    <th className="py-2 px-3 text-right">操作</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -701,8 +967,8 @@ const CourseManagement = () => {
                                           <td className="py-2 px-3">
                                             {section.video?.title || '无视频'}
                                           </td>
-                                          <td className="py-2 px-3">
-                                            <div className="flex items-center gap-1">
+                                          <td className="py-2 px-3 text-right">
+                                            <div className="flex justify-end items-center gap-1">
                                               {section.video?.video_url ? (
                                                 <Button 
                                                   size="sm" 
@@ -724,7 +990,6 @@ const CourseManagement = () => {
                                                   <span>添加视频</span>
                                                 </Button>
                                               )}
-                                              
                                               <Button 
                                                 size="sm" 
                                                 variant="outline"
@@ -734,7 +999,6 @@ const CourseManagement = () => {
                                                 <Edit className="h-3 w-3" />
                                                 <span>编辑</span>
                                               </Button>
-                                              
                                               {section.video?.video_url && (
                                                 <Button 
                                                   size="sm" 
@@ -746,12 +1010,11 @@ const CourseManagement = () => {
                                                   <span>更换</span>
                                                 </Button>
                                               )}
-                                              
                                               <Button 
                                                 size="sm" 
                                                 variant="destructive"
                                                 className="h-8 gap-1"
-                                                onClick={() => handleDeleteSection(section.id)}
+                                                onClick={() => setDeleteSectionDialog({ open: true, sectionId: section.id, title: section.title })}
                                               >
                                                 <Trash2 className="h-3 w-3" />
                                                 <span>删除</span>
@@ -788,12 +1051,12 @@ const CourseManagement = () => {
         </CardContent>
       </Card>
       {/* 新增课程弹窗 */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditMode('add'); setEditingCourseId(null); setForm({ ...defaultForm, sections: [] }); setPreviewCoverImage(false); } }}>
         <DialogContent className="sm:max-w-2xl w-full max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>新增课程</DialogTitle>
+            <DialogTitle>{editMode === 'edit' ? '编辑课程' : '新增课程'}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={editMode === 'edit' ? handleEditSubmit : handleSubmit} className="space-y-4">
             <div>
               <label className="block mb-1 font-medium">标题 *</label>
               <Input name="title" value={form.title} onChange={handleChange} required maxLength={100} placeholder="请输入课程标题" />
@@ -804,7 +1067,49 @@ const CourseManagement = () => {
             </div>
             <div>
               <label className="block mb-1 font-medium">封面图片URL</label>
-              <Input name="cover_image" value={form.cover_image || ''} onChange={handleChange} placeholder="请输入图片链接（可选）" />
+              <div className="flex gap-2">
+                <Input 
+                  name="cover_image" 
+                  value={form.cover_image || ''} 
+                  onChange={handleChange} 
+                  placeholder="请输入图片链接（可选）" 
+                  className="flex-1"
+                />
+                {form.cover_image && (
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setPreviewCoverImage(true)}
+                  >
+                    预览
+                  </Button>
+                )}
+              </div>
+              {form.cover_image && previewCoverImage && (
+                <div className="mt-2 relative">
+                  <img 
+                    src={form.cover_image} 
+                    alt="封面预览" 
+                    className="max-h-[200px] rounded border object-cover"
+                    onError={() => {
+                      toast({
+                        variant: "destructive",
+                        title: "图片加载失败",
+                        description: "无法加载图片，请检查URL是否正确"
+                      });
+                    }}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="absolute top-1 right-1 h-6 w-6 p-0 rounded-full bg-background/80"
+                    onClick={() => setPreviewCoverImage(false)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
             </div>
             <div>
               <label className="block mb-1 font-medium">状态</label>
@@ -868,7 +1173,7 @@ const CourseManagement = () => {
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>取消</Button>
-              <Button type="submit" disabled={submitting}>{submitting ? '提交中...' : '提交'}</Button>
+              <Button type="submit" disabled={submitting}>{submitting ? (editMode === 'edit' ? '保存中...' : '提交中...') : (editMode === 'edit' ? '保存' : '提交')}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -946,6 +1251,20 @@ const CourseManagement = () => {
                         <div className="font-medium">{video.title}</div>
                         <div className="text-xs text-muted-foreground truncate">{video.video_url}</div>
                         <div className="text-xs text-muted-foreground">{new Date(video.created_at).toLocaleString('zh-CN')}</div>
+                        <div className="mt-2 flex justify-end">
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleVideoSelect(video.id, video.video_url);
+                            }}
+                          >
+                            <Play className="h-3 w-3 mr-1" />
+                            <span>预览</span>
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -982,6 +1301,32 @@ const CourseManagement = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 章节删除确认对话框 */}
+      <AlertDialog 
+        open={deleteSectionDialog.open} 
+        onOpenChange={(open) => {
+          if (!open) setDeleteSectionDialog({ open: false, sectionId: '', title: '' });
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除章节"{deleteSectionDialog.title}"吗？此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              handleDeleteSection(deleteSectionDialog.sectionId);
+              setDeleteSectionDialog({ open: false, sectionId: '', title: '' });
+            }}>
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

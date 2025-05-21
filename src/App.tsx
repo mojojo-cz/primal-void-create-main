@@ -11,9 +11,11 @@ import Register from "./pages/auth/Register";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminLayout from "./pages/admin/AdminLayout";
 import AdminIndex from "./pages/admin/Index";
 import CourseManagement from "./pages/admin/CourseManagement";
 import VideoManagement from "./pages/admin/VideoManagement";
+import AccountManagement from "./pages/admin/AccountManagement";
 
 const queryClient = new QueryClient();
 
@@ -44,31 +46,40 @@ const App = () => (
               } 
             />
             
+            {/* 教师路由 */}
+            <Route 
+              path="/teacher" 
+              element={
+                <ProtectedRoute allowedUserTypes={["teacher"]}>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* 学员路由 */}
+            <Route 
+              path="/student" 
+              element={
+                <ProtectedRoute allowedUserTypes={["student"]}>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
             {/* Admin Routes */}
             <Route 
               path="/admin" 
               element={
                 <ProtectedRoute allowedUserTypes={["admin"]}>
-                  <AdminIndex />
+                  <AdminLayout />
                 </ProtectedRoute>
               } 
-            />
-            <Route 
-              path="/admin/courses" 
-              element={
-                <ProtectedRoute allowedUserTypes={["admin"]}>
-                  <CourseManagement />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/admin/videos" 
-              element={
-                <ProtectedRoute allowedUserTypes={["admin"]}>
-                  <VideoManagement />
-                </ProtectedRoute>
-              } 
-            />
+            >
+              <Route index element={<AdminIndex />} />
+              <Route path="courses" element={<CourseManagement />} />
+              <Route path="videos" element={<VideoManagement />} />
+              <Route path="accounts" element={<AccountManagement />} />
+            </Route>
             
             {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />

@@ -53,6 +53,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (data.user_type === "admin") {
             console.log("重定向到管理页面");
             navigate("/admin");
+          } else if (data.user_type === "teacher") {
+            console.log("重定向到教师页面");
+            navigate("/teacher");
+          } else if (data.user_type === "student") {
+            console.log("重定向到学员页面");
+            navigate("/student");
           } else {
             console.log("重定向到用户页面");
             navigate("/dashboard");
@@ -81,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (session?.user) {
           console.log("用户已登录，获取资料");
-          fetchProfile(session.user.id);
+            fetchProfile(session.user.id);
         } else {
           console.log("用户未登录或已登出");
           setProfile(null);
