@@ -14,9 +14,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Play, Trash2, Upload, Search, X } from "lucide-react";
+import { Play, Trash2, Upload, Search, X, Grid3X3, List, Calendar } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
 // 视频类型
@@ -28,10 +36,14 @@ interface Video {
   created_at: string;
 }
 
+// 视图类型
+type ViewMode = 'list' | 'grid';
+
 const VideoManagement = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>('list'); // 默认列表视图
   const [uploadDialog, setUploadDialog] = useState(false);
   const [videoTitle, setVideoTitle] = useState("");
   const [videoDescription, setVideoDescription] = useState("");
@@ -201,14 +213,233 @@ const VideoManagement = () => {
     (video.description && video.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  // 格式化文件大小
+  const formatDuration = (url: string) => {
+    // 这里可以添加获取视频时长的逻辑
+    return "未知时长";
+  };
+
+  // 渲染列表视图
+  const renderListView = () => (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[50px] text-center">#</TableHead>
+            <TableHead className="min-w-[200px]">标题</TableHead>
+            <TableHead className="hidden md:table-cell min-w-[150px]">描述</TableHead>
+            <TableHead className="hidden lg:table-cell min-w-[120px]">上传时间</TableHead>
+            <TableHead className="text-right min-w-[120px]">操作</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredVideos.map((video, index) => (
+            <TableRow key={video.id} className="hover:bg-muted/30">
+              <TableCell className="font-medium text-center text-muted-foreground">
+                {index + 1}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-16 h-12 bg-black rounded-lg flex items-center justify-center cursor-pointer hover:bg-gray-800 transition-all duration-200 hover:scale-105 flex-shrink-0"
+                    onClick={() => handlePlayVideo(video.video_url, video.title)}
+                    title="点击播放视频"
+                  >
+                    <Play className="h-6 w-6 text-white opacity-80 hover:opacity-100" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate pr-2">{video.title}</div>
+                    <div className="text-sm text-muted-foreground lg:hidden mt-1">
+                      {video.description ? (
+                        <span className="line-clamp-1">{video.description}</span>
+                      ) : (
+                        <span className="italic">无描述</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground md:hidden mt-1 flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      <span>{new Date(video.created_at).toLocaleDateString('zh-CN')}</span>
+                    </div>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="hidden md:table-cell">
+                <div className="max-w-xs">
+                  {video.description ? (
+                    <span className="line-clamp-2 text-sm">{video.description}</span>
+                  ) : (
+                    <span className="text-muted-foreground italic text-sm">无描述</span>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="hidden lg:table-cell">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Calendar className="h-4 w-4 flex-shrink-0" />
+                  <div className="flex flex-col">
+                    <span>{new Date(video.created_at).toLocaleDateString('zh-CN')}</span>
+                    <span className="text-xs">{new Date(video.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    onClick={() => handlePlayVideo(video.video_url, video.title)}
+                    className="hover:bg-primary/10"
+                    title="播放视频"
+                  >
+                    <Play className="h-4 w-4" />
+                    <span className="hidden sm:inline ml-1">播放</span>
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="删除视频"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="hidden sm:inline ml-1">删除</span>
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>确认删除</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          确定要删除视频"{video.title}"吗？此操作不可撤销。
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDeleteVideo(video.id)}>
+                          确认删除
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // 渲染网格视图
+  const renderGridView = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {filteredVideos.map(video => (
+        <div key={video.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-all duration-200 hover:border-primary/20 group">
+          <div 
+            className="aspect-video bg-black relative cursor-pointer overflow-hidden" 
+            onClick={() => handlePlayVideo(video.video_url, video.title)}
+            title="点击播放视频"
+          >
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all duration-200">
+              <Play className="h-12 w-12 text-white opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-200" />
+            </div>
+            <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+              视频
+            </div>
+          </div>
+          <div className="p-4">
+            <h3 className="font-medium truncate mb-2 group-hover:text-primary transition-colors" title={video.title}>
+              {video.title}
+            </h3>
+            <div className="min-h-[2.5rem] mb-3">
+              {video.description ? (
+                <p className="text-sm text-muted-foreground line-clamp-2">{video.description}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">无描述</p>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
+              <div className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                <span>{new Date(video.created_at).toLocaleDateString('zh-CN')}</span>
+              </div>
+              <span>{new Date(video.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t">
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => handlePlayVideo(video.video_url, video.title)}
+                className="flex-1 mr-2 hover:bg-primary hover:text-primary-foreground"
+              >
+                <Play className="h-4 w-4 mr-1" />
+                播放
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+                    title="删除视频"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>确认删除</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      确定要删除视频"{video.title}"吗？此操作不可撤销。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleDeleteVideo(video.id)}>
+                      确认删除
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold">视频管理</h1>
           <p className="text-muted-foreground mt-1">管理视频资源库，上传和删除视频</p>
         </div>
-        <Button onClick={() => setUploadDialog(true)}>上传视频</Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border rounded-lg">
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="rounded-r-none"
+            >
+              <List className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">列表</span>
+            </Button>
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="rounded-l-none border-l"
+            >
+              <Grid3X3 className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">网格</span>
+            </Button>
+          </div>
+          <Button onClick={() => setUploadDialog(true)}>
+            <Upload className="h-4 w-4 mr-1" />
+            <span>上传视频</span>
+          </Button>
+        </div>
       </div>
       
       <div className="mb-4">
@@ -235,58 +466,49 @@ const VideoManagement = () => {
       
       <Card>
         <CardHeader>
-          <CardTitle>视频列表 ({filteredVideos.length})</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>视频列表 ({filteredVideos.length})</span>
+            <div className="text-sm font-normal text-muted-foreground">
+              {viewMode === 'list' ? '列表视图' : '网格视图'}
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="text-center py-12">
+              <div className="inline-flex items-center gap-2">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                <span className="text-muted-foreground">加载中...</span>
+              </div>
+            </div>
           ) : filteredVideos.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {searchTerm ? "没有找到匹配的视频" : "暂无视频，点击右上角上传"}
+            <div className="text-center py-12">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                  {searchTerm ? (
+                    <Search className="h-8 w-8 text-muted-foreground" />
+                  ) : (
+                    <Upload className="h-8 w-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-medium">
+                    {searchTerm ? "没有找到匹配的视频" : "暂无视频"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {searchTerm ? "尝试更改搜索条件" : "点击右上角按钮开始上传视频"}
+                  </p>
+                </div>
+                {!searchTerm && (
+                  <Button onClick={() => setUploadDialog(true)} className="mt-2">
+                    <Upload className="h-4 w-4 mr-2" />
+                    上传第一个视频
+                  </Button>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredVideos.map(video => (
-                <div key={video.id} className="border rounded-lg overflow-hidden">
-                  <div className="aspect-video bg-black relative cursor-pointer" onClick={() => handlePlayVideo(video.video_url, video.title)}>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Play className="h-12 w-12 text-white opacity-80" />
-                    </div>
-                  </div>
-                  <div className="p-3">
-                    <h3 className="font-medium truncate">{video.title}</h3>
-                    {video.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{video.description}</p>
-                    )}
-                    <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground">
-                      <span>{new Date(video.created_at).toLocaleString('zh-CN')}</span>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            <span>删除</span>
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>确认删除</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              确定要删除视频"{video.title}"吗？此操作不可撤销。
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>取消</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteVideo(video.id)}>
-                              确认删除
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            viewMode === 'list' ? renderListView() : renderGridView()
           )}
         </CardContent>
       </Card>
