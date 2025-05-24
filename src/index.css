@@ -343,20 +343,71 @@ button:hover {
   box-shadow: 0 2px 12px rgba(37, 99, 235, 0.1);
 }
 
-/* 侧边栏响应式优化 */
+/* 移动端完全重构的响应式设计 */
 @media (max-width: 768px) {
+  /* 移动端隐藏侧边栏 */
   .admin-sidebar {
     transform: translateX(-100%);
     transition: transform 0.3s ease;
+    width: 280px; /* 移动端侧边栏更宽 */
+    z-index: 1000; /* 更高的层级 */
   }
   
+  /* 移动端主内容区域占满屏幕 */
   .admin-main-content {
-    margin-left: 0;
+    margin-left: 0 !important;
+    width: 100% !important;
   }
   
-  /* 移动端显示侧边栏时 */
+  /* 移动端显示侧边栏时添加遮罩 */
   .admin-sidebar.mobile-open {
     transform: translateX(0);
+  }
+  
+  /* 移动端遮罩层 */
+  .mobile-sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  
+  .mobile-sidebar-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  /* 移动端侧边栏头部优化 */
+  .sidebar-header {
+    padding: 1.5rem 1rem !important;
+    min-height: 4rem !important;
+  }
+  
+  .sidebar-header h1 {
+    font-size: 1rem !important;
+  }
+  
+  .sidebar-header p {
+    font-size: 0.75rem !important;
+  }
+  
+  /* 移动端导航项优化 */
+  .sidebar-nav-item {
+    padding: 0.75rem 1rem !important;
+    margin: 0.25rem 0.5rem !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.9rem !important;
+  }
+  
+  /* 移动端用户区域优化 */
+  .sidebar-user-area {
+    padding: 1rem !important;
   }
 }
 
@@ -478,10 +529,110 @@ button:hover {
   min-height: calc(100vh - 4rem); /* 减去面包屑高度 */
 }
 
-/* 移动端管理员页面内容 */
+/* 移动端管理员页面全面优化 */
 @media (max-width: 768px) {
   .admin-page-container {
-    padding: 1rem;
+    padding: 0.75rem !important;
+  }
+  
+  /* 移动端面包屑导航优化 */
+  .admin-nav-breadcrumb {
+    padding: 0.5rem 0.75rem !important;
+    min-height: 2.5rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  
+  /* 移动端页面标题优化 */
+  .admin-page-container h1 {
+    font-size: 1.25rem !important;
+    margin-bottom: 1rem !important;
+  }
+  
+  /* 移动端卡片优化 */
+  .admin-page-container .card {
+    margin-bottom: 1rem !important;
+    border-radius: 0.5rem !important;
+  }
+  
+  /* 移动端表格优化 */
+  .admin-page-container table {
+    font-size: 0.875rem !important;
+  }
+  
+  .admin-page-container td {
+    padding: 0.5rem 0.25rem !important;
+  }
+  
+  .admin-page-container th {
+    padding: 0.5rem 0.25rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* 移动端按钮优化 */
+  .admin-page-container button {
+    min-height: 44px !important; /* 符合移动端触摸标准 */
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+  }
+  
+  /* 移动端输入框优化 */
+  .admin-page-container input,
+  .admin-page-container textarea,
+  .admin-page-container select {
+    min-height: 44px !important;
+    font-size: 16px !important; /* 防止移动端缩放 */
+  }
+  
+  /* 移动端网格布局优化 */
+  .admin-page-container .grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+  
+  /* 移动端弹窗优化 */
+  .admin-page-container [role="dialog"] {
+    margin: 0.5rem !important;
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(100vh - 1rem) !important;
+  }
+  
+  /* 移动端课程管理特殊优化 */
+  .admin-page-container .course-item {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 0.75rem !important;
+    gap: 0.5rem !important;
+  }
+  
+  .admin-page-container .course-actions {
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+  }
+  
+  .admin-page-container .course-actions button {
+    flex: 1 1 auto !important;
+    min-width: 120px !important;
+  }
+  
+  /* 移动端搜索栏优化 */
+  .admin-page-container .search-bar {
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+  }
+  
+  /* 移动端拖拽排序优化 */
+  .admin-page-container .drag-handle {
+    display: none !important;
+  }
+  
+  /* 移动端章节展开优化 */
+  .admin-page-container .chapter-header {
+    padding: 0.75rem !important;
+    gap: 0.5rem !important;
+  }
+  
+  .admin-page-container .chapter-content {
+    padding: 0.5rem 0.75rem !important;
   }
 }
 

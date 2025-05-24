@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,9 @@ import {
   Users,
   AlertCircle,
   Shield,
-  Settings
+  Settings,
+  Menu,
+  X
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -19,6 +21,8 @@ const AdminLayout = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
   const isTeacher = profile?.user_type === "teacher";
   const systemSettings = loadSystemSettings();
@@ -110,32 +114,50 @@ const AdminLayout = () => {
   
   return (
     <div className="min-h-screen">
+      {/* 移动端遮罩层 */}
+      <div 
+        className={`mobile-sidebar-overlay ${isMobileSidebarOpen ? 'active' : ''}`}
+        onClick={() => setIsMobileSidebarOpen(false)}
+      ></div>
+      
       {/* 左侧边栏 */}
-      <aside className="w-64 admin-sidebar flex-col flex">
+      <aside className={`w-64 admin-sidebar flex-col flex ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
         {/* 侧边栏头部 */}
         <div className="sidebar-header p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="sidebar-logo w-8 h-8 rounded-lg flex items-center justify-center">
-              {systemSettings.system_logo ? (
-                <img 
-                  src={systemSettings.system_logo} 
-                  alt="系统Logo" 
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    // 如果自定义Logo加载失败，显示默认图标
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    target.nextElementSibling?.setAttribute('style', 'display: block');
-                  }}
-                />
-              ) : null}
-              <Shield className={`h-5 w-5 text-white ${systemSettings.system_logo ? 'hidden' : ''}`} />
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="sidebar-logo w-8 h-8 rounded-lg flex items-center justify-center">
+                {systemSettings.system_logo ? (
+                  <img 
+                    src={systemSettings.system_logo} 
+                    alt="系统Logo" 
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      // 如果自定义Logo加载失败，显示默认图标
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      target.nextElementSibling?.setAttribute('style', 'display: block');
+                    }}
+                  />
+                ) : null}
+                <Shield className={`h-5 w-5 text-white ${systemSettings.system_logo ? 'hidden' : ''}`} />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold leading-tight">
+                  {isTeacher ? "教师控制台" : "管理员控制台"}
+                </h1>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-bold leading-tight">
-                {isTeacher ? "教师控制台" : "管理员控制台"}
-              </h1>
-            </div>
+            
+            {/* 移动端关闭按钮 */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="md:hidden p-2 h-8 w-8"
+              onClick={() => setIsMobileSidebarOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
           <p className="text-sm">
             {systemSettings.site_name || (isTeacher ? "教师管理系统" : "系统管理控制台")}
@@ -158,7 +180,10 @@ const AdminLayout = () => {
                       <TooltipTrigger asChild>
                         <div
                           className="sidebar-restricted-item flex items-center gap-3 px-4 py-3 rounded-lg cursor-not-allowed"
-                          onClick={handleRestrictedAccess}
+                          onClick={(e) => {
+                            handleRestrictedAccess(e);
+                            setIsMobileSidebarOpen(false);
+                          }}
                         >
                           {item.icon}
                           <span className="font-medium">{item.label}</span>
@@ -185,6 +210,7 @@ const AdminLayout = () => {
                       isActive ? 'active' : ''
                     }`
                   }
+                  onClick={() => setIsMobileSidebarOpen(false)}
                 >
                   {item.icon}
                   <span className="font-medium">{item.label}</span>
@@ -213,6 +239,7 @@ const AdminLayout = () => {
                       isActive ? 'active' : ''
                     }`
                   }
+                  onClick={() => setIsMobileSidebarOpen(false)}
                 >
                   {item.icon}
                   <span className="font-medium">{item.label}</span>
@@ -237,6 +264,16 @@ const AdminLayout = () => {
             <div className="admin-nav-breadcrumb">
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                  {/* 移动端菜单按钮 */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="md:hidden p-2 h-8 w-8"
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                  >
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                  
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-primary flex-shrink-0" />
                     <span className="font-medium text-primary truncate">
