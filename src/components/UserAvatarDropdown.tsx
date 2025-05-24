@@ -81,19 +81,19 @@ const UserAvatarDropdown: React.FC<UserAvatarDropdownProps> = ({
         <DropdownMenuTrigger asChild>
           <Button 
             variant="ghost" 
-            className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-100 text-gray-700 ${className}`}
+            className={`flex items-center gap-3 px-3 py-3 hover:bg-gray-100 text-gray-700 justify-start text-left ${className}`}
           >
-            <Avatar className="h-8 w-8">
+            <Avatar className="h-9 w-9 flex-shrink-0">
               <AvatarImage src="" alt={getUserDisplayName()} />
               <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                 {getUserInitials()}
               </AvatarFallback>
             </Avatar>
-            <div className="hidden sm:flex flex-col items-start">
-              <span className="text-sm font-medium">{getUserDisplayName()}</span>
-              <span className="text-xs text-gray-500">{getUserTypeLabel()}</span>
+            <div className="flex flex-col items-start min-w-0 flex-1">
+              <span className="text-sm font-medium truncate w-full">{getUserDisplayName()}</span>
+              <span className="text-xs text-gray-500 truncate w-full">{getUserTypeLabel()}</span>
             </div>
-            <ChevronDown className="h-4 w-4 opacity-70" />
+            <ChevronDown className="h-4 w-4 opacity-70 flex-shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56" align="end" forceMount>
