@@ -407,15 +407,11 @@ button:hover {
   border-top: 1px solid hsl(214 20% 88%);
 }
 
-/* 侧边栏Logo - 浅色主题 */
+/* 侧边栏Logo - 去除所有装饰，只显示用户LOGO */
 .sidebar-logo {
-  background: linear-gradient(135deg, 
-    hsl(214 84% 56%) 0%, 
-    hsl(214 84% 65%) 100%);
-  border: 1px solid hsl(214 84% 70%);
-  box-shadow: 
-    0 2px 8px rgba(37, 99, 235, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 /* 导航分组标题 - 浅色主题 */
