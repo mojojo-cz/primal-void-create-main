@@ -49,6 +49,7 @@ import {
   X
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import VideoPlayer from "@/components/VideoPlayer";
 
 // 视频类型
 interface Video {
@@ -1137,10 +1138,12 @@ const VideoManagement = () => {
             <DialogTitle>{videoDialog.title}</DialogTitle>
           </DialogHeader>
           <div className="aspect-video">
-            <video 
-              controls 
-              className="w-full h-full rounded-lg"
+            <VideoPlayer
               src={videoDialog.url}
+              title={videoDialog.title}
+              autoPlay={true}
+              autoFullscreen={false}
+              className="w-full h-full rounded-lg"
             />
           </div>
         </DialogContent>

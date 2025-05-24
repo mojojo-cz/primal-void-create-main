@@ -130,6 +130,7 @@ export type Database = {
           access_expires_at: string
           created_at: string
           department: string | null
+          full_name: string | null
           grade: string | null
           id: string
           major: string | null
@@ -143,6 +144,7 @@ export type Database = {
           access_expires_at?: string
           created_at?: string
           department?: string | null
+          full_name?: string | null
           grade?: string | null
           id: string
           major?: string | null
@@ -156,6 +158,7 @@ export type Database = {
           access_expires_at?: string
           created_at?: string
           department?: string | null
+          full_name?: string | null
           grade?: string | null
           id?: string
           major?: string | null
@@ -164,6 +167,30 @@ export type Database = {
           updated_at?: string
           user_type?: string
           username?: string
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          created_at: string | null
+          id: number
+          setting_key: string
+          setting_value: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          setting_key: string
+          setting_value?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          setting_key?: string
+          setting_value?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -213,9 +240,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_user_permissions: {
+        Args: { target_id: string }
+        Returns: Json
+      }
       check_username_exists: {
         Args: { username: string }
         Returns: boolean
+      }
+      get_user_type: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
     }
     Enums: {

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .test-section h2 {
+            color: #2563eb;
+            margin-top: 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+        .error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+        .info {
+            background-color: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #3b82f6;
+        }
+        .code {
+            background-color: #f3f4f6;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 系统设置功能测试</h1>
+        
+        <div class="test-section">
+            <h2>✅ 修复说明</h2>
+            <div class="info">
+                <strong>问题：</strong>在设置页面设置了系统LOGO之后，更换登录设备就失效了<br>
+                <strong>解决方案：</strong>将系统设置从localStorage迁移到Supabase数据库存储
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🗄️ 数据库结构</h2>
+            <div class="code">CREATE TABLE system_settings (
+  id SERIAL PRIMARY KEY,
+  setting_key VARCHAR(100) UNIQUE NOT NULL,
+  setting_value TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);</div>
+            <div class="success">✅ 数据库表已创建，包含以下默认设置：</div>
+            <ul>
+                <li><code>system_logo</code> - 系统LOGO URL</li>
+                <li><code>favicon_url</code> - 标签栏图标URL</li>
+                <li><code>system_title</code> - 页面标题</li>
+                <li><code>site_name</code> - 网站名称</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🔄 功能改进</h2>
+            <div class="success">✅ 系统设置现在支持：</div>
+            <ul>
+                <li><strong>数据库存储</strong> - 设置保存到Supabase数据库</li>
+                <li><strong>跨设备同步</strong> - 所有设备共享相同设置</li>
+                <li><strong>降级机制</strong> - 数据库不可用时自动使用本地存储</li>
+                <li><strong>全局状态管理</strong> - 实时更新所有组件</li>
+                <li><strong>自动应用</strong> - 设置变更立即生效</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🧪 测试步骤</h2>
+            <div class="info">
+                <strong>测试跨设备同步功能：</strong>
+            </div>
+            <ol>
+                <li>在设备A上登录管理员账号</li>
+                <li>进入 <strong>系统设置</strong> 页面</li>
+                <li>设置自定义LOGO URL，例如：<br>
+                    <code>https://via.placeholder.com/64x64/3283FF/FFFFFF?text=LOGO</code>
+                </li>
+                <li>点击 <strong>保存设置</strong></li>
+                <li>在设备B上登录相同管理员账号</li>
+                <li>检查LOGO是否自动显示</li>
+                <li>✅ 如果LOGO在设备B上也显示，说明跨设备同步成功</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h2>📁 修改的文件</h2>
+            <div class="code">src/services/systemSettingsService.ts    # 新增数据库服务
+src/utils/systemSettings.ts              # 增强本地设置工具
+src/pages/admin/Settings.tsx             # 更新设置页面逻辑
+src/pages/admin/AdminLayout.tsx          # 使用全局设置
+src/contexts/AuthContext.tsx             # 应用启动时加载设置
+src/integrations/supabase/types.ts       # 更新数据库类型定义</div>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 技术实现</h2>
+            <ul>
+                <li><strong>数据库表：</strong>system_settings 存储键值对设置</li>
+                <li><strong>服务层：</strong>systemSettingsService 处理数据库操作</li>
+                <li><strong>工具层：</strong>systemSettings 提供全局状态管理</li>
+                <li><strong>UI层：</strong>Settings页面支持数据库和本地存储</li>
+                <li><strong>应用层：</strong>AuthContext在启动时初始化设置</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🚀 访问系统</h2>
+            <div class="info">
+                <strong>开发服务器：</strong> <a href="http://localhost:8103" target="_blank">http://localhost:8103</a><br>
+                <strong>设置页面：</strong> 登录后访问 管理员控制台 → 系统设置
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

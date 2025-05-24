@@ -15,7 +15,7 @@ import {
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
-import { loadSystemSettings } from "@/utils/systemSettings";
+import { getGlobalSettings } from "@/utils/systemSettings";
 
 const AdminLayout = () => {
   const { profile } = useAuth();
@@ -25,7 +25,7 @@ const AdminLayout = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
   const isTeacher = profile?.user_type === "teacher";
-  const systemSettings = loadSystemSettings();
+  const systemSettings = getGlobalSettings();
 
   // 教师尝试访问限制页面时的处理函数
   const handleRestrictedAccess = (e) => {

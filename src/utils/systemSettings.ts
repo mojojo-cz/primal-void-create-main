@@ -14,7 +14,7 @@ export const defaultSettings: SystemSettings = {
   site_name: "考研教育系统"
 };
 
-// 加载系统设置
+// 加载系统设置 - 支持从数据库和本地存储加载
 export const loadSystemSettings = (): SystemSettings => {
   try {
     const savedSettings = localStorage.getItem('system_settings');
@@ -31,13 +31,31 @@ export const loadSystemSettings = (): SystemSettings => {
   return defaultSettings;
 };
 
-// 保存系统设置
+// 保存系统设置到本地存储
 export const saveSystemSettings = (settings: SystemSettings): void => {
   try {
     localStorage.setItem('system_settings', JSON.stringify(settings));
   } catch (error) {
     console.error('保存系统设置失败:', error);
   }
+};
+
+// 全局设置存储器，用于在数据库和本地存储之间同步
+let globalSettings: SystemSettings | null = null;
+
+// 设置全局设置
+export const setGlobalSettings = (settings: SystemSettings): void => {
+  globalSettings = settings;
+  // 同时保存到本地存储作为缓存
+  saveSystemSettings(settings);
+};
+
+// 获取全局设置
+export const getGlobalSettings = (): SystemSettings => {
+  if (globalSettings) {
+    return globalSettings;
+  }
+  return loadSystemSettings();
 };
 
 // 应用系统设置到页面

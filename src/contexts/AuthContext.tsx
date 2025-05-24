@@ -2,6 +2,8 @@ import React, { createContext, useState, useContext, useEffect, useRef } from "r
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation } from "react-router-dom";
+import { loadSystemSettingsFromDB, checkDatabaseAccess } from "@/services/systemSettingsService";
+import { setGlobalSettings, loadSystemSettings, applySystemSettings } from "@/utils/systemSettings";
 
 interface AuthContextProps {
   session: Session | null;
@@ -44,6 +46,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const path = getRedirectPath(userType);
     console.log(`[AUTH] 重定向用户(${userType})到:`, path);
     navigate(path, { replace: true });
+  };
+
+  // 初始化系统设置
+  const initializeSystemSettings = async () => {
+    try {
+      console.log("[AUTH] 初始化系统设置");
+      const canAccessDB = await checkDatabaseAccess();
+      
+      if (canAccessDB) {
+        const settings = await loadSystemSettingsFromDB();
+        setGlobalSettings(settings);
+        applySystemSettings(settings);
+        console.log("[AUTH] 系统设置已从数据库加载");
+      } else {
+        const settings = loadSystemSettings();
+        setGlobalSettings(settings);
+        applySystemSettings(settings);
+        console.log("[AUTH] 系统设置已从本地存储加载");
+      }
+    } catch (error) {
+      console.error("[AUTH] 初始化系统设置失败:", error);
+      // 降级到默认设置
+      const settings = loadSystemSettings();
+      setGlobalSettings(settings);
+      applySystemSettings(settings);
+    }
   };
 
   // 获取用户资料
@@ -100,6 +128,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    // 初始化系统设置
+    initializeSystemSettings();
+    
     // 检查现有会话
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log("[AUTH] 检查现有会话:", !!session);

@@ -49,6 +49,7 @@ import {
   FolderOpen
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import VideoPlayer from "@/components/VideoPlayer";
 
 // 文件夹类型
 interface VideoFolder {
@@ -1725,15 +1726,23 @@ const CourseManagement = () => {
       
       {/* 视频播放弹窗 */}
       <Dialog open={videoDialog.open} onOpenChange={open => setVideoDialog(v => ({ ...v, open }))}>
-        <DialogContent className="max-w-2xl w-full">
+        <DialogContent className="max-w-4xl w-full">
           <DialogHeader>
             <DialogTitle>{videoDialog.title}</DialogTitle>
           </DialogHeader>
-          <div className="w-full aspect-video bg-black flex items-center justify-center">
+          <div className="w-full aspect-video">
             {videoDialog.url ? (
-              <video src={videoDialog.url} controls className="w-full h-full max-h-[60vh] bg-black" autoPlay />
+              <VideoPlayer
+                src={videoDialog.url}
+                title={videoDialog.title}
+                autoPlay={true}
+                autoFullscreen={false}
+                className="w-full h-full rounded-lg"
+              />
             ) : (
-              <span className="text-white">无视频资源</span>
+              <div className="w-full h-full bg-black flex items-center justify-center rounded-lg">
+                <span className="text-white">无视频资源</span>
+              </div>
             )}
           </div>
         </DialogContent>

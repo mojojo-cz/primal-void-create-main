@@ -20,8 +20,14 @@ import {
   defaultSettings,
   loadSystemSettings,
   saveSystemSettings,
-  applySystemSettings
+  applySystemSettings,
+  setGlobalSettings
 } from "@/utils/systemSettings";
+import { 
+  loadSystemSettingsFromDB,
+  saveSystemSettingsToDB,
+  checkDatabaseAccess
+} from "@/services/systemSettingsService";
 
 const Settings = () => {
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
@@ -35,8 +41,24 @@ const Settings = () => {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const currentSettings = loadSystemSettings();
+      
+      // 检查数据库访问能力
+      const canAccessDB = await checkDatabaseAccess();
+      
+      let currentSettings: SystemSettings;
+      
+      if (canAccessDB) {
+        // 优先从数据库加载
+        currentSettings = await loadSystemSettingsFromDB();
+        console.log('从数据库加载系统设置');
+      } else {
+        // 降级到本地存储
+        currentSettings = loadSystemSettings();
+        console.log('从本地存储加载系统设置');
+      }
+      
       setSettings(currentSettings);
+      setGlobalSettings(currentSettings);
     } catch (error: any) {
       console.error('加载设置失败:', error);
       toast({
@@ -54,16 +76,40 @@ const Settings = () => {
     try {
       setSaving(true);
       
-      // 保存设置
-      saveSystemSettings(settings);
+      // 检查数据库访问能力
+      const canAccessDB = await checkDatabaseAccess();
       
-      // 应用设置到页面
-      applySystemSettings(settings);
+      let saveSuccess = false;
+      
+      if (canAccessDB) {
+        // 优先保存到数据库
+        saveSuccess = await saveSystemSettingsToDB(settings);
+        if (saveSuccess) {
+          console.log('设置已保存到数据库');
+        } else {
+          console.error('保存到数据库失败，降级到本地存储');
+        }
+      }
+      
+      if (!saveSuccess) {
+        // 保存到本地存储（作为备份或降级方案）
+        saveSystemSettings(settings);
+        saveSuccess = true;
+        console.log('设置已保存到本地存储');
+      }
+      
+      if (saveSuccess) {
+        // 设置全局设置并应用到页面
+        setGlobalSettings(settings);
+        applySystemSettings(settings);
 
-      toast({
-        title: "保存成功",
-        description: "系统设置已更新"
-      });
+        toast({
+          title: "保存成功",
+          description: canAccessDB ? "系统设置已同步到数据库" : "系统设置已保存到本地"
+        });
+      } else {
+        throw new Error("保存失败");
+      }
     } catch (error: any) {
       console.error('保存设置失败:', error);
       toast({
