@@ -12,10 +12,12 @@ import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./pages/admin/AdminLayout";
-import AdminIndex from "./pages/admin/Index";
 import CourseManagement from "./pages/admin/CourseManagement";
 import VideoManagement from "./pages/admin/VideoManagement";
 import AccountManagement from "./pages/admin/AccountManagement";
+import Settings from "./pages/admin/Settings";
+import StudentPage from "./pages/StudentPage";
+import ColorShowcase from "./pages/ColorShowcase";
 
 const queryClient = new QueryClient();
 
@@ -61,7 +63,7 @@ const App = () => (
               path="/student" 
               element={
                 <ProtectedRoute allowedUserTypes={["student"]}>
-                  <Dashboard />
+                  <StudentPage />
                 </ProtectedRoute>
               } 
             />
@@ -75,11 +77,15 @@ const App = () => (
                 </ProtectedRoute>
               } 
             >
-              <Route index element={<AdminIndex />} />
+              <Route index element={<Navigate to="/admin/courses" replace />} />
               <Route path="courses" element={<CourseManagement />} />
               <Route path="videos" element={<VideoManagement />} />
               <Route path="accounts" element={<AccountManagement />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
+            
+            {/* Color Showcase Route */}
+            <Route path="/colors" element={<ColorShowcase />} />
             
             {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />

@@ -1,75 +1,40 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
-  const { user, profile, signOut } = useAuth();
+  const { profile } = useAuth();
+  const navigate = useNavigate();
 
+  useEffect(() => {
+    // 根据用户类型自动重定向到相应的管理控制台
+    if (profile) {
+      switch (profile.user_type) {
+        case 'admin':
+          navigate('/admin/courses', { replace: true });
+          break;
+        case 'teacher':
+          navigate('/admin/accounts', { replace: true });
+          break;
+        case 'student':
+          // 学生用户可以保持在Dashboard，或重定向到学习页面
+          navigate('/student', { replace: true });
+          break;
+        default:
+          // 其他用户类型暂时保持在当前页面
+          break;
+      }
+    }
+  }, [profile, navigate]);
+
+  // 显示加载中或重定向提示
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">用户仪表盘</h1>
-        <Button onClick={signOut} variant="outline">退出登录</Button>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-muted-foreground">正在跳转到管理控制台...</p>
       </div>
-      
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>欢迎回来，{profile?.username || '用户'}！</CardTitle>
-          <CardDescription>
-            您的账户访问有效期至：{new Date(profile?.access_expires_at).toLocaleDateString()}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <h4 className="text-sm font-medium">用户名</h4>
-              <p className="text-lg">{profile?.username}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium">邮箱</h4>
-              <p className="text-lg">{user?.email}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium">手机号码</h4>
-              <p className="text-lg">{profile?.phone_number}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium">用户类型</h4>
-              <p className="text-lg capitalize">{profile?.user_type}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      
-      {profile?.school && (
-        <Card>
-          <CardHeader>
-            <CardTitle>学校信息</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <h4 className="text-sm font-medium">学校</h4>
-                <p className="text-lg">{profile.school}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium">学院</h4>
-                <p className="text-lg">{profile.department}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium">专业</h4>
-                <p className="text-lg">{profile.major}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium">年级/届</h4>
-                <p className="text-lg">{profile.grade}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };

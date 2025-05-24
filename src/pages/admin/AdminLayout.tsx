@@ -5,39 +5,23 @@ import { Button } from "@/components/ui/button";
 import { 
   BookOpen, 
   Video, 
-  User, 
-  LogOut,
-  Menu,
-  X,
   Users,
-  AlertCircle
+  AlertCircle,
+  Shield,
+  Settings
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import UserAvatarDropdown from "@/components/UserAvatarDropdown";
+import { loadSystemSettings } from "@/utils/systemSettings";
 
 const AdminLayout = () => {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   
   const isTeacher = profile?.user_type === "teacher";
-  
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      // 清理 Supabase 本地缓存
-      Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith('sb-')) {
-          localStorage.removeItem(key);
-        }
-      });
-      // 强制刷新页面，彻底重置所有状态
-      window.location.replace("/auth/login");
-    } catch (e) {
-      // 可选：弹出错误提示
-    }
-  };
+  const systemSettings = loadSystemSettings();
 
   // 教师尝试访问限制页面时的处理函数
   const handleRestrictedAccess = (e) => {
@@ -50,6 +34,48 @@ const AdminLayout = () => {
       });
     }
   };
+
+  // 获取当前页面信息和面包屑导航
+  const getCurrentPageInfo = () => {
+    const path = location.pathname;
+    if (path.includes('/courses')) {
+      return { 
+        title: '课程管理', 
+        breadcrumb: '课程管理',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 课程管理`
+      };
+    } else if (path.includes('/videos')) {
+      return { 
+        title: '视频管理', 
+        breadcrumb: '视频管理',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 视频管理`
+      };
+    } else if (path.includes('/accounts')) {
+      return { 
+        title: '账号管理', 
+        breadcrumb: '账号管理',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 账号管理`
+      };
+    } else if (path.includes('/settings')) {
+      return { 
+        title: '系统设置', 
+        breadcrumb: '设置',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 系统设置`
+      };
+    }
+    return { 
+      title: '管理控制台', 
+      breadcrumb: '控制台',
+      showDashboardLink: false,
+      breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'}`
+    };
+  };
+
+  const currentPage = getCurrentPageInfo();
 
   const navItems = [
     { 
@@ -71,42 +97,75 @@ const AdminLayout = () => {
       restricted: false
     },
   ];
+
+  const personalItems = [
+    {
+      to: "/admin/settings",
+      label: "设置",
+      icon: <Settings className="h-5 w-5" />,
+      restricted: false,
+      disabled: false
+    }
+  ];
   
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* 顶部导航栏 */}
-      <header className="bg-primary text-primary-foreground shadow-md">
-        <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">
-              {isTeacher ? "教师控制台" : "管理员控制台"}
-            </h1>
+    <div className="min-h-screen">
+      {/* 左侧边栏 */}
+      <aside className="w-64 admin-sidebar flex-col flex">
+        {/* 侧边栏头部 */}
+        <div className="sidebar-header p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="sidebar-logo w-8 h-8 rounded-lg flex items-center justify-center">
+              {systemSettings.system_logo ? (
+                <img 
+                  src={systemSettings.system_logo} 
+                  alt="系统Logo" 
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    // 如果自定义Logo加载失败，显示默认图标
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.nextElementSibling?.setAttribute('style', 'display: block');
+                  }}
+                />
+              ) : null}
+              <Shield className={`h-5 w-5 text-white ${systemSettings.system_logo ? 'hidden' : ''}`} />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold leading-tight">
+                {isTeacher ? "教师控制台" : "管理员控制台"}
+              </h1>
+            </div>
           </div>
-          
-          {/* 移动端菜单按钮 */}
-          <button 
-            className="md:hidden p-2" 
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X /> : <Menu />}
-          </button>
-          
-          {/* 桌面端导航 */}
-          <nav className="hidden md:flex items-center gap-4">
+          <p className="text-sm">
+            {systemSettings.site_name || (isTeacher ? "教师管理系统" : "系统管理控制台")}
+          </p>
+        </div>
+
+        {/* 导航菜单 */}
+        <nav className="flex-1 p-4 space-y-6">
+          {/* 管理功能分组 */}
+          <div>
+            <h3 className="nav-group-title text-xs uppercase tracking-wider mb-3">
+              管理功能
+            </h3>
+            <div className="space-y-1">
             {navItems.map((item) => {
-              const NavComponent = item.restricted ? 
-                ({ children }) => (
-                  <TooltipProvider>
+              if (item.restricted) {
+                return (
+                  <TooltipProvider key={item.to}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span
-                          className={`flex items-center gap-1 px-3 py-2 rounded cursor-not-allowed opacity-60`}
+                        <div
+                          className="sidebar-restricted-item flex items-center gap-3 px-4 py-3 rounded-lg cursor-not-allowed"
                           onClick={handleRestrictedAccess}
                         >
-                          {children}
-                        </span>
+                          {item.icon}
+                          <span className="font-medium">{item.label}</span>
+                          <AlertCircle className="h-4 w-4 ml-auto text-amber-500" />
+                        </div>
                       </TooltipTrigger>
-                      <TooltipContent>
+                      <TooltipContent side="right">
                         <div className="flex items-center">
                           <AlertCircle className="h-4 w-4 mr-1 text-amber-500" />
                           <span>教师账号无法访问此功能</span>
@@ -114,107 +173,92 @@ const AdminLayout = () => {
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                ) : 
-                NavLink;
-                
+                );
+              }
+              
               return (
-                <NavComponent
+                <NavLink
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) => 
-                    `flex items-center gap-1 px-3 py-2 rounded transition-colors ${
-                      isActive && !item.restricted
-                        ? 'bg-primary-foreground/20 text-white' 
-                        : 'hover:bg-primary-foreground/10'
+                    `sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg hover:no-underline ${
+                      isActive ? 'active' : ''
                     }`
                   }
                 >
                   {item.icon}
-                  <span>{item.label}</span>
-                </NavComponent>
+                  <span className="font-medium">{item.label}</span>
+                </NavLink>
               );
             })}
-            <div className="h-6 w-px bg-primary-foreground/20 mx-1"></div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 px-3 py-2">
-                <User className="h-5 w-5" />
-                <span>{profile?.username || (isTeacher ? '教师' : '管理员')}</span>
-              </div>
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                className="font-bold"
-                onClick={handleSignOut}
-              >
-                <LogOut className="h-4 w-4 mr-1" />
-                退出
-              </Button>
             </div>
-          </nav>
-        </div>
-      </header>
-      
-      {/* 移动端菜单 */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-background border-b shadow-sm">
-          <div className="container mx-auto py-2">
-            <nav className="flex flex-col space-y-1">
-              {navItems.map((item) => {
-                if (item.restricted) {
-                  return (
-                    <div
-                      key={item.to}
-                      className="flex items-center gap-2 px-4 py-2 rounded opacity-60 cursor-not-allowed"
-                      onClick={handleRestrictedAccess}
-                    >
-                      {item.icon}
-                      <span>{item.label}</span>
-                      <AlertCircle className="h-4 w-4 ml-auto text-amber-500" />
-                    </div>
-                  );
-                }
-                
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) => 
-                      `flex items-center gap-2 px-4 py-2 rounded ${
-                        isActive ? 'bg-muted font-medium' : 'hover:bg-muted/50'
-                      }`
-                    }
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </NavLink>
-                );
-              })}
-              <div className="h-px bg-border my-1"></div>
-              <div className="flex items-center justify-between px-4 py-2">
-                <div className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  <span>{profile?.username || (isTeacher ? '教师' : '管理员')}</span>
-                </div>
-                <Button 
-                  variant="secondary" 
-                  size="sm"
-                  className="font-bold"
-                  onClick={handleSignOut}
+          </div>
+
+          {/* 分隔线 */}
+          <div className="sidebar-divider"></div>
+
+          {/* 系统设置分组 */}
+          <div>
+            <h3 className="nav-group-title text-xs uppercase tracking-wider mb-3">
+              系统设置
+            </h3>
+            <div className="space-y-1">
+            {personalItems.map((item) => {
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => 
+                    `sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg hover:no-underline ${
+                      isActive ? 'active' : ''
+                    }`
+                  }
                 >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  退出
-                </Button>
+                  {item.icon}
+                  <span className="font-medium">{item.label}</span>
+                </NavLink>
+              );
+            })}
+            </div>
+          </div>
+        </nav>
+
+        {/* 侧边栏底部 */}
+        <div className="sidebar-user-area p-4">
+          <UserAvatarDropdown variant="admin" className="w-full" />
+        </div>
+      </aside>
+
+      {/* 主内容区域 */}
+      <div className="flex flex-col admin-main-content">
+        {/* 页面顶部面包屑 */}
+        <div className="bg-background">
+          <div className="px-4 md:px-6 py-2 md:py-3">
+            <div className="admin-nav-breadcrumb">
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span className="font-medium text-primary truncate">
+                      <span className="hidden sm:inline">
+                        {currentPage.breadcrumbPath}
+                      </span>
+                      <span className="sm:hidden">
+                        {currentPage.breadcrumb}
+                      </span>
+                    </span>
+                  </div>
+                </div>
               </div>
-            </nav>
+            </div>
           </div>
         </div>
-      )}
-      
-      {/* 主内容区域 */}
-      <main className="flex-1 bg-background">
-        <Outlet />
-      </main>
+        
+        {/* 主内容区域 */}
+        <main className="bg-background">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };

@@ -4,89 +4,122 @@
 
 @layer base {
   :root {
+    /* 基础色彩 */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 212 25% 15%; /* 深蓝灰，更易阅读 */
 
+    /* 卡片和弹出组件 */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 212 25% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 212 25% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* 主色调 - 教育蓝 */
+    --primary: 214 84% 56%; /* 专业教育蓝 #2563EB */
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* 辅助色调 - 温暖的学术绿 */
+    --secondary: 142 76% 94%; /* 淡绿色背景 */
+    --secondary-foreground: 142 51% 20%; /* 深绿色文字 */
 
+    /* 静音色调 - 柔和中性色 */
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* 强调色 - 学术橙 */
+    --accent: 43 74% 94%; /* 淡橙色背景 */
+    --accent-foreground: 43 96% 25%; /* 深橙色文字 */
 
+    /* 警告/错误色 */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
+    /* 边框和输入框 */
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 214 84% 56%; /* 焦点环使用主色调 */
 
-    --radius: 0.5rem;
+    /* 圆角设置 */
+    --radius: 0.5rem; /* 适中的圆角，体现专业感 */
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
+    /* 侧边栏配色 */
+    --sidebar-background: 214 100% 97%; /* 淡蓝色背景 */
+    --sidebar-foreground: 212 25% 25%;
+    --sidebar-primary: 214 84% 56%;
     --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 214 50% 90%;
+    --sidebar-accent-foreground: 214 84% 40%;
+    --sidebar-border: 214 31% 88%;
+    --sidebar-ring: 214 84% 56%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    /* 成功色 - 学术绿 */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
+    /* 警告色 - 学术橙 */
+    --warning: 43 96% 56%;
+    --warning-foreground: 0 0% 98%;
 
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* 信息色 - 学术蓝 */
+    --info: 214 84% 56%;
+    --info-foreground: 0 0% 98%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* 深色模式基础色彩 */
+    --background: 224 71% 4%; /* 深蓝黑色 */
+    --foreground: 213 31% 91%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    /* 深色模式卡片 */
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 213 31% 91%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* 深色模式主色调 */
+    --primary: 214 84% 56%; /* 保持教育蓝 */
+    --primary-foreground: 214 16% 12%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    /* 深色模式辅助色 */
+    --secondary: 215 25% 17%;
+    --secondary-foreground: 213 31% 91%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    /* 深色模式静音色 */
+    --muted: 215 25% 17%;
+    --muted-foreground: 217.9 10.6% 64.9%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* 深色模式强调色 */
+    --accent: 215 25% 17%;
+    --accent-foreground: 213 31% 91%;
 
+    /* 深色模式警告色 */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    /* 深色模式边框 */
+    --border: 215 25% 17%;
+    --input: 215 25% 17%;
+    --ring: 214 84% 56%;
+
+    /* 深色模式侧边栏 */
+    --sidebar-background: 224 47% 8%;
+    --sidebar-foreground: 213 31% 91%;
+    --sidebar-primary: 214 84% 56%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 216 34% 17%;
+    --sidebar-accent-foreground: 213 31% 91%;
+    --sidebar-border: 216 34% 17%;
+    --sidebar-ring: 214 84% 56%;
+
+    /* 深色模式状态色 */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+    --warning: 43 96% 56%;
+    --warning-foreground: 0 0% 98%;
+    --info: 214 84% 56%;
+    --info-foreground: 0 0% 98%;
   }
 }
 
@@ -95,7 +128,388 @@
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+/* 显然考研教育专用样式 */
+.edu-gradient-primary { 
+  background: linear-gradient(135deg, hsl(214 84% 56%) 0%, hsl(214 84% 70%) 100%); 
+}
+
+.edu-gradient-success { 
+  background: linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(142 76% 50%) 100%); 
+}
+
+.edu-gradient-warning { 
+  background: linear-gradient(135deg, hsl(43 96% 56%) 0%, hsl(43 96% 70%) 100%); 
+}
+
+.edu-glow-primary { 
+  box-shadow: 0 4px 20px hsla(214 84% 56%, 0.25); 
+}
+
+.edu-glow-success { 
+  box-shadow: 0 4px 20px hsla(142 76% 36%, 0.25); 
+}
+
+.edu-text-gradient { 
+  background: linear-gradient(135deg, hsl(214 84% 56%) 0%, hsl(142 76% 36%) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 学习进度条样式 */
+.progress-bar {
+  background: linear-gradient(90deg, hsl(214 84% 56%) 0%, hsl(142 76% 36%) 100%);
+}
+
+/* 专注学习模式的护眼配色 */
+.study-mode {
+  --background: 45 29% 97%; /* 温暖的米白色 */
+  --foreground: 212 25% 15%;
+  --card: 45 29% 97%;
+  --card-foreground: 212 25% 15%;
+}
+
+/* 教师专用色彩 */
+.teacher-accent {
+  --accent: 43 74% 94%;
+  --accent-foreground: 43 96% 25%;
+}
+
+/* 学生专用色彩 */
+.student-accent {
+  --accent: 142 76% 94%;
+  --accent-foreground: 142 51% 20%;
+}
+
+/* 按钮悬停时不显示下划线 */
+button:hover {
+  text-decoration: none !important;
+}
+
+/* 确保所有按钮组件不显示下划线 */
+.button:hover,
+[role="button"]:hover {
+  text-decoration: none !important;
+}
+
+/* 用户头像下拉菜单样式 */
+[data-radix-popper-content-wrapper] {
+  z-index: 50;
+}
+
+/* 头像样式 */
+.avatar-container {
+  transition: all 0.2s ease-in-out;
+}
+
+.avatar-container:hover {
+  transform: scale(1.05);
+}
+
+/* Dashboard导航样式 */
+.dashboard-nav {
+  background: linear-gradient(135deg, hsl(214 84% 56%) 0%, hsl(214 84% 65%) 100%);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-nav .nav-breadcrumb {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+}
+
+/* 快速操作卡片动画 */
+.quick-action-card {
+  transition: all 0.2s ease-in-out;
+}
+
+.quick-action-card:hover {
+  transform: translateY(-2px);
+}
+
+/* 管理员导航面包屑样式 */
+.admin-nav-breadcrumb {
+  background: linear-gradient(135deg, 
+    hsl(214 84% 97%) 0%, 
+    hsl(214 50% 95%) 100%);
+  border-radius: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  min-height: 3.5rem;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid hsl(214 30% 90%);
+}
+
+.admin-nav-breadcrumb .text-muted-foreground {
+  color: hsl(214 25% 65%);
+}
+
+/* 面包屑导航响应式优化 */
+@media (max-width: 768px) {
+  .admin-nav-breadcrumb {
+    padding: 0.75rem 1rem;
+    min-height: 3rem;
+    border-radius: 0.5rem;
+  }
+}
+
+/* 管理员导航悬停效果 */
+.admin-nav-item {
+  transition: all 0.2s ease-in-out;
+}
+
+.admin-nav-item:hover {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(4px);
+}
+
+/* 侧边栏样式 - 浅色主题 */
+.admin-sidebar {
+  background: linear-gradient(180deg, 
+    hsl(0 0% 98%) 0%, 
+    hsl(214 20% 95%) 100%);
+  border-right: 1px solid hsl(214 20% 88%);
+  box-shadow: 
+    2px 0 20px rgba(0, 0, 0, 0.06),
+    inset -1px 0 0 rgba(255, 255, 255, 0.8);
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 10;
+}
+
+.admin-sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, 
+    transparent 0%, 
+    rgba(214, 84%, 56%, 0.02) 50%, 
+    transparent 100%);
+  pointer-events: none;
+}
+
+/* 侧边栏导航项 - 浅色主题 */
+.sidebar-nav-item {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  color: hsl(214 25% 35%);
+}
+
+.sidebar-nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background: hsl(214 84% 56%);
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
+  border-radius: 0 2px 2px 0;
+}
+
+.sidebar-nav-item.active::before {
+  transform: scaleY(1);
+}
+
+.sidebar-nav-item.active {
+  background: hsl(214 84% 95%);
+  color: hsl(214 84% 56%);
+  font-weight: 600;
+}
+
+.sidebar-nav-item:hover {
+  transform: translateX(2px);
+  background: hsl(214 50% 97%);
+  color: hsl(214 84% 56%);
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.1);
+}
+
+/* 侧边栏响应式优化 */
+@media (max-width: 768px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .admin-main-content {
+    margin-left: 0;
+  }
+  
+  /* 移动端显示侧边栏时 */
+  .admin-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+}
+
+/* 平板端适配 */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .admin-sidebar {
+    width: 240px;
+  }
+  
+  .admin-main-content {
+    margin-left: 240px;
+  }
+}
+
+/* 侧边栏导航项图标 */
+.sidebar-nav-item svg {
+  transition: all 0.2s ease;
+}
+
+.sidebar-nav-item:hover svg {
+  transform: scale(1.05);
+}
+
+.sidebar-nav-item.active svg {
+  color: hsl(214 84% 56%);
+}
+
+/* 侧边栏分隔线 */
+.sidebar-divider {
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    hsl(214 20% 88%) 50%, 
+    transparent 100%);
+  margin: 1rem 0;
+}
+
+/* 主内容区域自适应 */
+.admin-main-content {
+  margin-left: 256px; /* 侧边栏宽度 */
+  transition: margin-left 0.3s ease;
+  min-height: 100vh;
+}
+
+/* 侧边栏用户区域 - 浅色主题 */
+.sidebar-user-area {
+  background: hsl(214 20% 96%);
+  border-top: 1px solid hsl(214 20% 88%);
+}
+
+/* 侧边栏Logo - 浅色主题 */
+.sidebar-logo {
+  background: linear-gradient(135deg, 
+    hsl(214 84% 56%) 0%, 
+    hsl(214 84% 65%) 100%);
+  border: 1px solid hsl(214 84% 70%);
+  box-shadow: 
+    0 2px 8px rgba(37, 99, 235, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* 导航分组标题 - 浅色主题 */
+.nav-group-title {
+  letter-spacing: 0.05em;
+  color: hsl(214 25% 50%);
+  font-weight: 600;
+}
+
+/* 侧边栏受限项样式 */
+.sidebar-restricted-item {
+  color: hsl(214 15% 60%);
+  background: hsl(214 10% 97%);
+  border: 1px dashed hsl(214 15% 85%);
+}
+
+.sidebar-restricted-item:hover {
+  background: hsl(43 96% 96%);
+  border-color: hsl(43 96% 75%);
+}
+
+/* 侧边栏禁用项样式 */
+.sidebar-disabled-item {
+  color: hsl(214 15% 60%);
+  background: hsl(214 5% 98%);
+}
+
+.sidebar-disabled-item .disabled-badge {
+  background: hsl(214 15% 90%);
+  color: hsl(214 15% 55%);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* 侧边栏头部 - 浅色主题 */
+.sidebar-header {
+  background: hsl(0 0% 99%);
+  border-bottom: 1px solid hsl(214 20% 88%);
+  color: hsl(214 25% 25%);
+  min-height: 5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.sidebar-header h1 {
+  color: hsl(214 25% 15%);
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+
+.sidebar-header p {
+  color: hsl(214 25% 50%);
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+/* 管理员页面内容布局优化 */
+.admin-page-container {
+  padding: 2rem;
+  margin: 0;
+  max-width: none;
+  width: 100%;
+  min-height: calc(100vh - 4rem); /* 减去面包屑高度 */
+}
+
+/* 移动端管理员页面内容 */
+@media (max-width: 768px) {
+  .admin-page-container {
+    padding: 1rem;
+  }
+}
+
+/* 重写管理员页面中的container样式，确保对齐 */
+.admin-main-content .container {
+  margin: 0 !important;
+  max-width: none !important;
+  padding: 2rem !important;
+  width: 100% !important;
+}
+
+@media (max-width: 768px) {
+  .admin-main-content .container {
+    padding: 1rem !important;
+  }
+}
+
+/* 管理员页面的分割线与边框优化 */
+.admin-main-content .border-b {
+  border-color: hsl(214 20% 88%) !important;
+}
+
+.admin-main-content .shadow-sm {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+}
+
+

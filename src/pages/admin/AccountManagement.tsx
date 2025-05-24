@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Edit, Trash2, Search, X, User, Plus, FileEdit, Info, AlertCircle } from "lucide-react";
+import { Edit, Trash2, Search, X, User, Plus, FileEdit, Info, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,8 +50,44 @@ const userTypeMap: Record<string, string> = {
   admin: "管理员"
 };
 
-// 特殊调试信息
-const DEBUG_MODE = true;
+// 用户类型颜色配置
+const userTypeColors: Record<string, { bg: string; text: string; border?: string }> = {
+  registered: {
+    bg: "bg-gray-100",
+    text: "text-gray-700",
+    border: "border-gray-200"
+  },
+  student: {
+    bg: "bg-blue-100",
+    text: "text-blue-700",
+    border: "border-blue-200"
+  },
+  teacher: {
+    bg: "bg-green-100",
+    text: "text-green-700",
+    border: "border-green-200"
+  },
+  admin: {
+    bg: "bg-red-100",
+    text: "text-red-700",
+    border: "border-red-200"
+  }
+};
+
+  // 特殊调试信息
+  const DEBUG_MODE = true;
+
+  // 生成用户类型标签
+  const getUserTypeTag = (userType: string) => {
+    const colors = userTypeColors[userType] || userTypeColors.registered;
+    const label = userTypeMap[userType] || userType;
+    
+    return (
+      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border || ''}`}>
+        {label}
+      </span>
+    );
+  };
 
 const AccountManagement = () => {
   // 获取认证信息
@@ -60,6 +96,8 @@ const AccountManagement = () => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
   const [editDialog, setEditDialog] = useState<{ open: boolean; profile: Profile | null }>({
     open: false,
     profile: null
@@ -370,13 +408,99 @@ const AccountManagement = () => {
     }
   };
 
-  // 过滤用户列表
+  // 过滤和分页逻辑
   const filteredProfiles = profiles.filter(profile =>
     profile.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
     profile.phone_number.includes(searchTerm) ||
     (profile.school && profile.school.toLowerCase().includes(searchTerm.toLowerCase())) ||
     userTypeMap[profile.user_type]?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filteredProfiles.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedProfiles = filteredProfiles.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  // 分页控制
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+
+    return (
+      <div className="flex items-center justify-center gap-2 mt-6">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        
+        {startPage > 1 && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(1)}
+            >
+              1
+            </Button>
+            {startPage > 2 && <span className="px-2">...</span>}
+          </>
+        )}
+        
+        {pages.map(page => (
+          <Button
+            key={page}
+            variant={currentPage === page ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePageChange(page)}
+          >
+            {page}
+          </Button>
+        ))}
+        
+        {endPage < totalPages && (
+          <>
+            {endPage < totalPages - 1 && <span className="px-2">...</span>}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(totalPages)}
+            >
+              {totalPages}
+            </Button>
+          </>
+        )}
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  };
 
   // 处理教师尝试删除账号的情况
   const handleTeacherDeleteAttempt = (e) => {
@@ -431,7 +555,10 @@ const AccountManagement = () => {
           <Input
             placeholder="搜索用户名、手机号、学校或用户类型..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1); // 搜索时重置到第一页
+            }}
             className="pl-10"
           />
           {searchTerm && (
@@ -449,37 +576,54 @@ const AccountManagement = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>用户列表 ({filteredProfiles.length})</CardTitle>
+          <CardTitle>
+            用户列表
+            {filteredProfiles.length > 0 && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                共 {filteredProfiles.length} 个用户
+                {totalPages > 1 && ` • 第 ${currentPage} / ${totalPages} 页`}
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8">加载中...</div>
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">加载中...</p>
+              </div>
+            </div>
           ) : filteredProfiles.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {searchTerm ? "没有找到匹配的用户" : "暂无用户"}
+            <div className="text-center py-12">
+              <div className="text-muted-foreground">
+                {searchTerm ? "没有找到匹配的用户" : "暂无用户"}
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                {searchTerm ? "尝试使用不同的关键词搜索" : "系统中还没有注册用户"}
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="py-3 px-4 text-left">用户名</th>
-                    <th className="py-3 px-4 text-left">手机号</th>
-                    <th className="py-3 px-4 text-left">用户类型</th>
-                    <th className="py-3 px-4 text-left">学校</th>
-                    <th className="py-3 px-4 text-left">过期时间</th>
-                    <th className="py-3 px-4 text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProfiles.map(profile => (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="py-3 px-4 text-left">用户名</th>
+                      <th className="py-3 px-4 text-left">手机号</th>
+                      <th className="py-3 px-4 text-left">用户类型</th>
+                      <th className="py-3 px-4 text-left">学校</th>
+                      <th className="py-3 px-4 text-left">过期时间</th>
+                      <th className="py-3 px-4 text-right">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedProfiles.map(profile => (
                     <tr key={profile.id} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4">{profile.username}</td>
                       <td className="py-3 px-4">{profile.phone_number}</td>
                       <td className="py-3 px-4">
-                        <span className="px-2 py-1 bg-gray-100 rounded-full text-xs font-medium">
-                          {userTypeMap[profile.user_type] || profile.user_type}
-                        </span>
+                        {getUserTypeTag(profile.user_type)}
                       </td>
                       <td className="py-3 px-4">{profile.school || "-"}</td>
                       <td className="py-3 px-4">
@@ -559,9 +703,11 @@ const AccountManagement = () => {
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                                  </tbody>
+                </table>
+              </div>
+              {renderPagination()}
+            </>
           )}
         </CardContent>
       </Card>

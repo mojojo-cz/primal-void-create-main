@@ -24,6 +24,13 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { 
   Play, 
@@ -34,9 +41,70 @@ import {
   Plus,
   ArrowUp,
   ArrowDown,
-  X
+  X,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Folder,
+  FolderOpen
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+
+// 文件夹类型
+interface VideoFolder {
+  id: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  color?: string;
+}
+
+// 默认文件夹
+const DEFAULT_FOLDERS: VideoFolder[] = [
+  {
+    id: 'default',
+    name: '默认文件夹',
+    description: '系统默认文件夹，用于存放未分类的视频',
+    is_default: true,
+    color: 'gray'
+  },
+  {
+    id: 'course-videos',
+    name: '课程视频',
+    description: '课程相关的教学视频',
+    is_default: false,
+    color: 'blue'
+  },
+  {
+    id: 'demo-videos',
+    name: '演示视频',
+    description: '产品演示和介绍视频',
+    is_default: false,
+    color: 'green'
+  }
+];
+
+// 本地存储键
+const FOLDERS_STORAGE_KEY = 'video_folders';
+
+// 加载文件夹
+const loadFoldersFromStorage = (): VideoFolder[] => {
+  try {
+    const stored = localStorage.getItem(FOLDERS_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // 确保默认文件夹存在
+      const folderIds = parsed.map((f: VideoFolder) => f.id);
+      const missingDefaults = DEFAULT_FOLDERS.filter(df => !folderIds.includes(df.id));
+      return [...missingDefaults, ...parsed];
+    }
+  } catch (error) {
+    console.error('加载文件夹失败:', error);
+  }
+  return DEFAULT_FOLDERS;
+};
+
+
 
 const defaultForm: TablesInsert<'courses'> = {
   title: '',
@@ -137,11 +205,18 @@ const CourseManagement = () => {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [selectedVideoId, setSelectedVideoId] = useState<string>('');
   const [uploadedVideoTitle, setUploadedVideoTitle] = useState('');
+  const [selectedUploadFolderId, setSelectedUploadFolderId] = useState<string>('course-videos');
+  const [videoUploadDescription, setVideoUploadDescription] = useState('');
+  const [selectedBrowseFolderId, setSelectedBrowseFolderId] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>('upload');
   const videoUploadRef = useRef<HTMLInputElement>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; courseId: string; title: string }>({ open: false, courseId: '', title: '' });
   const [deleteSectionDialog, setDeleteSectionDialog] = useState<{ open: boolean; sectionId: string; title: string }>({ open: false, sectionId: '', title: '' });
   const [previewCoverImage, setPreviewCoverImage] = useState(false);
   const [activeCourseId, setActiveCourseId] = useState<string | undefined>(undefined);
+  
+  // 文件夹管理
+  const [folders] = useState<VideoFolder[]>(loadFoldersFromStorage());
 
   // 获取课程及章节和视频信息
   const fetchCourses = async () => {
@@ -191,12 +266,31 @@ const CourseManagement = () => {
 
   // 获取视频库
   const fetchVideoLibrary = async () => {
-    const { data, error } = await supabase
-      .from("videos")
-      .select("id, title, description, video_url, created_at")
-      .order("created_at", { ascending: false });
-    if (!error && data) {
-      setVideoLibrary(data);
+    try {
+      const { data, error } = await supabase
+        .from("videos")
+        .select("id, title, description, video_url, created_at")
+        .order("created_at", { ascending: false });
+      
+      if (error) {
+        console.error('获取视频库失败:', error);
+        toast({
+          variant: "destructive",
+          title: "加载视频库失败",
+          description: error.message || "无法加载视频库"
+        });
+        return;
+      }
+      
+      setVideoLibrary(data || []);
+    } catch (error: any) {
+      console.error('获取视频库异常:', error);
+      toast({
+        variant: "destructive",
+        title: "加载视频库异常",
+        description: error.message || "获取视频库时发生异常"
+      });
+      setVideoLibrary([]);
     }
   };
 
@@ -404,6 +498,10 @@ const CourseManagement = () => {
     setVideoUploadDialog({ open: false, sectionId: '', courseId: '' });
     setSelectedVideoId('');
     setUploadedVideoTitle('');
+    setVideoUploadDescription('');
+    setSelectedUploadFolderId('course-videos');
+    setSelectedBrowseFolderId('');
+    setActiveTab('upload');
   };
 
   // 视频选择
@@ -462,11 +560,24 @@ const CourseManagement = () => {
       
       const videoUrl = urlData?.publicUrl;
       
+      // 根据选择的文件夹调整描述（用于分类）
+      let finalDescription = videoUploadDescription;
+      const selectedFolder = folders.find(f => f.id === selectedUploadFolderId);
+      if (selectedFolder && !selectedFolder.is_default) {
+        // 自定义文件夹：在描述中添加文件夹名称标签
+        finalDescription = `${selectedFolder.name} ${finalDescription || uploadedVideoTitle}`.trim();
+      } else if (selectedUploadFolderId === 'course-videos' && !finalDescription?.includes('课程')) {
+        finalDescription = `课程视频：${finalDescription || uploadedVideoTitle}`;
+      } else if (selectedUploadFolderId === 'demo-videos' && !finalDescription?.includes('演示')) {
+        finalDescription = `演示视频：${finalDescription || uploadedVideoTitle}`;
+      }
+      
       // 3. 保存到视频表
       const { data: videoData, error: insertError } = await supabase
         .from('videos')
         .insert([{
           title: uploadedVideoTitle || file.name,
+          description: finalDescription || null,
           video_url: videoUrl,
         }])
         .select('id')
@@ -481,6 +592,11 @@ const CourseManagement = () => {
         event.target.value = '';
       }
       
+      // 清空表单
+      setUploadedVideoTitle('');
+      setVideoUploadDescription('');
+      setSelectedUploadFolderId('course-videos');
+      
       toast({
         title: "上传成功",
         description: "视频已成功上传"
@@ -493,6 +609,74 @@ const CourseManagement = () => {
       });
     } finally {
       setUploadingVideo(false);
+    }
+  };
+
+  // 根据文件夹过滤视频库
+  const getFilteredVideosByFolder = (videos: Video[], folderId: string) => {
+    try {
+      if (!videos || !Array.isArray(videos)) {
+        console.warn('视频列表为空或格式错误');
+        return [];
+      }
+      
+      if (!folderId) return videos;
+      
+      // 如果是自定义文件夹，使用标签匹配
+      const customFolder = folders.find(f => f.id === folderId && !f.is_default);
+      if (customFolder) {
+        return videos.filter(video => {
+          try {
+            const content = `${video?.title || ''} ${video?.description || ''}`.toLowerCase();
+            return content.includes(customFolder.name.toLowerCase());
+          } catch (error) {
+            console.error('过滤视频时出错:', error, video);
+            return false;
+          }
+        });
+      }
+      
+      // 默认文件夹的智能分类逻辑
+      return videos.filter(video => {
+        try {
+          const content = `${video?.title || ''} ${video?.description || ''}`.toLowerCase();
+          switch (folderId) {
+            case 'course-videos':
+              return content.includes('课程') || content.includes('教学') || content.includes('学习');
+            case 'demo-videos':
+              return content.includes('演示') || content.includes('展示') || content.includes('介绍');
+            case 'default':
+              // 默认文件夹：不属于其他分类的视频
+              const belongsToOther = folders.some(folder => {
+                try {
+                  if (folder.is_default && folder.id !== 'default') {
+                    if (folder.id === 'course-videos') {
+                      return content.includes('课程') || content.includes('教学') || content.includes('学习');
+                    }
+                    if (folder.id === 'demo-videos') {
+                      return content.includes('演示') || content.includes('展示') || content.includes('介绍');
+                    }
+                  } else if (!folder.is_default) {
+                    return content.includes(folder.name.toLowerCase());
+                  }
+                  return false;
+                } catch (error) {
+                  console.error('检查文件夹归属时出错:', error, folder);
+                  return false;
+                }
+              });
+              return !belongsToOther;
+            default:
+              return false;
+          }
+        } catch (error) {
+          console.error('过滤视频时出错:', error, video);
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('getFilteredVideosByFolder函数异常:', error);
+      return [];
     }
   };
 
@@ -849,27 +1033,159 @@ const CourseManagement = () => {
     }
   };
 
+  // 分页和搜索状态
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  // 过滤和分页
+  const filteredCourses = courses.filter(course => 
+    course.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (course.description && course.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const totalPages = Math.ceil(filteredCourses.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedCourses = filteredCourses.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  // 分页控制
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+
+    return (
+      <div className="flex items-center justify-center gap-2 mt-6">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        
+        {startPage > 1 && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(1)}
+            >
+              1
+            </Button>
+            {startPage > 2 && <span className="px-2">...</span>}
+          </>
+        )}
+        
+        {pages.map(page => (
+          <Button
+            key={page}
+            variant={currentPage === page ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePageChange(page)}
+          >
+            {page}
+          </Button>
+        ))}
+        
+        {endPage < totalPages && (
+          <>
+            {endPage < totalPages - 1 && <span className="px-2">...</span>}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(totalPages)}
+            >
+              {totalPages}
+            </Button>
+          </>
+        )}
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  };
+
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="admin-page-container">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold">课程管理</h1>
           <p className="text-muted-foreground mt-1">创建和管理课程、章节和视频内容</p>
         </div>
-        <Button onClick={() => setOpen(true)}>新增课程</Button>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜索课程..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1); // 搜索时重置到第一页
+              }}
+              className="pl-10 w-64"
+            />
+          </div>
+          <Button onClick={() => setOpen(true)}>新增课程</Button>
+        </div>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>课程列表</CardTitle>
+          <CardTitle>
+            课程列表
+            {filteredCourses.length > 0 && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                共 {filteredCourses.length} 门课程
+                {totalPages > 1 && ` • 第 ${currentPage} / ${totalPages} 页`}
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div>加载中...</div>
-          ) : courses.length === 0 ? (
-            <div>暂无课程</div>
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">加载中...</p>
+              </div>
+            </div>
+          ) : filteredCourses.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-muted-foreground">
+                {searchTerm ? '没有找到匹配的课程' : '暂无课程'}
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                {searchTerm ? '尝试使用不同的关键词搜索' : '点击新增课程按钮创建第一门课程'}
+              </p>
+            </div>
           ) : (
-            <Accordion type="single" collapsible className="w-full" value={activeCourseId} onValueChange={setActiveCourseId}>
-              {courses.map((course) => (
+            <>
+              <Accordion type="single" collapsible className="w-full" value={activeCourseId} onValueChange={setActiveCourseId}>
+                {paginatedCourses.map((course) => (
                 <AccordionItem value={course.id} key={course.id}>
                   <AccordionTrigger className="hover:bg-gray-50 px-4">
                     <div className="flex justify-between items-center w-full mr-4">
@@ -879,10 +1195,10 @@ const CourseManagement = () => {
                       </div>
 {/* --- 课程状态与删除功能区开始 --- */}
 <div className="flex items-center gap-2">
-  <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setEditMode('edit'); setEditingCourseId(course.id); setForm({ ...course, sections: mapSectionsForForm(course.sections) }); setOpen(true); }}>编辑</Button>
+  <Button size="sm" variant="outline" className="hover:no-underline" onClick={e => { e.stopPropagation(); setEditMode('edit'); setEditingCourseId(course.id); setForm({ ...course, sections: mapSectionsForForm(course.sections) }); setOpen(true); }}>编辑</Button>
   <AlertDialog>
     <AlertDialogTrigger asChild>
-      <Button size="sm" variant="destructive" onClick={e => { e.stopPropagation(); setDeleteDialog({ open: true, courseId: course.id, title: course.title }); }}>删除</Button>
+      <Button size="sm" variant="destructive" className="hover:no-underline" onClick={e => { e.stopPropagation(); setDeleteDialog({ open: true, courseId: course.id, title: course.title }); }}>删除</Button>
     </AlertDialogTrigger>
     <AlertDialogContent>
       <AlertDialogHeader>
@@ -973,7 +1289,7 @@ const CourseManagement = () => {
                                                 <Button 
                                                   size="sm" 
                                                   variant="secondary"
-                                                  className="h-8 gap-1"
+                                                  className="h-8 gap-1 hover:no-underline"
                                                   onClick={() => handlePlayVideo(section.video!.video_url, section.video!.title)}
                                                 >
                                                   <Play className="h-3 w-3" />
@@ -983,7 +1299,7 @@ const CourseManagement = () => {
                                                 <Button 
                                                   size="sm" 
                                                   variant="outline"
-                                                  className="h-8 gap-1"
+                                                  className="h-8 gap-1 hover:no-underline"
                                                   onClick={() => openVideoDialog(section.id, course.id)}
                                                 >
                                                   <Video className="h-3 w-3" />
@@ -993,7 +1309,7 @@ const CourseManagement = () => {
                                               <Button 
                                                 size="sm" 
                                                 variant="outline"
-                                                className="h-8 gap-1"
+                                                className="h-8 gap-1 hover:no-underline"
                                                 onClick={() => openSectionDialog('edit', course.id, section)}
                                               >
                                                 <Edit className="h-3 w-3" />
@@ -1003,7 +1319,7 @@ const CourseManagement = () => {
                                                 <Button 
                                                   size="sm" 
                                                   variant="outline"
-                                                  className="h-8 gap-1"
+                                                  className="h-8 gap-1 hover:no-underline"
                                                   onClick={() => openVideoDialog(section.id, course.id)}
                                                 >
                                                   <Video className="h-3 w-3" />
@@ -1013,7 +1329,7 @@ const CourseManagement = () => {
                                               <Button 
                                                 size="sm" 
                                                 variant="destructive"
-                                                className="h-8 gap-1"
+                                                className="h-8 gap-1 hover:no-underline"
                                                 onClick={() => setDeleteSectionDialog({ open: true, sectionId: section.id, title: section.title })}
                                               >
                                                 <Trash2 className="h-3 w-3" />
@@ -1037,7 +1353,7 @@ const CourseManagement = () => {
                       <Button 
                         size="sm" 
                         onClick={() => openSectionDialog('add', course.id)}
-                        className="gap-1"
+                        className="gap-1 hover:no-underline"
                       >
                         <Plus className="h-4 w-4" />
                         <span>新增章节</span>
@@ -1046,7 +1362,9 @@ const CourseManagement = () => {
                   </AccordionContent>
                 </AccordionItem>
               ))}
-            </Accordion>
+              </Accordion>
+              {renderPagination()}
+            </>
           )}
         </CardContent>
       </Card>
@@ -1212,66 +1530,185 @@ const CourseManagement = () => {
           <DialogHeader>
             <DialogTitle>视频上传/选择</DialogTitle>
           </DialogHeader>
-          <Tabs defaultValue="upload">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="upload">上传新视频</TabsTrigger>
-              <TabsTrigger value="select">选择现有视频</TabsTrigger>
-            </TabsList>
+          
+          <div className="space-y-4">
+            {/* Tab导航 */}
+            <div className="flex border-b">
+              <button 
+                className={`px-4 py-2 border-b-2 transition-colors ${
+                  activeTab === 'upload' 
+                    ? 'border-primary text-primary' 
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setActiveTab('upload')}
+              >
+                上传新视频
+              </button>
+              <button 
+                className={`px-4 py-2 border-b-2 transition-colors ${
+                  activeTab === 'select' 
+                    ? 'border-primary text-primary' 
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setActiveTab('select')}
+              >
+                选择现有视频
+              </button>
+            </div>
             
-            <TabsContent value="upload" className="space-y-4 py-4">
-              <div>
-                <label className="block mb-1 font-medium">视频标题</label>
-                <Input value={uploadedVideoTitle} onChange={(e) => setUploadedVideoTitle(e.target.value)} placeholder="请输入视频标题（可选）" />
+            {/* 上传新视频Tab */}
+            {activeTab === 'upload' && (
+              <div className="space-y-4 py-4">
+                <div>
+                  <label className="block mb-1 font-medium">视频标题</label>
+                  <Input value={uploadedVideoTitle} onChange={(e) => setUploadedVideoTitle(e.target.value)} placeholder="请输入视频标题（可选）" />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium">视频描述</label>
+                  <Textarea 
+                    value={videoUploadDescription} 
+                    onChange={(e) => setVideoUploadDescription(e.target.value)} 
+                    placeholder="请输入视频描述（可选）" 
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium">选择文件夹</label>
+                  <Select value={selectedUploadFolderId} onValueChange={setSelectedUploadFolderId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择视频分类" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {folders.map(folder => (
+                        <SelectItem key={folder.id} value={folder.id}>
+                          <div className="flex items-center gap-2">
+                            <Folder className="h-4 w-4" />
+                            {folder.name} {folder.is_default && '（系统）'}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium">上传视频文件</label>
+                  <Input 
+                    type="file" 
+                    ref={videoUploadRef}
+                    accept="video/*" 
+                    onChange={handleVideoUpload}
+                    disabled={uploadingVideo}
+                  />
+                  {uploadingVideo && <div className="mt-2 text-sm">上传中，请稍候...</div>}
+                </div>
               </div>
-              <div>
-                <label className="block mb-1 font-medium">上传视频文件</label>
-                <Input 
-                  type="file" 
-                  ref={videoUploadRef}
-                  accept="video/*" 
-                  onChange={handleVideoUpload}
-                  disabled={uploadingVideo}
-                />
-                {uploadingVideo && <div className="mt-2 text-sm">上传中，请稍候...</div>}
-              </div>
-            </TabsContent>
+            )}
             
-            <TabsContent value="select" className="py-4">
-              <div className="h-[400px] overflow-y-auto border rounded">
-                {videoLibrary.length === 0 ? (
-                  <div className="flex items-center justify-center h-full">暂无视频</div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-2">
-                    {videoLibrary.map(video => (
-                      <div 
-                        key={video.id} 
-                        className={`border rounded p-2 cursor-pointer ${selectedVideoId === video.id ? 'bg-primary/10 border-primary' : ''}`}
-                        onClick={() => handleVideoSelect(video.id)}
-                      >
-                        <div className="font-medium">{video.title}</div>
-                        <div className="text-xs text-muted-foreground truncate">{video.video_url}</div>
-                        <div className="text-xs text-muted-foreground">{new Date(video.created_at).toLocaleString('zh-CN')}</div>
-                        <div className="mt-2 flex justify-end">
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="h-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleVideoSelect(video.id, video.video_url);
-                            }}
-                          >
-                            <Play className="h-3 w-3 mr-1" />
-                            <span>预览</span>
-                          </Button>
-                        </div>
+            {/* 选择现有视频Tab */}
+            {activeTab === 'select' && (
+              <div className="space-y-4 py-4">
+                <div>
+                  <label className="block mb-1 font-medium">筛选文件夹</label>
+                  <select 
+                    value={selectedBrowseFolderId} 
+                    onChange={(e) => setSelectedBrowseFolderId(e.target.value)}
+                    className="w-full border rounded px-3 py-2"
+                  >
+                    <option value="">全部视频</option>
+                    <option value="course-videos">课程视频</option>
+                    <option value="demo-videos">演示视频</option>
+                    <option value="default">默认文件夹</option>
+                  </select>
+                </div>
+                
+                <div className="h-[400px] overflow-y-auto border rounded bg-white">
+                  <div className="p-4">
+                    <h3 className="text-lg font-bold mb-4">
+                      视频库 ({(() => {
+                        if (!videoLibrary || videoLibrary.length === 0) return 0;
+                        const filteredCount = selectedBrowseFolderId 
+                          ? getFilteredVideosByFolder(videoLibrary, selectedBrowseFolderId).length
+                          : videoLibrary.length;
+                        return selectedBrowseFolderId 
+                          ? `${filteredCount}/${videoLibrary.length}` 
+                          : filteredCount;
+                      })()} 个视频)
+                    </h3>
+                    
+                    {!videoLibrary || videoLibrary.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        暂无视频，请先上传视频
                       </div>
-                    ))}
+                    ) : (() => {
+                      // 根据选择的文件夹筛选视频
+                      const filteredVideos = selectedBrowseFolderId 
+                        ? getFilteredVideosByFolder(videoLibrary, selectedBrowseFolderId)
+                        : videoLibrary;
+                      
+                      if (filteredVideos.length === 0) {
+                        return (
+                          <div className="text-center py-8 text-gray-500">
+                            {selectedBrowseFolderId ? '该文件夹暂无视频' : '暂无视频'}
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <div className="space-y-3">
+                          {filteredVideos.map((video) => (
+                            <div 
+                              key={video.id} 
+                              className={`p-3 border rounded cursor-pointer transition-colors ${
+                                selectedVideoId === video.id 
+                                  ? 'bg-blue-50 border-blue-300' 
+                                  : 'bg-gray-50 hover:bg-gray-100'
+                              }`}
+                              onClick={() => setSelectedVideoId(video.id)}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900">{video.title || '未命名视频'}</h4>
+                                  {video.description && (
+                                    <p className="text-sm text-gray-600 mt-1">{video.description}</p>
+                                  )}
+                                  <p className="text-xs text-gray-400 mt-2">
+                                    {video.created_at ? new Date(video.created_at).toLocaleDateString('zh-CN') : ''}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2 ml-4">
+                                  <button 
+                                    className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setVideoDialog({
+                                        open: true,
+                                        url: video.video_url,
+                                        title: video.title
+                                      });
+                                    }}
+                                  >
+                                    预览
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    
+                    {selectedVideoId && (
+                      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded">
+                        <p className="text-green-800 font-medium">
+                          ✅ 已选择视频：{videoLibrary?.find(v => v.id === selectedVideoId)?.title || selectedVideoId}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            </TabsContent>
-          </Tabs>
+            )}
+          </div>
           
           <DialogFooter>
             <Button type="button" variant="outline" onClick={closeVideoDialog}>取消</Button>
