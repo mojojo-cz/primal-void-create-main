@@ -59,11 +59,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const containerElement = containerRef.current;
 
     try {
-      // 优先尝试对 video 元素请求全屏（对移动端更友好）
+      // 优先尝试 iOS WebKit 特有的方法 (同步执行)
+      if (videoElement && typeof (videoElement as any).webkitEnterFullscreen === 'function') {
+        (videoElement as any).webkitEnterFullscreen();
+        return; // iOS 全屏通常由事件处理更新状态，这里直接返回
+      }
+      
+      // 其次尝试标准的 requestFullscreen API (video 元素优先)
       if (videoElement && videoElement.requestFullscreen) {
         await videoElement.requestFullscreen();
         return;
-      } else if (videoElement && (videoElement as any).webkitRequestFullscreen) {
+      } else if (videoElement && (videoElement as any).webkitRequestFullscreen) { // Safari Desktop 等
         await (videoElement as any).webkitRequestFullscreen();
         return;
       } else if (videoElement && (videoElement as any).mozRequestFullScreen) {
