@@ -55,18 +55,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // 进入全屏
   const enterFullscreen = async () => {
-    const element = containerRef.current;
-    if (!element) return;
+    const videoElement = videoRef.current;
+    const containerElement = containerRef.current;
 
     try {
-      if (element.requestFullscreen) {
-        await element.requestFullscreen();
-      } else if ((element as any).webkitRequestFullscreen) {
-        await (element as any).webkitRequestFullscreen();
-      } else if ((element as any).mozRequestFullScreen) {
-        await (element as any).mozRequestFullScreen();
-      } else if ((element as any).msRequestFullscreen) {
-        await (element as any).msRequestFullscreen();
+      // 优先尝试对 video 元素请求全屏（对移动端更友好）
+      if (videoElement && videoElement.requestFullscreen) {
+        await videoElement.requestFullscreen();
+        return;
+      } else if (videoElement && (videoElement as any).webkitRequestFullscreen) {
+        await (videoElement as any).webkitRequestFullscreen();
+        return;
+      } else if (videoElement && (videoElement as any).mozRequestFullScreen) {
+        await (videoElement as any).mozRequestFullScreen();
+        return;
+      } else if (videoElement && (videoElement as any).msRequestFullscreen) {
+        await (videoElement as any).msRequestFullscreen();
+        return;
+      }
+
+      // 如果 video 元素全屏失败或不可用，再尝试容器元素
+      if (containerElement) {
+        if (containerElement.requestFullscreen) {
+          await containerElement.requestFullscreen();
+        } else if ((containerElement as any).webkitRequestFullscreen) {
+          await (containerElement as any).webkitRequestFullscreen();
+        } else if ((containerElement as any).mozRequestFullScreen) {
+          await (containerElement as any).mozRequestFullScreen();
+        } else if ((containerElement as any).msRequestFullscreen) {
+          await (containerElement as any).msRequestFullscreen();
+        }
       }
     } catch (error) {
       console.error('进入全屏失败:', error);
@@ -76,14 +94,34 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // 退出全屏
   const exitFullscreen = async () => {
     try {
-      if (document.exitFullscreen && document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else if ((document as any).webkitExitFullscreen && (document as any).webkitFullscreenElement) {
-        await (document as any).webkitExitFullscreen();
-      } else if ((document as any).mozCancelFullScreen && (document as any).mozFullScreenElement) {
-        await (document as any).mozCancelFullScreen();
-      } else if ((document as any).msExitFullscreen && (document as any).msFullscreenElement) {
-        await (document as any).msExitFullscreen();
+      let exited = false;
+      if (document.exitFullscreen) {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+          exited = true;
+        }
+      } else if ((document as any).webkitExitFullscreen) {
+        if ((document as any).webkitFullscreenElement) {
+          await (document as any).webkitExitFullscreen();
+          exited = true;
+        }
+      } else if ((document as any).mozCancelFullScreen) {
+        if ((document as any).mozFullScreenElement) {
+          await (document as any).mozCancelFullScreen();
+          exited = true;
+        }
+      } else if ((document as any).msExitFullscreen) {
+        if ((document as any).msFullscreenElement) {
+          await (document as any).msExitFullscreen();
+          exited = true;
+        }
+      }
+      // 如果通过检查 fullscreenElement 未能退出，尝试直接调用退出命令，以防状态不同步
+      if (!exited) {
+        if (document.exitFullscreen) await document.exitFullscreen().catch(e => console.warn("Error attempting to force exit fullscreen:", e));
+        else if ((document as any).webkitExitFullscreen) await (document as any).webkitExitFullscreen().catch(e => console.warn("Error attempting to force exit webkit fullscreen:", e));
+        else if ((document as any).mozCancelFullScreen) await (document as any).mozCancelFullScreen().catch(e => console.warn("Error attempting to force exit moz fullscreen:", e));
+        else if ((document as any).msExitFullscreen) await (document as any).msExitFullscreen().catch(e => console.warn("Error attempting to force exit ms fullscreen:", e));
       }
     } catch (error) {
       console.error('退出全屏失败:', error);
@@ -108,9 +146,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     // 如果设置了自动全屏，则在播放时进入全屏
     if (autoFullscreen && !isFullscreen) {
-      setTimeout(() => {
-        enterFullscreen();
-      }, 100); // 稍微延迟以确保播放已开始
+      // 移除 setTimeout 延迟
+      enterFullscreen();
     }
   };
 
