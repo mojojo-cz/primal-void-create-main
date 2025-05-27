@@ -189,6 +189,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         src={src}
         controls
         autoPlay={autoPlay}
+        playsInline
         className="w-full h-full"
         onPlay={handlePlay}
         onPause={handlePause}
