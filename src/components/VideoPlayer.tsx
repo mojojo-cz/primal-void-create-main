@@ -38,6 +38,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         (document as any).msFullscreenElement
       );
       setIsFullscreen(isCurrentlyFullscreen);
+
+      // 如果退出全屏，尝试解锁屏幕方向
+      if (!isCurrentlyFullscreen && screen.orientation && typeof (screen.orientation as any).unlock === 'function') {
+        (screen.orientation as any).unlock();
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -59,6 +64,19 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const containerElement = containerRef.current;
 
     try {
+      // 尝试锁定屏幕方向
+      if (videoElement && videoElement.videoWidth && videoElement.videoHeight && screen.orientation && typeof (screen.orientation as any).lock === 'function') {
+        try {
+          if (videoElement.videoWidth > videoElement.videoHeight) {
+            await (screen.orientation as any).lock('landscape');
+          } else {
+            await (screen.orientation as any).lock('portrait');
+          }
+        } catch (orientError) {
+          console.warn('屏幕方向锁定失败:', orientError);
+        }
+      }
+      
       // 优先尝试 iOS WebKit 特有的方法 (同步执行)
       if (videoElement && typeof (videoElement as any).webkitEnterFullscreen === 'function') {
         (videoElement as any).webkitEnterFullscreen();
