@@ -107,7 +107,7 @@ const AdminLayout = () => {
       to: "/admin/settings",
       label: "设置",
       icon: <Settings className="h-5 w-5" />,
-      restricted: false,
+      restricted: isTeacher,
       disabled: false
     }
   ];
@@ -230,6 +230,33 @@ const AdminLayout = () => {
             </h3>
             <div className="space-y-1">
             {personalItems.map((item) => {
+              if (item.restricted) {
+                return (
+                  <TooltipProvider key={item.to}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          className="sidebar-restricted-item flex items-center gap-3 px-4 py-3 rounded-lg cursor-not-allowed"
+                          onClick={(e) => {
+                            handleRestrictedAccess(e);
+                            setIsMobileSidebarOpen(false);
+                          }}
+                        >
+                          {item.icon}
+                          <span className="font-medium">{item.label}</span>
+                          <AlertCircle className="h-4 w-4 ml-auto text-amber-500" />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <div className="flex items-center">
+                          <AlertCircle className="h-4 w-4 mr-1 text-amber-500" />
+                          <span>教师账号无法访问此功能</span>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              }
               return (
                 <NavLink
                   key={item.to}
