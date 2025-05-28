@@ -150,19 +150,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, userData: any) => {
     try {
       console.log("[AUTH] 注册新用户，邮箱(虚拟):", email, "附加数据:", userData);
-      // The userData here is what we pass to options.data, which Supabase uses 
-      // to populate the public.profiles table via a trigger or function.
-      // Ensure userData includes all necessary fields for the profiles table, including full_name.
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             username: userData.username,
-            full_name: userData.full_name, // Ensure full_name is passed
+            full_name: userData.full_name,
             phone_number: userData.phone_number,
-            user_type: userData.user_type || "registered", // Default to registered
-            // Include other optional fields if they are part of userData
+            user_type: userData.user_type || "registered",
             school: userData.school,
             department: userData.department,
             major: userData.major,
@@ -177,12 +174,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       console.log("[AUTH] Supabase signUp 成功:", data);
       
-      // Note: Supabase typically creates the profile entry via a trigger (`on_auth_user_created`).
-      // If that trigger isn't set up to handle all fields from options.data (like full_name),
-      // you might need to manually insert/update the profile here after successful signUp,
-      // or ensure the trigger handles all fields correctly.
-      // For now, assuming the trigger handles it or it's a new setup.
-
+      // 立即登出防止自动登录状态导致页面跳转
+      console.log("[AUTH] 注册成功，立即登出防止自动跳转");
+      await supabase.auth.signOut();
+      
       return data;
     } catch (error: any) {
       console.error("[AUTH] 注册流程最终错误:", error.message);

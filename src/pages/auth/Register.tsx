@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/components/ui/use-toast";
+import { registerSuccessToast, errorToast } from "@/utils/toast";
 
 import {
   Form,
@@ -81,10 +81,7 @@ const Register = () => {
       
       await signUp(dummyEmail, values.password, userDataForProfile);
       
-      toast({
-        title: "注册成功",
-        description: "您已成功注册，现在可以登录了。",
-      });
+      registerSuccessToast();
       
       navigate("/auth/login");
     } catch (error: any) {
@@ -97,11 +94,7 @@ const Register = () => {
           errorMessage = "请输入一个有效的手机号码。";
       }
 
-      toast({
-        variant: "destructive",
-        title: "注册失败",
-        description: errorMessage,
-      });
+      errorToast(errorMessage);
     } finally {
       setIsLoading(false);
     }

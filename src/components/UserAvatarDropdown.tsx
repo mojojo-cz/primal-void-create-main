@@ -82,6 +82,10 @@ const UserAvatarDropdown: React.FC<UserAvatarDropdownProps> = ({
           <Button 
             variant="ghost" 
             className={`flex items-center gap-3 px-3 py-3 hover:bg-gray-100 text-gray-700 justify-start text-left ${className}`}
+            style={{ 
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent'
+            }}
           >
             <Avatar className="h-9 w-9 flex-shrink-0">
               <AvatarImage src="" alt={getUserDisplayName()} />
@@ -96,7 +100,14 @@ const UserAvatarDropdown: React.FC<UserAvatarDropdownProps> = ({
             <ChevronDown className="h-4 w-4 opacity-70 flex-shrink-0" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56" align="end" forceMount>
+        <DropdownMenuContent 
+          className="w-56" 
+          align="end" 
+          forceMount
+          side="top"
+          sideOffset={8}
+          style={{ zIndex: 1001 }}
+        >
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
               <p className="text-sm font-medium leading-none">{getUserDisplayName()}</p>

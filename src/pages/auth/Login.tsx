@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/components/ui/use-toast";
+import { loginSuccessToast, errorToast } from "@/utils/toast";
 
 import {
   Form,
@@ -62,16 +62,9 @@ const Login = () => {
       // 无论是邮箱还是转换后的手机号，都传给signIn
       await signIn(loginEmail, values.password);
       
-      toast({
-        title: "登录成功",
-        description: "您已成功登录系统。",
-      });
+      loginSuccessToast();
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "登录失败",
-        description: "账号或密码不正确，请重试。",
-      });
+      errorToast("账号或密码不正确，请重试。");
     } finally {
       setIsLoading(false);
     }

@@ -405,9 +405,40 @@ button:hover {
     font-size: 0.9rem !important;
   }
   
+  /* 移动端退出登录按钮优化 */
+  .sidebar-logout-button {
+    min-height: 48px !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  
   /* 移动端用户区域优化 */
   .sidebar-user-area {
     padding: 1rem !important;
+  }
+  
+  /* 移动端侧边栏内下拉菜单 z-index 修复 */
+  .admin-sidebar [data-radix-popper-content-wrapper] {
+    z-index: 1001 !important;
+  }
+  
+  /* 确保下拉菜单内容在移动端侧边栏中正确显示 */
+  .admin-sidebar [data-radix-dropdown-menu-content] {
+    z-index: 1001 !important;
+  }
+  
+  /* 确保下拉菜单触发器在移动端可点击 */
+  .admin-sidebar .sidebar-user-area button[data-state] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* 移动端侧边栏用户头像按钮优化 */
+  .admin-sidebar .sidebar-user-area button {
+    min-height: 48px; /* 满足移动端最小触控区域 */
+    width: 100%;
+    position: relative;
+    z-index: 1000;
   }
 }
 
@@ -497,6 +528,23 @@ button:hover {
   font-weight: 500;
 }
 
+/* 侧边栏退出登录按钮样式 */
+.sidebar-logout-button {
+  color: hsl(0 84% 60%) !important;
+  transition: all 0.2s ease;
+}
+
+.sidebar-logout-button:hover {
+  background: hsl(0 84% 96%) !important;
+  color: hsl(0 84% 50%) !important;
+  transform: translateX(2px);
+}
+
+.dark .sidebar-logout-button:hover {
+  background: hsl(0 84% 15%) !important;
+  color: hsl(0 84% 70%) !important;
+}
+
 /* 侧边栏头部 - 浅色主题 */
 .sidebar-header {
   background: hsl(0 0% 99%);
@@ -529,134 +577,13 @@ button:hover {
   min-height: calc(100vh - 4rem); /* 减去面包屑高度 */
 }
 
-/* 移动端管理员页面全面优化 */
-@media (max-width: 768px) {
-  .admin-page-container {
-    padding: 0.75rem !important;
-  }
-  
-  /* 移动端面包屑导航优化 */
-  .admin-nav-breadcrumb {
-    padding: 0.5rem 0.75rem !important;
-    min-height: 2.5rem !important;
-    margin-bottom: 0.75rem !important;
-  }
-  
-  /* 移动端页面标题优化 */
-  .admin-page-container h1 {
-    font-size: 1.25rem !important;
-    margin-bottom: 1rem !important;
-  }
-  
-  /* 移动端卡片优化 */
-  .admin-page-container .card {
-    margin-bottom: 1rem !important;
-    border-radius: 0.5rem !important;
-  }
-  
-  /* 移动端表格优化 */
-  .admin-page-container table {
-    font-size: 0.875rem !important;
-  }
-  
-  .admin-page-container td {
-    padding: 0.5rem 0.25rem !important;
-  }
-  
-  .admin-page-container th {
-    padding: 0.5rem 0.25rem !important;
-    font-size: 0.75rem !important;
-  }
-  
-  /* 移动端按钮优化 */
-  .admin-page-container button {
-    min-height: 44px !important; /* 符合移动端触摸标准 */
-    padding: 0.5rem 0.75rem !important;
-    font-size: 0.875rem !important;
-  }
-  
-  /* 移动端输入框优化 */
-  .admin-page-container input,
-  .admin-page-container textarea,
-  .admin-page-container select {
-    min-height: 44px !important;
-    font-size: 16px !important; /* 防止移动端缩放 */
-  }
-  
-  /* 移动端网格布局优化 */
-  .admin-page-container .grid {
-    grid-template-columns: 1fr !important;
-    gap: 0.75rem !important;
-  }
-  
-  /* 移动端弹窗优化 */
-  .admin-page-container [role="dialog"] {
-    margin: 0.5rem !important;
-    max-width: calc(100vw - 1rem) !important;
-    max-height: calc(100vh - 1rem) !important;
-  }
-  
-  /* 移动端课程管理特殊优化 */
-  .admin-page-container .course-item {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    padding: 0.75rem !important;
-    gap: 0.5rem !important;
-  }
-  
-  .admin-page-container .course-actions {
-    flex-wrap: wrap !important;
-    gap: 0.5rem !important;
-  }
-  
-  .admin-page-container .course-actions button {
-    flex: 1 1 auto !important;
-    min-width: 120px !important;
-  }
-  
-  /* 移动端搜索栏优化 */
-  .admin-page-container .search-bar {
-    flex-direction: column !important;
-    gap: 0.75rem !important;
-  }
-  
-  /* 移动端拖拽排序优化 */
-  .admin-page-container .drag-handle {
-    display: none !important;
-  }
-  
-  /* 移动端章节展开优化 */
-  .admin-page-container .chapter-header {
-    padding: 0.75rem !important;
-    gap: 0.5rem !important;
-  }
-  
-  .admin-page-container .chapter-content {
-    padding: 0.5rem 0.75rem !important;
-  }
-}
-
-/* 重写管理员页面中的container样式，确保对齐 */
-.admin-main-content .container {
-  margin: 0 !important;
-  max-width: none !important;
-  padding: 2rem !important;
-  width: 100% !important;
-}
-
-@media (max-width: 768px) {
-  .admin-main-content .container {
-    padding: 1rem !important;
-  }
-}
-
 /* 管理员页面的分割线与边框优化 */
 .admin-main-content .border-b {
   border-color: hsl(214 20% 88%) !important;
 }
 
 .admin-main-content .shadow-sm {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+  box-shadow: none !important;
 }
 
 

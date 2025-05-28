@@ -326,6 +326,34 @@ const CourseManagement = () => {
     fetchVideoLibrary();
   }, []);
 
+  // 处理表格滚动事件，优化移动端体验
+  useEffect(() => {
+    const handleTableScroll = () => {
+      const scrollContainers = document.querySelectorAll('.overflow-x-auto');
+      scrollContainers.forEach(container => {
+        const hasScrolled = container.scrollLeft > 0;
+        if (hasScrolled) {
+          container.classList.add('scrolled');
+        } else {
+          container.classList.remove('scrolled');
+        }
+      });
+    };
+
+    // 为所有滚动容器添加滚动事件监听
+    const scrollContainers = document.querySelectorAll('.overflow-x-auto');
+    scrollContainers.forEach(container => {
+      container.addEventListener('scroll', handleTableScroll);
+    });
+
+    // 清理函数
+    return () => {
+      scrollContainers.forEach(container => {
+        container.removeEventListener('scroll', handleTableScroll);
+      });
+    };
+  }, [courses]);
+
   // 处理表单输入
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -1225,126 +1253,131 @@ const CourseManagement = () => {
                       <DragDropContext onDragEnd={(result) => handleDragEnd(result, course.id, course.sections)}>
                         <Droppable droppableId={`course-${course.id}`}>
                           {(provided) => (
-                            <div
-                              {...provided.droppableProps}
-                              ref={provided.innerRef}
-                              className="w-full border rounded-md overflow-hidden"
-                            >
-                              <table className="w-full text-sm">
-                                <thead className="bg-gray-50">
-                                  <tr>
-                                    <th className="py-2 px-3 text-left">排序</th>
-                                    <th className="py-2 px-3 text-left">序号</th>
-                                    <th className="py-2 px-3 text-left">章节标题</th>
-                                    <th className="py-2 px-3 text-left">视频</th>
-                                    <th className="py-2 px-3 text-right">操作</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {course.sections.map((section, idx) => (
-                                    <Draggable 
-                                      key={section.id} 
-                                      draggableId={section.id} 
-                                      index={idx}
-                                    >
-                                      {(provided, snapshot) => (
-                                        <tr 
+                            <div className="w-full border rounded-md overflow-hidden">
+                              {/* 移动端水平滚动容器 */}
+                              <div className="overflow-x-auto">
+                                <div
+                                  {...provided.droppableProps}
+                                  ref={provided.innerRef}
+                                  className="w-full"
+                                >
+                                  <table className="w-full text-sm min-w-[800px]">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="py-2 px-3 text-left">排序</th>
+                                        <th className="py-2 px-3 text-left">序号</th>
+                                        <th className="py-2 px-3 text-left">章节标题</th>
+                                        <th className="py-2 px-3 text-left">视频</th>
+                                        <th className="py-2 px-3 text-right">操作</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {course.sections.map((section, idx) => (
+                                        <Draggable 
                                           key={section.id} 
-                                          className={`border-b ${snapshot.isDragging ? 'bg-blue-50' : ''}`}
-                                          ref={provided.innerRef}
-                                          {...provided.draggableProps}
+                                          draggableId={section.id} 
+                                          index={idx}
                                         >
-                                          <td className="py-2 px-3 w-16" {...provided.dragHandleProps}>
-                                            <div className="flex items-center gap-1">
-                                              <GripVertical className="w-4 h-4 text-gray-400" />
-                                              <div className="flex flex-col">
-                                                <Button 
-                                                  size="icon" 
-                                                  variant="ghost" 
-                                                  className="h-6 w-6"
-                                                  disabled={idx === 0}
-                                                  onClick={() => moveSectionUp(course.id, idx)}
-                                                >
-                                                  <ArrowUp className="h-3 w-3" />
-                                                </Button>
-                                                <Button 
-                                                  size="icon" 
-                                                  variant="ghost" 
-                                                  className="h-6 w-6"
-                                                  disabled={idx === course.sections.length - 1}
-                                                  onClick={() => moveSectionDown(course.id, idx)}
-                                                >
-                                                  <ArrowDown className="h-3 w-3" />
-                                                </Button>
-                                              </div>
-                                            </div>
-                                          </td>
-                                          <td className="py-2 px-3">{section.order}</td>
-                                          <td className="py-2 px-3">{section.title}</td>
-                                          <td className="py-2 px-3">
-                                            {section.video?.title || '无视频'}
-                                          </td>
-                                          <td className="py-2 px-3 text-right">
-                                            <div className="flex justify-end items-center gap-1">
-                                              {section.video?.video_url ? (
-                                                <Button 
-                                                  size="sm" 
-                                                  variant="secondary"
-                                                  className="h-8 gap-1 hover:no-underline"
-                                                  onClick={() => handlePlayVideo(section.video!.video_url, section.video!.title)}
-                                                >
-                                                  <Play className="h-3 w-3" />
-                                                  <span>播放</span>
-                                                </Button>
-                                              ) : (
-                                                <Button 
-                                                  size="sm" 
-                                                  variant="outline"
-                                                  className="h-8 gap-1 hover:no-underline"
-                                                  onClick={() => openVideoDialog(section.id, course.id)}
-                                                >
-                                                  <Video className="h-3 w-3" />
-                                                  <span>添加视频</span>
-                                                </Button>
-                                              )}
-                                              <Button 
-                                                size="sm" 
-                                                variant="outline"
-                                                className="h-8 gap-1 hover:no-underline"
-                                                onClick={() => openSectionDialog('edit', course.id, section)}
-                                              >
-                                                <Edit className="h-3 w-3" />
-                                                <span>编辑</span>
-                                              </Button>
-                                              {section.video?.video_url && (
-                                                <Button 
-                                                  size="sm" 
-                                                  variant="outline"
-                                                  className="h-8 gap-1 hover:no-underline"
-                                                  onClick={() => openVideoDialog(section.id, course.id)}
-                                                >
-                                                  <Video className="h-3 w-3" />
-                                                  <span>更换</span>
-                                                </Button>
-                                              )}
-                                              <Button 
-                                                size="sm" 
-                                                variant="destructive"
-                                                className="h-8 gap-1 hover:no-underline"
-                                                onClick={() => setDeleteSectionDialog({ open: true, sectionId: section.id, title: section.title })}
-                                              >
-                                                <Trash2 className="h-3 w-3" />
-                                                <span>删除</span>
-                                              </Button>
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      )}
-                                    </Draggable>
-                                  ))}
-                                  {provided.placeholder}
-                                </tbody>
-                              </table>
+                                          {(provided, snapshot) => (
+                                            <tr 
+                                              key={section.id} 
+                                              className={`border-b ${snapshot.isDragging ? 'bg-blue-50' : ''}`}
+                                              ref={provided.innerRef}
+                                              {...provided.draggableProps}
+                                            >
+                                              <td className="py-2 px-3 w-16" {...provided.dragHandleProps}>
+                                                <div className="flex items-center gap-1">
+                                                  <GripVertical className="w-4 h-4 text-gray-400" />
+                                                  <div className="flex flex-col">
+                                                    <Button 
+                                                      size="icon" 
+                                                      variant="ghost" 
+                                                      className="h-6 w-6"
+                                                      disabled={idx === 0}
+                                                      onClick={() => moveSectionUp(course.id, idx)}
+                                                    >
+                                                      <ArrowUp className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button 
+                                                      size="icon" 
+                                                      variant="ghost" 
+                                                      className="h-6 w-6"
+                                                      disabled={idx === course.sections.length - 1}
+                                                      onClick={() => moveSectionDown(course.id, idx)}
+                                                    >
+                                                      <ArrowDown className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                              </td>
+                                              <td className="py-2 px-3">{section.order}</td>
+                                              <td className="py-2 px-3">{section.title}</td>
+                                              <td className="py-2 px-3">
+                                                {section.video?.title || '无视频'}
+                                              </td>
+                                              <td className="py-2 px-3 text-right">
+                                                <div className="flex justify-end items-center gap-1">
+                                                  {section.video?.video_url ? (
+                                                    <Button 
+                                                      size="sm" 
+                                                      variant="secondary"
+                                                      className="h-8 gap-1 hover:no-underline"
+                                                      onClick={() => handlePlayVideo(section.video!.video_url, section.video!.title)}
+                                                    >
+                                                      <Play className="h-3 w-3" />
+                                                      <span>播放</span>
+                                                    </Button>
+                                                  ) : (
+                                                    <Button 
+                                                      size="sm" 
+                                                      variant="outline"
+                                                      className="h-8 gap-1 hover:no-underline"
+                                                      onClick={() => openVideoDialog(section.id, course.id)}
+                                                    >
+                                                      <Video className="h-3 w-3" />
+                                                      <span>添加视频</span>
+                                                    </Button>
+                                                  )}
+                                                  <Button 
+                                                    size="sm" 
+                                                    variant="outline"
+                                                    className="h-8 gap-1 hover:no-underline"
+                                                    onClick={() => openSectionDialog('edit', course.id, section)}
+                                                  >
+                                                    <Edit className="h-3 w-3" />
+                                                    <span>编辑</span>
+                                                  </Button>
+                                                  {section.video?.video_url && (
+                                                    <Button 
+                                                      size="sm" 
+                                                      variant="outline"
+                                                      className="h-8 gap-1 hover:no-underline"
+                                                      onClick={() => openVideoDialog(section.id, course.id)}
+                                                    >
+                                                      <Video className="h-3 w-3" />
+                                                      <span>更换</span>
+                                                    </Button>
+                                                  )}
+                                                  <Button 
+                                                    size="sm" 
+                                                    variant="destructive"
+                                                    className="h-8 gap-1 hover:no-underline"
+                                                    onClick={() => setDeleteSectionDialog({ open: true, sectionId: section.id, title: section.title })}
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                    <span>删除</span>
+                                                  </Button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          )}
+                                        </Draggable>
+                                      ))}
+                                      {provided.placeholder}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </Droppable>

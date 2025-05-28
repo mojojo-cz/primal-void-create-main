@@ -10,7 +10,8 @@ import {
   Shield,
   Settings,
   Menu,
-  X
+  X,
+  LogOut
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,7 +19,7 @@ import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
 
 const AdminLayout = () => {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -35,6 +36,27 @@ const AdminLayout = () => {
         title: "访问受限",
         description: "教师账号无法访问此功能",
         variant: "destructive"
+      });
+    }
+  };
+
+  // 处理退出登录
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      // 清理 Supabase 本地缓存
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
+      // 强制刷新页面，彻底重置所有状态
+      window.location.replace("/auth/login");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "退出失败",
+        description: "退出登录时发生错误，请重试"
       });
     }
   };
@@ -246,6 +268,25 @@ const AdminLayout = () => {
                 </NavLink>
               );
             })}
+            </div>
+          </div>
+
+          {/* 分隔线 */}
+          <div className="sidebar-divider"></div>
+
+          {/* 退出登录 */}
+          <div>
+            <div className="space-y-1">
+              <button
+                onClick={() => {
+                  handleSignOut();
+                  setIsMobileSidebarOpen(false);
+                }}
+                className="sidebar-nav-item sidebar-logout-button flex items-center gap-3 px-4 py-3 rounded-lg hover:no-underline w-full text-left transition-colors"
+              >
+                <LogOut className="h-5 w-5" />
+                <span className="font-medium">退出登录</span>
+              </button>
             </div>
           </div>
         </nav>
