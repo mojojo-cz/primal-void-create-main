@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Edit, Trash2, Search, X, User, Plus, FileEdit, Info, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Edit, Trash2, Search, X, User, Plus, FileEdit, Info, AlertCircle, ChevronLeft, ChevronRight, Key } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
@@ -110,8 +110,22 @@ const AccountManagement = () => {
     username: ""
   });
 
+  // 重置密码相关状态
+  const [resetPasswordDialog, setResetPasswordDialog] = useState<{ 
+    open: boolean; 
+    profile: Profile | null; 
+  }>({
+    open: false,
+    profile: null
+  });
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetPasswordSubmitting, setResetPasswordSubmitting] = useState(false);
+
   // 判断当前用户是否为教师
   const isTeacher = profile?.user_type === "teacher";
+  // 判断当前用户是否为管理员
+  const isAdmin = profile?.user_type === "admin";
 
   // 调试日志
   const log = (message: string, data?: any) => {
@@ -349,6 +363,106 @@ const AccountManagement = () => {
         title: "删除失败",
         description: error.message || "无法删除账号"
       });
+    }
+  };
+
+  // 打开重置密码对话框
+  const handleResetPassword = (profile: Profile) => {
+    setResetPasswordDialog({ open: true, profile });
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  // 关闭重置密码对话框
+  const closeResetPasswordDialog = () => {
+    if (resetPasswordSubmitting) return;
+    setResetPasswordDialog({ open: false, profile: null });
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  // 验证密码重置表单
+  const validatePasswordForm = () => {
+    if (!newPassword || newPassword.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "验证失败",
+        description: "新密码至少需要6个字符"
+      });
+      return false;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast({
+        variant: "destructive",
+        title: "验证失败",
+        description: "两次输入的密码不一致"
+      });
+      return false;
+    }
+    
+    return true;
+  };
+
+  // 执行密码重置
+  const handlePasswordReset = async () => {
+    if (!resetPasswordDialog.profile?.id) return;
+    
+    // 表单验证
+    if (!validatePasswordForm()) return;
+    
+    setResetPasswordSubmitting(true);
+    try {
+      log("开始重置密码，用户ID:", resetPasswordDialog.profile.id);
+      
+      // 调用 Edge Function 来重置密码
+      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+        body: {
+          userId: resetPasswordDialog.profile.id,
+          newPassword: newPassword,
+          adminUserId: user?.id
+        }
+      });
+      
+      if (error) {
+        log("Edge Function 调用失败", error);
+        throw new Error(error.message || "调用密码重置服务失败");
+      }
+      
+      if (!data?.success) {
+        log("Edge Function 返回失败", data);
+        throw new Error(data?.error || "密码重置服务返回失败");
+      }
+      
+      log("密码重置成功", data);
+      
+      toast({
+        title: "重置成功",
+        description: `用户"${resetPasswordDialog.profile.username}"的密码已重置`
+      });
+      
+      closeResetPasswordDialog();
+      
+    } catch (error: any) {
+      log("密码重置异常", error);
+      
+      // 提供更详细的错误信息
+      let errorMessage = "无法重置密码";
+      if (error.message?.includes("服务角色密钥未配置")) {
+        errorMessage = "系统配置错误：服务角色密钥未配置，请联系系统管理员";
+      } else if (error.message?.includes("只有管理员才能重置")) {
+        errorMessage = "权限不足：只有管理员才能重置用户密码";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "重置失败",
+        description: errorMessage
+      });
+    } finally {
+      setResetPasswordSubmitting(false);
     }
   };
 
@@ -643,6 +757,19 @@ const AccountManagement = () => {
                             编辑
                           </Button>
                           
+                          {/* 重置密码按钮 - 只有管理员可以看到 */}
+                          {isAdmin && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 border-orange-300 text-orange-600 hover:bg-orange-50"
+                              onClick={() => handleResetPassword(profile)}
+                            >
+                              <Key className="h-4 w-4 mr-1" />
+                              重置密码
+                            </Button>
+                          )}
+                          
                           {isTeacher ? (
                             <TooltipProvider>
                               <Tooltip>
@@ -843,6 +970,83 @@ const AccountManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 重置密码弹窗 */}
+      <Dialog open={resetPasswordDialog.open} onOpenChange={(open) => !resetPasswordSubmitting && open === false && closeResetPasswordDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Key className="h-5 w-5 mr-2 text-orange-600" />
+              重置用户密码
+            </DialogTitle>
+          </DialogHeader>
+          {resetPasswordDialog.profile && (
+            <div className="space-y-4 py-4">
+              {/* 用户信息 */}
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-sm text-gray-600">为以下用户重置密码：</p>
+                <p className="font-medium">{resetPasswordDialog.profile.username}</p>
+                <p className="text-sm text-gray-500">{resetPasswordDialog.profile.full_name}</p>
+              </div>
+              
+              {/* 新密码输入 */}
+              <div>
+                <label className="block mb-1 font-medium">新密码</label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="请输入新密码（至少6位）"
+                  disabled={resetPasswordSubmitting}
+                />
+              </div>
+              
+              {/* 确认密码输入 */}
+              <div>
+                <label className="block mb-1 font-medium">确认新密码</label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="请再次输入新密码"
+                  disabled={resetPasswordSubmitting}
+                />
+              </div>
+              
+              {/* 安全提示 */}
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                <div className="flex items-start">
+                  <AlertCircle className="h-4 w-4 mr-2 text-amber-600 mt-0.5" />
+                  <div className="text-sm text-amber-800">
+                    <p className="font-medium">安全提示：</p>
+                    <ul className="mt-1 space-y-1">
+                      <li>• 重置后用户需要使用新密码登录</li>
+                      <li>• 建议通知用户新密码并提醒其及时修改</li>
+                      <li>• 此操作会立即生效，无法撤销</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={closeResetPasswordDialog} 
+              disabled={resetPasswordSubmitting}
+            >
+              取消
+            </Button>
+            <Button 
+              onClick={handlePasswordReset} 
+              disabled={resetPasswordSubmitting}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {resetPasswordSubmitting ? "重置中..." : "确认重置"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -733,7 +733,7 @@ const VideoManagement = () => {
 
   // 渲染网格视图
   const renderGridView = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
       {paginatedVideos.map(video => {
         const content = `${video.title} ${video.description || ''}`.toLowerCase();
         
@@ -751,42 +751,42 @@ const VideoManagement = () => {
               title="点击播放视频"
             >
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all duration-200">
-                <Play className="h-12 w-12 text-white opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-200" />
+                <Play className="h-8 w-8 sm:h-12 sm:w-12 text-white opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-200" />
               </div>
-              <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+              <div className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-black/50 text-white text-xs px-1 py-0.5 sm:px-2 sm:py-1 rounded">
                 视频
               </div>
-              <div className="absolute top-2 right-2 bg-primary/80 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-                <Folder className="h-3 w-3" />
-                {category}
+              <div className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-primary/80 text-white text-xs px-1 py-0.5 sm:px-2 sm:py-1 rounded flex items-center gap-1 max-w-[60%]">
+                <Folder className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{category}</span>
               </div>
             </div>
-            <div className="p-4">
-              <h3 className="font-medium truncate mb-2 group-hover:text-primary transition-colors" title={video.title}>
+            <div className="p-3 lg:p-4">
+              <h3 className="font-medium truncate mb-2 group-hover:text-primary transition-colors text-sm lg:text-base" title={video.title}>
                 {video.title}
               </h3>
-              <div className="min-h-[2.5rem] mb-3">
+              <div className="min-h-[2rem] lg:min-h-[2.5rem] mb-3">
                 {video.description ? (
-                  <p className="text-sm text-muted-foreground line-clamp-2">{video.description}</p>
+                  <p className="text-xs lg:text-sm text-muted-foreground line-clamp-2">{video.description}</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">无描述</p>
+                  <p className="text-xs lg:text-sm text-muted-foreground italic">无描述</p>
                 )}
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
                 <div className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  <span>{new Date(video.created_at).toLocaleDateString('zh-CN')}</span>
+                  <Calendar className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{new Date(video.created_at).toLocaleDateString('zh-CN')}</span>
                 </div>
-                <span>{new Date(video.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="flex-shrink-0 hidden sm:block">{new Date(video.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
-              <div className="flex items-center justify-between pt-2 border-t">
+              <div className="flex items-center gap-2 pt-2 border-t">
                 <Button 
                   size="sm" 
                   variant="outline"
                   onClick={() => handlePlayVideo(video.video_url, video.title)}
-                  className="flex-1 mr-2 hover:bg-primary hover:text-primary-foreground"
+                  className="flex-1 hover:bg-primary hover:text-primary-foreground text-xs lg:text-sm h-8 lg:h-9"
                 >
-                  <Play className="h-4 w-4 mr-1" />
+                  <Play className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
                   播放
                 </Button>
                 <AlertDialog>
@@ -794,10 +794,10 @@ const VideoManagement = () => {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20 h-8 lg:h-9 w-8 lg:w-9 p-0"
                       title="删除视频"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3 lg:h-4 lg:w-4" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -831,26 +831,28 @@ const VideoManagement = () => {
 
   return (
     <div className="admin-page-container">
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
         {/* 左侧文件夹列表 */}
         <div className="lg:w-64 flex-shrink-0">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">视频分类</CardTitle>
+                <CardTitle className="text-base lg:text-lg">视频分类</CardTitle>
                 <Button 
                   size="sm" 
                   variant="outline"
                   onClick={() => openFolderDialog('add')}
                   className="h-8 w-8 p-0"
+                  title="添加分类"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-1">
+              {/* 全部视频 */}
               <div
-                className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors ${
+                className={`flex items-center gap-2 p-2 lg:p-3 rounded-lg cursor-pointer transition-colors ${
                   !currentFolder ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                 }`}
                 onClick={() => {
@@ -858,11 +860,12 @@ const VideoManagement = () => {
                   setCurrentPage(1);
                 }}
               >
-                <FolderOpen className="h-4 w-4" />
-                <span className="font-medium">全部视频</span>
-                <span className="ml-auto text-sm">({videos.length})</span>
+                <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                <span className="font-medium flex-1 min-w-0 truncate">全部视频</span>
+                <span className="text-sm flex-shrink-0">({videos.length})</span>
               </div>
               
+              {/* 文件夹列表 */}
               {folders.map(folder => {
                 const isSelected = currentFolder === folder.id;
                 
@@ -915,45 +918,47 @@ const VideoManagement = () => {
                 return (
                   <div
                     key={folder.id}
-                    className={`group flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors ${
+                    className={`group flex items-center gap-2 p-2 lg:p-3 rounded-lg cursor-pointer transition-colors ${
                       isSelected ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                     }`}
                   >
                     <div
-                      className="flex items-center gap-2 flex-1"
+                      className="flex items-center gap-2 flex-1 min-w-0"
                       onClick={() => {
                         setCurrentFolder(folder.id);
                         setCurrentPage(1);
                       }}
                     >
-                      <Folder className="h-4 w-4" />
-                      <span className="flex-1 truncate">{folder.name}</span>
-                      <span className="text-sm">({folderVideoCount})</span>
+                      <Folder className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1 min-w-0 truncate text-sm lg:text-base">{folder.name}</span>
+                      <span className="text-sm flex-shrink-0">({folderVideoCount})</span>
                     </div>
                     
                     {/* 文件夹操作按钮 */}
                     {!folder.is_default && (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 lg:opacity-100 transition-opacity">
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 w-6 p-0"
+                          className="h-6 w-6 p-0 lg:h-7 lg:w-7"
                           onClick={(e) => {
                             e.stopPropagation();
                             openFolderDialog('edit', folder);
                           }}
+                          title="编辑分类"
                         >
-                          <Edit className="h-3 w-3" />
+                          <Edit className="h-3 w-3 lg:h-4 lg:w-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                              className="h-6 w-6 p-0 lg:h-7 lg:w-7 text-destructive hover:text-destructive"
                               onClick={(e) => e.stopPropagation()}
+                              title="删除分类"
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-3 w-3 lg:h-4 lg:w-4" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
@@ -984,19 +989,36 @@ const VideoManagement = () => {
         <div className="flex-1">
           <Card>
             <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    {currentFolder ? <Folder className="h-5 w-5" /> : <FolderOpen className="h-5 w-5" />}
-                    {getCurrentFolderName()}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    共 {filteredVideos.length} 个视频
-                    {totalPages > 1 && ` • 第 ${currentPage} / ${totalPages} 页`}
-                  </p>
+              <div className="flex flex-col gap-4">
+                {/* 标题行 */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      {currentFolder ? <Folder className="h-5 w-5" /> : <FolderOpen className="h-5 w-5" />}
+                      {getCurrentFolderName()}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      共 {filteredVideos.length} 个视频
+                      {totalPages > 1 && ` • 第 ${currentPage} / ${totalPages} 页`}
+                    </p>
+                  </div>
+                  
+                  {/* 移动端上传按钮 */}
+                  <div className="sm:hidden">
+                    <Button 
+                      onClick={() => setUploadDialog(true)}
+                      className="w-full"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      上传视频
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
+                
+                {/* 控制栏 */}
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
+                  {/* 搜索框 */}
+                  <div className="relative flex-1 sm:max-w-xs">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="搜索视频..."
@@ -1005,31 +1027,42 @@ const VideoManagement = () => {
                         setSearchTerm(e.target.value);
                         setCurrentPage(1); // 搜索时重置到第一页
                       }}
-                      className="pl-10 w-64"
+                      className="pl-10"
                     />
                   </div>
-                  <div className="flex border rounded-lg p-1">
-                    <Button
-                      variant={viewMode === 'list' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => setViewMode('list')}
-                      className="h-8 w-8 p-0"
-                    >
-                      <List className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => setViewMode('grid')}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Grid3X3 className="h-4 w-4" />
-                    </Button>
+                  
+                  {/* 右侧控制组 */}
+                  <div className="flex items-center justify-between sm:justify-end gap-2">
+                    {/* 视图切换按钮 */}
+                    <div className="flex border rounded-lg p-1">
+                      <Button
+                        variant={viewMode === 'list' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewMode('list')}
+                        className="h-8 w-8 p-0"
+                        title="列表视图"
+                      >
+                        <List className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewMode('grid')}
+                        className="h-8 w-8 p-0"
+                        title="网格视图"
+                      >
+                        <Grid3X3 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    {/* 桌面端上传按钮 */}
+                    <div className="hidden sm:block">
+                      <Button onClick={() => setUploadDialog(true)}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        上传视频
+                      </Button>
+                    </div>
                   </div>
-                  <Button onClick={() => setUploadDialog(true)}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    上传视频
-                  </Button>
                 </div>
               </div>
             </CardHeader>

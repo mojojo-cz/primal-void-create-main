@@ -27,13 +27,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-
-  // 新增：添加日志的辅助函数
-  const addLog = (message: string) => {
-    console.log(message); // 仍然在控制台输出
-    setDebugLogs(prevLogs => [message, ...prevLogs.slice(0, 19)]); // 保留最新的20条日志，并显示在UI上
-  };
 
   // 检测全屏状态变化
   useEffect(() => {
@@ -46,7 +39,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       );
       setIsFullscreen(isCurrentlyFullscreen);
 
-      // 如果退出全屏，尝试解锁屏幕方向
       if (!isCurrentlyFullscreen && screen.orientation && typeof (screen.orientation as any).unlock === 'function') {
         (screen.orientation as any).unlock();
       }
@@ -69,67 +61,41 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const enterFullscreen = async () => {
     const videoElement = videoRef.current;
     const containerElement = containerRef.current;
-    addLog('[VideoPlayer] Attempting to enter fullscreen...');
 
     try {
-      // 尝试锁定屏幕方向
       if (videoElement) {
-        addLog(`[VideoPlayer] Video readyState: ${videoElement.readyState}, HAVE_METADATA: ${HTMLMediaElement.HAVE_METADATA}`);
-        addLog(`[VideoPlayer] Video dimensions: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
-        
         if (videoElement.readyState >= HTMLMediaElement.HAVE_METADATA && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
           if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
-            addLog('[VideoPlayer] Screen orientation lock API is available.');
             try {
               const targetOrientation = videoElement.videoWidth > videoElement.videoHeight ? 'landscape' : 'portrait';
-              addLog(`[VideoPlayer] Attempting to lock orientation to: ${targetOrientation}`);
               await (screen.orientation as any).lock(targetOrientation);
-              addLog('[VideoPlayer] Screen orientation lock initiated.');
             } catch (orientError: any) {
-              addLog(`[VideoPlayer] Screen orientation lock failed: ${orientError.message || orientError}`);
+              console.warn(`[VideoPlayer] Screen orientation lock failed: ${orientError.message || orientError}`);
             }
-          } else {
-            addLog('[VideoPlayer] Screen orientation lock API NOT available.');
           }
-        } else {
-          addLog('[VideoPlayer] Video metadata not ready or dimensions are zero, skipping orientation lock.');
         }
       }
       
-      // 优先尝试 iOS WebKit 特有的方法 (同步执行)
       if (videoElement && typeof (videoElement as any).webkitEnterFullscreen === 'function') {
-        addLog('[VideoPlayer] Attempting iOS webkitEnterFullscreen...');
         (videoElement as any).webkitEnterFullscreen();
-        addLog('[VideoPlayer] iOS webkitEnterFullscreen called.');
         return;
       }
       
-      // 其次尝试标准的 requestFullscreen API (video 元素优先)
       if (videoElement && videoElement.requestFullscreen) {
-        addLog('[VideoPlayer] Attempting standard videoElement.requestFullscreen...');
         await videoElement.requestFullscreen();
-        addLog('[VideoPlayer] Standard videoElement.requestFullscreen successful.');
         return;
-      } else if (videoElement && (videoElement as any).webkitRequestFullscreen) { // Safari Desktop 等
-        addLog('[VideoPlayer] Attempting videoElement.webkitRequestFullscreen...');
+      } else if (videoElement && (videoElement as any).webkitRequestFullscreen) {
         await (videoElement as any).webkitRequestFullscreen();
-        addLog('[VideoPlayer] videoElement.webkitRequestFullscreen successful.');
         return;
       } else if (videoElement && (videoElement as any).mozRequestFullScreen) {
-        addLog('[VideoPlayer] Attempting videoElement.mozRequestFullScreen...');
         await (videoElement as any).mozRequestFullScreen();
-        addLog('[VideoPlayer] videoElement.mozRequestFullScreen successful.');
         return;
       } else if (videoElement && (videoElement as any).msRequestFullscreen) {
-        addLog('[VideoPlayer] Attempting videoElement.msRequestFullscreen...');
         await (videoElement as any).msRequestFullscreen();
-        addLog('[VideoPlayer] videoElement.msRequestFullscreen successful.');
         return;
       }
 
-      // 如果 video 元素全屏失败或不可用，再尝试容器元素
       if (containerElement) {
-        addLog('[VideoPlayer] Attempting fullscreen on container element...');
         if (containerElement.requestFullscreen) {
           await containerElement.requestFullscreen();
         } else if ((containerElement as any).webkitRequestFullscreen) {
@@ -139,10 +105,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         } else if ((containerElement as any).msRequestFullscreen) {
           await (containerElement as any).msRequestFullscreen();
         }
-        addLog('[VideoPlayer] Container element fullscreen attempt finished.');
       }
     } catch (error: any) {
-      addLog(`[VideoPlayer] Error entering fullscreen: ${error.message || error}`);
+      console.error(`[VideoPlayer] Error entering fullscreen: ${error.message || error}`);
     }
   };
 
@@ -171,7 +136,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           exited = true;
         }
       }
-      // 如果通过检查 fullscreenElement 未能退出，尝试直接调用退出命令，以防状态不同步
       if (!exited) {
         if (document.exitFullscreen) await document.exitFullscreen().catch(e => console.warn("Error attempting to force exit fullscreen:", e));
         else if ((document as any).webkitExitFullscreen) await (document as any).webkitExitFullscreen().catch(e => console.warn("Error attempting to force exit webkit fullscreen:", e));
@@ -283,28 +247,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <div className="bg-black/50 text-white px-3 py-2 rounded backdrop-blur-sm">
             <h3 className="text-lg font-medium">{title}</h3>
           </div>
-        </div>
-      )}
-
-      {/* 调试日志显示 */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{
-          position: 'absolute',
-          bottom: '10px',
-          left: '10px',
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          color: 'lime',
-          padding: '5px',
-          fontSize: '10px',
-          maxHeight: '100px',
-          maxWidth: 'calc(100% - 20px)',
-          overflowY: 'auto',
-          zIndex: 99999
-        }}>
-          <p style={{ fontWeight: 'bold', marginBottom: '5px' }}>Debug Logs:</p>
-          {debugLogs.map((log, index) => (
-            <div key={index} style={{ whiteSpace: 'pre-wrap' }}>{log}</div>
-          ))}
         </div>
       )}
     </div>
