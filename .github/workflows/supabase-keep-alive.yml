@@ -1,0 +1,36 @@
+# GitHub Actions Workflow: Supabase Keep Alive
+#
+# 名称：此自动化任务的名称
+name: Supabase Keep Alive Ping
+
+# 触发器：定义何时运行此任务
+on:
+  schedule:
+    # 使用 Cron 语法。'0 5 * * *' 表示在每天的 UTC 时间 5:00 运行。
+    # 为了避免所有项目在同一时间请求，你可以选择一个随机的时间。
+    # 例如 '15 3 * * 2,5' 表示在每周二和周五的 3:15 (UTC) 运行。
+    # 每周运行一到两次足以保持项目活跃。
+    - cron: '30 8 * * *'
+
+# 任务：定义要执行的具体工作
+jobs:
+  ping:
+    # 运行环境：使用最新的 Ubuntu 系统
+    runs-on: ubuntu-latest
+
+    # 步骤：按顺序执行以下步骤
+    steps:
+      # 第一步：给任务一个名字
+      - name: Send GET request to Supabase
+        # 使用 curl 命令发送一个 HTTP GET 请求
+        # 这个请求会读取 'keep_alive' 表（或你指定的任何表），并只取第一行（limit=1）
+        # 这足以被 Supabase 记录为一次“活动”
+        run: |
+          curl -X GET \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/keep_alive?select=*&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}"
+
+      # (可选) 第二步：打印成功消息，方便在日志中查看
+      - name: Log success
+        run: echo "Supabase ping successful!"
