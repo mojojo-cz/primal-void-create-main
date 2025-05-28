@@ -133,6 +133,9 @@ const Login = () => {
           </div>
         </CardFooter>
       </Card>
+      <div className="absolute bottom-4 text-center w-full text-xs text-gray-500">
+        <p>版权所有 © {new Date().getFullYear()} 杭州劲风教育科技有限公司</p>
+      </div>
     </div>
   );
 };
