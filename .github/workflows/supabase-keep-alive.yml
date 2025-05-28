@@ -5,6 +5,9 @@ name: Supabase Keep Alive Ping
 
 # 触发器：定义何时运行此任务
 on:
+  # 新增的部分：允许手动触发
+  workflow_dispatch: {}
+
   schedule:
     # 使用 Cron 语法。'0 5 * * *' 表示在每天的 UTC 时间 5:00 运行。
     # 为了避免所有项目在同一时间请求，你可以选择一个随机的时间。
