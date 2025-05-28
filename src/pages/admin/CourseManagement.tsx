@@ -50,6 +50,9 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
+import { Badge } from "@/components/ui/badge";
+import EnhancedPagination from "@/components/ui/enhanced-pagination";
+import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
 
 // 文件夹类型
 interface VideoFolder {
@@ -218,6 +221,18 @@ const CourseManagement = () => {
   
   // 文件夹管理
   const [folders] = useState<VideoFolder[]>(loadFoldersFromStorage());
+
+  // 分页和搜索状态 - 使用用户偏好设置
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setCurrentPageSize] = useState(() => getCurrentPageSize());
+
+  // 处理每页显示数量变化
+  const handlePageSizeChange = (newPageSize: number) => {
+    setCurrentPageSize(newPageSize);
+    setPageSize(newPageSize);
+    setCurrentPage(1); // 重置到第一页
+  };
 
   // 获取课程及章节和视频信息
   const fetchCourses = async () => {
@@ -1062,101 +1077,19 @@ const CourseManagement = () => {
     }
   };
 
-  // 分页和搜索状态
-  const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
-
   // 过滤和分页
   const filteredCourses = courses.filter(course => 
     course.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (course.description && course.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const totalPages = Math.ceil(filteredCourses.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedCourses = filteredCourses.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredCourses.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedCourses = filteredCourses.slice(startIndex, startIndex + pageSize);
 
   // 分页控制
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-  };
-
-  const renderPagination = () => {
-    if (totalPages <= 1) return null;
-
-    const pages = [];
-    const maxVisiblePages = 5;
-    
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
-    }
-
-    return (
-      <div className="flex items-center justify-center gap-2 mt-6">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        
-        {startPage > 1 && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(1)}
-            >
-              1
-            </Button>
-            {startPage > 2 && <span className="px-2">...</span>}
-          </>
-        )}
-        
-        {pages.map(page => (
-          <Button
-            key={page}
-            variant={currentPage === page ? "default" : "outline"}
-            size="sm"
-            onClick={() => handlePageChange(page)}
-          >
-            {page}
-          </Button>
-        ))}
-        
-        {endPage < totalPages && (
-          <>
-            {endPage < totalPages - 1 && <span className="px-2">...</span>}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(totalPages)}
-            >
-              {totalPages}
-            </Button>
-          </>
-        )}
-        
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    );
   };
 
   return (
@@ -1397,7 +1330,17 @@ const CourseManagement = () => {
                 </AccordionItem>
               ))}
               </Accordion>
-              {renderPagination()}
+              {filteredCourses.length > 0 && (
+                <EnhancedPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredCourses.length}
+                  pageSize={pageSize}
+                  onPageChange={handlePageChange}
+                  onPageSizeChange={handlePageSizeChange}
+                  className="mt-6"
+                />
+              )}
             </>
           )}
         </CardContent>

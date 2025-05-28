@@ -26,6 +26,9 @@ import { toast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import EnhancedPagination from "@/components/ui/enhanced-pagination";
+import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
 
 // 用户类型
 interface Profile {
@@ -74,20 +77,20 @@ const userTypeColors: Record<string, { bg: string; text: string; border?: string
   }
 };
 
-  // 特殊调试信息
-  const DEBUG_MODE = true;
+// 特殊调试信息
+const DEBUG_MODE = true;
 
-  // 生成用户类型标签
-  const getUserTypeTag = (userType: string) => {
-    const colors = userTypeColors[userType] || userTypeColors.registered;
-    const label = userTypeMap[userType] || userType;
-    
-    return (
-      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border || ''}`}>
-        {label}
-      </span>
-    );
-  };
+// 生成用户类型标签
+const getUserTypeTag = (userType: string) => {
+  const colors = userTypeColors[userType] || userTypeColors.registered;
+  const label = userTypeMap[userType] || userType;
+  
+  return (
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border || ''}`}>
+      {label}
+    </span>
+  );
+};
 
 const AccountManagement = () => {
   // 获取认证信息
@@ -97,7 +100,10 @@ const AccountManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  
+  // 使用用户偏好设置
+  const [pageSize, setCurrentPageSize] = useState(() => getCurrentPageSize());
+  
   const [editDialog, setEditDialog] = useState<{ open: boolean; profile: Profile | null }>({
     open: false,
     profile: null
@@ -522,6 +528,13 @@ const AccountManagement = () => {
     }
   };
 
+  // 处理每页显示数量变化
+  const handlePageSizeChange = (newPageSize: number) => {
+    setCurrentPageSize(newPageSize);
+    setPageSize(newPageSize);
+    setCurrentPage(1); // 重置到第一页
+  };
+
   // 过滤和分页逻辑
   const filteredProfiles = profiles.filter(profile =>
     profile.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -530,90 +543,13 @@ const AccountManagement = () => {
     userTypeMap[profile.user_type]?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalPages = Math.ceil(filteredProfiles.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedProfiles = filteredProfiles.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredProfiles.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedProfiles = filteredProfiles.slice(startIndex, startIndex + pageSize);
 
   // 分页控制
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-  };
-
-  const renderPagination = () => {
-    if (totalPages <= 1) return null;
-
-    const pages = [];
-    const maxVisiblePages = 5;
-    
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
-    }
-
-    return (
-      <div className="flex items-center justify-center gap-2 mt-6">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handlePageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        
-        {startPage > 1 && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(1)}
-            >
-              1
-            </Button>
-            {startPage > 2 && <span className="px-2">...</span>}
-          </>
-        )}
-        
-        {pages.map(page => (
-          <Button
-            key={page}
-            variant={currentPage === page ? "default" : "outline"}
-            size="sm"
-            onClick={() => handlePageChange(page)}
-          >
-            {page}
-          </Button>
-        ))}
-        
-        {endPage < totalPages && (
-          <>
-            {endPage < totalPages - 1 && <span className="px-2">...</span>}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(totalPages)}
-            >
-              {totalPages}
-            </Button>
-          </>
-        )}
-        
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handlePageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    );
   };
 
   // 处理教师尝试删除账号的情况
@@ -833,7 +769,14 @@ const AccountManagement = () => {
                                   </tbody>
                 </table>
               </div>
-              {renderPagination()}
+              <EnhancedPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={filteredProfiles.length}
+                pageSize={pageSize}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+              />
             </>
           )}
         </CardContent>

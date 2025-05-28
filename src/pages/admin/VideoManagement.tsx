@@ -50,6 +50,8 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
+import EnhancedPagination from "@/components/ui/enhanced-pagination";
+import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
 
 // 视频类型
 interface Video {
@@ -72,8 +74,8 @@ interface VideoFolder {
 // 视图类型
 type ViewMode = 'list' | 'grid';
 
-// 分页配置
-const ITEMS_PER_PAGE = 6; // 减少每页项目数，更容易看到分页效果
+// 分页配置 - 现在从用户偏好获取
+// const ITEMS_PER_PAGE = 6; // 移除硬编码，改用用户偏好
 
 // 默认文件夹
 const DEFAULT_FOLDERS: VideoFolder[] = [
@@ -139,8 +141,9 @@ const VideoManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   
-  // 分页状态
+  // 分页状态 - 使用用户偏好设置
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setCurrentPageSize] = useState(() => getCurrentPageSize());
   
   // 对话框状态
   const [uploadDialog, setUploadDialog] = useState(false);
@@ -246,9 +249,16 @@ const VideoManagement = () => {
     (video.description && video.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const totalPages = Math.ceil(filteredVideos.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedVideos = filteredVideos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredVideos.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedVideos = filteredVideos.slice(startIndex, startIndex + pageSize);
+
+  // 处理每页显示数量变化
+  const handlePageSizeChange = (newPageSize: number) => {
+    setCurrentPageSize(newPageSize);
+    setPageSize(newPageSize);
+    setCurrentPage(1); // 重置到第一页
+  };
 
   // 视频上传
   const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -508,92 +518,6 @@ const VideoManagement = () => {
   // 分页控制
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-  };
-
-  const renderPagination = () => {
-    // 降低显示分页的门槛，当有超过3个项目时就显示分页
-    if (filteredVideos.length <= ITEMS_PER_PAGE) return null;
-
-    const pages = [];
-    const maxVisiblePages = 5;
-    
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
-    }
-
-    return (
-      <div className="flex items-center justify-center gap-2 mt-6">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            上一页
-          </Button>
-          
-          {startPage > 1 && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(1)}
-              >
-                1
-              </Button>
-              {startPage > 2 && <span className="px-2 text-muted-foreground">...</span>}
-            </>
-          )}
-          
-          {pages.map(page => (
-            <Button
-              key={page}
-              variant={currentPage === page ? "default" : "outline"}
-              size="sm"
-              onClick={() => handlePageChange(page)}
-            >
-              {page}
-            </Button>
-          ))}
-          
-          {endPage < totalPages && (
-            <>
-              {endPage < totalPages - 1 && <span className="px-2 text-muted-foreground">...</span>}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(totalPages)}
-              >
-                {totalPages}
-              </Button>
-            </>
-          )}
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-          >
-            下一页
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-        
-        <div className="text-sm text-muted-foreground ml-4">
-          显示第 {startIndex + 1}-{Math.min(startIndex + ITEMS_PER_PAGE, filteredVideos.length)} 项，共 {filteredVideos.length} 项
-        </div>
-      </div>
-    );
   };
 
   // 渲染列表视图
@@ -1093,7 +1017,15 @@ const VideoManagement = () => {
               ) : (
                 <>
                   {viewMode === 'list' ? renderListView() : renderGridView()}
-                  {renderPagination()}
+                  <EnhancedPagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filteredVideos.length}
+                    pageSize={pageSize}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                    className="mt-6"
+                  />
                 </>
               )}
             </CardContent>

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/use-toast";
 import { 
@@ -13,7 +14,9 @@ import {
   Shield,
   Globe,
   Eye,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  List,
+  Grid3X3
 } from "lucide-react";
 import { 
   SystemSettings,
@@ -28,9 +31,17 @@ import {
   saveSystemSettingsToDB,
   checkDatabaseAccess
 } from "@/services/systemSettingsService";
+import {
+  UserPreferences,
+  loadUserPreferences,
+  saveUserPreferences,
+  getAvailablePageSizes,
+  resetToDefaultPreferences
+} from "@/utils/userPreferences";
 
 const Settings = () => {
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
+  const [userPrefs, setUserPrefs] = useState<UserPreferences>(loadUserPreferences());
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -137,6 +148,48 @@ const Settings = () => {
       ...prev,
       [field]: value
     }));
+  };
+
+  // 处理用户偏好变化
+  const handlePreferenceChange = <T extends keyof UserPreferences>(
+    category: T,
+    field: keyof UserPreferences[T],
+    value: any
+  ) => {
+    setUserPrefs(prev => ({
+      ...prev,
+      [category]: {
+        ...prev[category],
+        [field]: value
+      }
+    }));
+  };
+
+  // 保存用户偏好
+  const saveUserPrefs = () => {
+    try {
+      saveUserPreferences(userPrefs);
+      toast({
+        title: "保存成功",
+        description: "用户偏好设置已保存"
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "保存失败",
+        description: "无法保存用户偏好设置"
+      });
+    }
+  };
+
+  // 重置用户偏好
+  const resetUserPreferences = () => {
+    const defaultPrefs = resetToDefaultPreferences();
+    setUserPrefs(defaultPrefs);
+    toast({
+      title: "已重置",
+      description: "用户偏好已重置为默认值"
+    });
   };
 
   useEffect(() => {
@@ -338,6 +391,126 @@ const Settings = () => {
           </CardContent>
         </Card>
 
+        {/* 用户偏好设置 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <List className="h-5 w-5 text-primary" />
+              用户偏好设置
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* 分页设置 */}
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium mb-3">分页设置</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pageSize">每页显示数量</Label>
+                    <Select
+                      value={userPrefs.pagination.itemsPerPage.toString()}
+                      onValueChange={(value) => 
+                        handlePreferenceChange('pagination', 'itemsPerPage', parseInt(value))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getAvailablePageSizes().map(size => (
+                          <SelectItem key={size} value={size.toString()}>
+                            {size} 项/页
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      设置列表页面每页显示的项目数量
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="defaultPageSize">默认页面大小</Label>
+                    <Select
+                      value={userPrefs.pagination.defaultPageSize.toString()}
+                      onValueChange={(value) => 
+                        handlePreferenceChange('pagination', 'defaultPageSize', parseInt(value))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getAvailablePageSizes().map(size => (
+                          <SelectItem key={size} value={size.toString()}>
+                            {size} 项/页
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      新页面的默认每页显示数量
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* 显示设置 */}
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium mb-3">显示设置</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="defaultVideoView">默认视频视图</Label>
+                      <Select
+                        value={userPrefs.admin.defaultVideoView}
+                        onValueChange={(value: 'list' | 'grid') => 
+                          handlePreferenceChange('admin', 'defaultVideoView', value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="list">
+                            <div className="flex items-center gap-2">
+                              <List className="h-4 w-4" />
+                              列表视图
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="grid">
+                            <div className="flex items-center gap-2">
+                              <Grid3X3 className="h-4 w-4" />
+                              网格视图
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-sm text-muted-foreground">
+                        视频管理页面的默认显示方式
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 操作按钮 */}
+              <div className="flex items-center gap-2 pt-4">
+                <Button variant="outline" onClick={resetUserPreferences}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  重置偏好
+                </Button>
+                <Button onClick={saveUserPrefs}>
+                  <Save className="h-4 w-4 mr-2" />
+                  保存偏好
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* 使用说明 */}
         <Card>
           <CardHeader>
@@ -348,6 +521,15 @@ const Settings = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3 text-sm">
+              <div className="flex items-start gap-2">
+                <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <p className="font-medium">分页设置</p>
+                  <p className="text-muted-foreground">
+                    调整列表页面的每页显示数量，适用于账号管理、视频管理、课程管理等页面
+                  </p>
+                </div>
+              </div>
               <div className="flex items-start gap-2">
                 <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
                 <div>

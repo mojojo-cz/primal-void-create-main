@@ -405,13 +405,6 @@ button:hover {
     font-size: 0.9rem !important;
   }
   
-  /* 移动端退出登录按钮优化 */
-  .sidebar-logout-button {
-    min-height: 48px !important;
-    touch-action: manipulation !important;
-    -webkit-tap-highlight-color: transparent !important;
-  }
-  
   /* 移动端用户区域优化 */
   .sidebar-user-area {
     padding: 1rem !important;
@@ -526,23 +519,6 @@ button:hover {
   color: hsl(214 15% 55%);
   font-size: 10px;
   font-weight: 500;
-}
-
-/* 侧边栏退出登录按钮样式 */
-.sidebar-logout-button {
-  color: hsl(0 84% 60%) !important;
-  transition: all 0.2s ease;
-}
-
-.sidebar-logout-button:hover {
-  background: hsl(0 84% 96%) !important;
-  color: hsl(0 84% 50%) !important;
-  transform: translateX(2px);
-}
-
-.dark .sidebar-logout-button:hover {
-  background: hsl(0 84% 15%) !important;
-  color: hsl(0 84% 70%) !important;
 }
 
 /* 侧边栏头部 - 浅色主题 */
