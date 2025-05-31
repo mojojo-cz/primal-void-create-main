@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>创建测试视频文件</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .info {
+            background-color: #e7f3ff;
+            border: 1px solid #b6d7ff;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 创建测试视频文件</h1>
+        <p>生成一个小的测试视频文件，用于调试MinIO上传功能</p>
+
+        <div class="info">
+            <h3>📋 测试文件规格</h3>
+            <ul>
+                <li><strong>分辨率</strong>: 320x240 (小尺寸)</li>
+                <li><strong>时长</strong>: 3秒</li>
+                <li><strong>格式</strong>: WebM</li>
+                <li><strong>预期大小</strong>: < 100KB</li>
+            </ul>
+        </div>
+
+        <canvas id="canvas" width="320" height="240"></canvas>
+        
+        <div>
+            <button onclick="createTestVideo()">生成测试视频</button>
+            <button onclick="downloadVideo()" id="downloadBtn" style="display: none;">下载测试视频</button>
+        </div>
+
+        <div id="status"></div>
+    </div>
+
+    <script>
+        let videoBlob = null;
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="${type}">${message}</div>`;
+        }
+
+        async function createTestVideo() {
+            try {
+                showStatus('🎬 正在生成测试视频...', 'info');
+                
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 设置录制选项
+                const stream = canvas.captureStream(30); // 30 FPS
+                const mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp8'
+                });
+                
+                const chunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        chunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    videoBlob = new Blob(chunks, { type: 'video/webm' });
+                    const sizeKB = (videoBlob.size / 1024).toFixed(2);
+                    showStatus(`✅ 测试视频生成成功！大小: ${sizeKB} KB`, 'success');
+                    document.getElementById('downloadBtn').style.display = 'inline-block';
+                };
+                
+                // 开始录制
+                mediaRecorder.start();
+                
+                // 绘制动画 (3秒)
+                let frame = 0;
+                const totalFrames = 90; // 3秒 × 30fps
+                
+                const drawFrame = () => {
+                    // 清空画布
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // 绘制渐变背景
+                    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                    gradient.addColorStop(0, `hsl(${frame * 4}, 70%, 50%)`);
+                    gradient.addColorStop(1, `hsl(${frame * 4 + 180}, 70%, 30%)`);
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // 绘制移动的圆
+                    const x = (canvas.width / 2) + Math.sin(frame * 0.1) * 100;
+                    const y = (canvas.height / 2) + Math.cos(frame * 0.1) * 80;
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 20, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 绘制文字
+                    ctx.fillStyle = 'white';
+                    ctx.font = '20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('测试视频', canvas.width / 2, 50);
+                    ctx.fillText(`帧 ${frame + 1}/${totalFrames}`, canvas.width / 2, canvas.height - 30);
+                    
+                    frame++;
+                    
+                    if (frame < totalFrames) {
+                        requestAnimationFrame(drawFrame);
+                    } else {
+                        // 停止录制
+                        setTimeout(() => {
+                            mediaRecorder.stop();
+                            stream.getTracks().forEach(track => track.stop());
+                        }, 100);
+                    }
+                };
+                
+                drawFrame();
+                
+            } catch (error) {
+                showStatus(`❌ 生成视频时出错: ${error.message}`, 'error');
+            }
+        }
+
+        function downloadVideo() {
+            if (!videoBlob) {
+                showStatus('❌ 没有可下载的视频', 'error');
+                return;
+            }
+            
+            const url = URL.createObjectURL(videoBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'test_video_small.webm';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatus('✅ 测试视频已下载，现在可以用它来测试上传功能', 'success');
+        }
+    </script>
+</body>
+</html> 

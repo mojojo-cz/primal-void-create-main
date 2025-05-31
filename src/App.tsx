@@ -14,6 +14,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./pages/admin/AdminLayout";
 import CourseManagement from "./pages/admin/CourseManagement";
 import VideoManagement from "./pages/admin/VideoManagement";
+import MinIOVideoManagement from "./pages/admin/MinIOVideoManagement";
 import AccountManagement from "./pages/admin/AccountManagement";
 import Settings from "./pages/admin/Settings";
 import StudentPage from "./pages/StudentPage";
@@ -80,6 +81,7 @@ const App = () => (
               <Route index element={<Navigate to="/admin/courses" replace />} />
               <Route path="courses" element={<CourseManagement />} />
               <Route path="videos" element={<VideoManagement />} />
+              <Route path="minio-videos" element={<MinIOVideoManagement />} />
               <Route path="accounts" element={<AccountManagement />} />
               <Route path="settings" element={<Settings />} />
             </Route>

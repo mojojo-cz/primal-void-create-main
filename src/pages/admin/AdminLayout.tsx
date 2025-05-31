@@ -10,7 +10,8 @@ import {
   Shield,
   Settings,
   Menu,
-  X
+  X,
+  Database
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -49,12 +50,19 @@ const AdminLayout = () => {
         showDashboardLink: false,
         breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 课程管理`
       };
-    } else if (path.includes('/videos')) {
+    } else if (path.includes('/videos') && !path.includes('/minio-videos')) {
       return { 
         title: '视频管理', 
         breadcrumb: '视频管理',
         showDashboardLink: false,
         breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 视频管理`
+      };
+    } else if (path.includes('/minio-videos')) {
+      return { 
+        title: 'MinIO视频管理', 
+        breadcrumb: 'MinIO视频管理',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / MinIO视频管理`
       };
     } else if (path.includes('/accounts')) {
       return { 
@@ -92,6 +100,12 @@ const AdminLayout = () => {
       to: "/admin/videos", 
       label: "视频管理", 
       icon: <Video className="h-5 w-5" />,
+      restricted: isTeacher
+    },
+    { 
+      to: "/admin/minio-videos", 
+      label: "MinIO视频管理", 
+      icon: <Database className="h-5 w-5" />,
       restricted: isTeacher
     },
     { 

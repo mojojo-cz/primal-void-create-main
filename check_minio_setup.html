@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MinIO设置检查器</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .step {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .credentials {
+            background-color: #e7f3ff;
+            border: 1px solid #b6d7ff;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .link-button {
+            background-color: #28a745;
+        }
+        .link-button:hover {
+            background-color: #218838;
+        }
+        ol {
+            line-height: 1.6;
+        }
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 MinIO设置检查器</h1>
+        <p>按照以下步骤检查和修复MinIO配置问题</p>
+
+        <div class="error">
+            <h3>❌ 检测到的问题</h3>
+            <p><strong>错误代码</strong>: 403 Forbidden</p>
+            <p><strong>错误含义</strong>: MinIO服务器拒绝了上传请求</p>
+            <p><strong>常见原因</strong>: 存储桶不存在或权限配置错误</p>
+        </div>
+
+        <div class="step">
+            <h3>步骤 1: 访问MinIO控制台</h3>
+            <div class="credentials">
+控制台地址: http://115.159.33.45:9001
+用户名: WRJDY2MYP6RF0Y5EO4M2
+密码: jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7
+            </div>
+            <a href="http://115.159.33.45:9001" target="_blank" class="link-button">打开MinIO控制台</a>
+        </div>
+
+        <div class="step">
+            <h3>步骤 2: 检查存储桶</h3>
+            <ol>
+                <li>登录MinIO控制台后，点击左侧的 <code>Buckets</code></li>
+                <li>查看是否存在名为 <code>videos</code> 的存储桶</li>
+                <li>如果不存在，点击 <code>Create Bucket</code> 创建</li>
+                <li>输入名称: <code>videos</code></li>
+                <li>点击 <code>Create Bucket</code> 完成创建</li>
+            </ol>
+            
+            <div class="warning">
+                <strong>⚠️ 重要</strong>: 存储桶名称必须是 <code>videos</code>，区分大小写！
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>步骤 3: 配置存储桶策略</h3>
+            <ol>
+                <li>选择 <code>videos</code> 存储桶</li>
+                <li>点击 <code>Access</code> 选项卡</li>
+                <li>在 <code>Access Policy</code> 部分，点击 <code>Add Access Rule</code></li>
+                <li>设置以下规则：
+                    <ul>
+                        <li><strong>Prefix</strong>: <code>*</code></li>
+                        <li><strong>Access</strong>: <code>Read and Write</code></li>
+                    </ul>
+                </li>
+                <li>点击 <code>Save</code> 保存设置</li>
+            </ol>
+            
+            <div class="success">
+                <strong>✅ 或者使用更简单的方法</strong>: 在存储桶设置中将 <code>Access Policy</code> 设置为 <code>Public</code>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>步骤 4: 验证连接</h3>
+            <p>完成上述设置后，回到调试工具重新测试：</p>
+            <ol>
+                <li>刷新 <code>debug_minio_upload.html</code> 页面</li>
+                <li>点击 "1. 测试MinIO连接"</li>
+                <li>点击 "2. 测试Edge Function"</li>
+                <li>如果成功，选择视频文件并测试上传</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>步骤 5: 如果仍然失败</h3>
+            <p>如果问题仍然存在，可能需要检查：</p>
+            <ul>
+                <li><strong>网络连接</strong>: 确保可以访问 115.159.33.45:9000</li>
+                <li><strong>MinIO服务状态</strong>: 确认MinIO服务正在运行</li>
+                <li><strong>凭据正确性</strong>: 验证Access Key和Secret Key</li>
+                <li><strong>防火墙设置</strong>: 确保端口9000和9001开放</li>
+            </ul>
+            
+            <div class="warning">
+                <strong>💡 提示</strong>: 可以在MinIO控制台的 <code>Monitoring</code> 页面查看访问日志，了解具体的错误信息。
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>快速测试命令</h3>
+            <p>如果您有命令行访问权限，可以使用以下命令测试MinIO连接：</p>
+            <div class="credentials">
+# 测试MinIO健康状态
+curl -I http://115.159.33.45:9000/minio/health/live
+
+# 测试存储桶访问
+curl -I http://115.159.33.45:9000/videos/
+
+# 如果返回200 OK，说明配置正确
+            </div>
+        </div>
+
+        <div class="success">
+            <h3>✅ 预期结果</h3>
+            <p>完成正确配置后，您应该能看到：</p>
+            <ul>
+                <li>MinIO控制台中存在 <code>videos</code> 存储桶</li>
+                <li>存储桶有适当的读写权限</li>
+                <li>Edge Function测试返回成功状态</li>
+                <li>视频文件可以成功上传</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html> 

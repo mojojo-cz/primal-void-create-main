@@ -87,6 +87,21 @@ export type Database = {
         }
         Relationships: []
       }
+      keep_alive: {
+        Row: {
+          created_at: string
+          id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+        }
+        Relationships: []
+      }
       learning_progress: {
         Row: {
           completed: boolean | null
@@ -124,6 +139,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      minio_videos: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          description: string | null
+          file_size: number | null
+          id: string
+          minio_object_name: string
+          title: string
+          updated_at: string
+          video_url: string
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          description?: string | null
+          file_size?: number | null
+          id?: string
+          minio_object_name: string
+          title: string
+          updated_at?: string
+          video_url: string
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          description?: string | null
+          file_size?: number | null
+          id?: string
+          minio_object_name?: string
+          title?: string
+          updated_at?: string
+          video_url?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
