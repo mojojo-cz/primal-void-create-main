@@ -10,8 +10,8 @@ export interface SystemSettings {
 export const defaultSettings: SystemSettings = {
   system_logo: "",
   favicon_url: "/favicon.png",
-  system_title: "primal-void-create",
-  site_name: "考研教育系统"
+  system_title: "显然考研",
+  site_name: "显然考研"
 };
 
 // 加载系统设置 - 支持从数据库和本地存储加载

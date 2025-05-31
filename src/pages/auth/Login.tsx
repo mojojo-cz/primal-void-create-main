@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { loginSuccessToast, errorToast } from "@/utils/toast";
+import { applySystemSettings } from "@/utils/systemSettings";
 
 import {
   Form,
@@ -33,6 +34,11 @@ const formSchema = z.object({
 const Login = () => {
   const { signIn } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+
+  // 确保页面标题正确显示
+  useEffect(() => {
+    applySystemSettings();
+  }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
