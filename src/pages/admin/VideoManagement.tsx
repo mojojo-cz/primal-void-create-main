@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -46,20 +46,28 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit,
-  X
+  X,
+  Database,
+  Shield
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
 import EnhancedPagination from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
+import VideoUploadToMinIO from "@/components/VideoUploadToMinIO";
 
-// 视频类型
+// 视频类型 - 修改为MinIO视频类型
 interface Video {
   id: string;
   title: string;
   description: string | null;
   video_url: string;
+  minio_object_name: string;
   created_at: string;
+  file_size?: number;
+  content_type?: string;
+  play_url?: string | null; // 新增：长效播放URL
+  play_url_expires_at?: string | null; // 新增：播放URL过期时间
 }
 
 // 文件夹类型
@@ -157,32 +165,26 @@ const VideoManagement = () => {
   });
   
   // 表单状态
-  const [videoTitle, setVideoTitle] = useState("");
-  const [videoDescription, setVideoDescription] = useState("");
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("default");
   const [folderForm, setFolderForm] = useState({
     name: "",
     description: "",
     color: "blue"
   });
-  const [uploading, setUploading] = useState(false);
   const [folderSubmitting, setFolderSubmitting] = useState(false);
-  
-  const videoUploadRef = useRef<HTMLInputElement>(null);
 
   // 获取视频列表
   const fetchVideos = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("videos")
+        .from("minio_videos")
         .select("*")
         .order("created_at", { ascending: false });
       
       if (error) throw error;
       
       setVideos(data || []);
-      setCurrentPage(1); // 重置到第一页
+      setCurrentPage(1);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -260,99 +262,88 @@ const VideoManagement = () => {
     setCurrentPage(1); // 重置到第一页
   };
 
-  // 视频上传
-  const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    
-    if (!file.type.startsWith('video/')) {
-      toast({
-        variant: "destructive",
-        title: "文件类型错误",
-        description: "请选择视频文件"
-      });
-      return;
-    }
-    
-    try {
-      setUploading(true);
+  // 格式化文件大小
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
       
-      const timestamp = Date.now();
-      const fileExtension = file.name.split('.').pop() || '';
-      const safeFileName = `${timestamp}_${Math.random().toString(36).substring(2, 10)}.${fileExtension}`;
-      
-      // 上传到 Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('videos')
-        .upload(safeFileName, file);
-      
-      if (uploadError) throw new Error('视频上传失败：' + uploadError.message);
-      
-      // 获取公开URL
-      const { data: urlData } = await supabase.storage
-        .from('videos')
-        .getPublicUrl(safeFileName);
-      
-      const videoUrl = urlData?.publicUrl;
+  // 上传完成处理
+  const handleUploadComplete = async () => {
+    setUploadDialog(false);
+    await fetchVideos();
+  };
 
-      // 根据选择的文件夹调整描述（用于分类）
-      let finalDescription = videoDescription;
-      const selectedFolder = folders.find(f => f.id === selectedFolderId);
-      if (selectedFolder && !selectedFolder.is_default) {
-        // 自定义文件夹：在描述中添加文件夹名称标签
-        finalDescription = `${selectedFolder.name} ${finalDescription || videoTitle}`.trim();
-      } else if (selectedFolderId === 'course-videos' && !finalDescription?.includes('课程')) {
-        finalDescription = `课程视频：${finalDescription || videoTitle}`;
-      } else if (selectedFolderId === 'demo-videos' && !finalDescription?.includes('演示')) {
-        finalDescription = `演示视频：${finalDescription || videoTitle}`;
+  // 播放视频 - 适配MinIO视频（优化版）
+  const handlePlayVideo = async (video: Video) => {
+    try {
+      let playUrl = video.play_url;
+      
+      // 检查是否有存储的播放URL且未过期
+      if (video.play_url && video.play_url_expires_at) {
+        const expiresAt = new Date(video.play_url_expires_at);
+        const now = new Date();
+        const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+        
+        // 如果URL将在10小时内过期，则重新生成（适应长视频播放）
+        if (timeUntilExpiry > 10 * 60 * 60 * 1000) {
+          // URL仍然有效，直接使用
+          setVideoDialog({ 
+            open: true, 
+            url: video.play_url, 
+            title: video.title 
+          });
+          return;
+        }
       }
       
-      // 保存到视频表
-      const { error: insertError } = await supabase
-        .from('videos')
-        .insert([{
-          title: videoTitle || file.name,
-          description: finalDescription || null,
-          video_url: videoUrl,
-        }]);
-      
-      if (insertError) throw new Error('保存视频信息失败：' + insertError.message);
-      
-      // 清空表单
-      setVideoTitle("");
-      setVideoDescription("");
-      setSelectedFolderId("default");
-      setUploadDialog(false);
-      
-      if (event.target.files) {
-        event.target.value = '';
-      }
-      
-      await fetchVideos();
-      
-      toast({
-        title: "上传成功",
-        description: "视频已成功上传"
+      // 如果没有播放URL或将在10小时内过期，调用Edge Function生成新的播放URL
+      const { data, error } = await supabase.functions.invoke('minio-presigned-upload', {
+        body: { 
+          action: 'generatePlayUrl',
+          objectName: video.minio_object_name 
+        }
       });
+      
+      if (error) throw error;
+
+      if (data?.playUrl) {
+        // 更新数据库中的播放URL
+        if (data.expiresAt) {
+          await supabase
+            .from('minio_videos')
+            .update({
+              play_url: data.playUrl,
+              play_url_expires_at: data.expiresAt
+            })
+            .eq('id', video.id);
+      }
+      
+        setVideoDialog({ 
+          open: true, 
+          url: data.playUrl, 
+          title: video.title 
+        });
+      } else {
+        throw new Error('未能获取视频播放URL');
+      }
     } catch (error: any) {
+      console.error('播放失败:', error);
       toast({
         variant: "destructive",
-        title: "上传失败",
-        description: error.message || '上传失败'
+        title: "播放失败",
+        description: error.message || "无法播放视频"
       });
-    } finally {
-      setUploading(false);
     }
   };
 
-  // 播放视频
-  const handlePlayVideo = (url: string, title: string) => {
-    setVideoDialog({ open: true, url, title });
-  };
-
-  // 删除视频
-  const handleDeleteVideo = async (videoId: string) => {
+  // 删除视频 - 适配MinIO视频
+  const handleDeleteVideo = async (videoId: string, objectName: string) => {
     try {
+      // 检查是否有课程章节使用此视频
       const { data: sections, error: checkError } = await supabase
         .from("course_sections")
         .select("id, title, course_id")
@@ -369,12 +360,23 @@ const VideoManagement = () => {
         return;
       }
       
-      const { error: deleteError } = await supabase
-        .from("videos")
+      // 先从数据库删除记录
+      const { error: dbError } = await supabase
+        .from("minio_videos")
         .delete()
         .eq("id", videoId);
       
-      if (deleteError) throw deleteError;
+      if (dbError) throw dbError;
+      
+      // 然后删除MinIO对象
+      const { data, error: deleteError } = await supabase.functions.invoke('minio-video-delete', {
+        body: { objectName }
+      });
+
+      if (deleteError) {
+        console.warn('删除MinIO对象失败:', deleteError);
+        // 即使MinIO删除失败，数据库记录已删除，继续刷新列表
+      }
       
       await fetchVideos();
       
@@ -529,6 +531,7 @@ const VideoManagement = () => {
             <TableHead className="w-[50px] text-center">#</TableHead>
             <TableHead className="min-w-[200px]">标题</TableHead>
             <TableHead className="hidden md:table-cell min-w-[150px]">描述</TableHead>
+            <TableHead className="hidden lg:table-cell min-w-[100px]">文件大小</TableHead>
             <TableHead className="hidden lg:table-cell min-w-[120px]">所属分类</TableHead>
             <TableHead className="hidden lg:table-cell min-w-[120px]">上传时间</TableHead>
             <TableHead className="text-right min-w-[120px]">操作</TableHead>
@@ -547,13 +550,21 @@ const VideoManagement = () => {
                   <div className="flex items-center gap-3">
                     <div 
                       className="w-16 h-12 bg-black rounded-lg flex items-center justify-center cursor-pointer hover:bg-gray-800 transition-all duration-200 hover:scale-105 flex-shrink-0"
-                      onClick={() => handlePlayVideo(video.video_url, video.title)}
+                      onClick={() => handlePlayVideo(video)}
                       title="点击播放视频"
                     >
                       <Play className="h-6 w-6 text-white opacity-80 hover:opacity-100" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium truncate pr-2">{video.title}</div>
+                      <div className="font-medium truncate pr-2 flex items-center gap-2">
+                        <Database className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                        {video.title}
+                        {video.file_size && video.file_size > 50 * 1024 * 1024 && (
+                          <span className="text-xs bg-green-100 text-green-600 px-1 rounded" title="大文件">
+                            <Shield className="h-3 w-3" />
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-muted-foreground lg:hidden mt-1">
                         {video.description ? (
                           <span className="line-clamp-1">{video.description}</span>
@@ -576,6 +587,20 @@ const VideoManagement = () => {
                       <span className="text-muted-foreground italic text-sm">无描述</span>
                     )}
                   </div>
+                </TableCell>
+                <TableCell className="hidden lg:table-cell">
+                  {video.file_size ? (
+                    <div className="flex items-center gap-1 text-sm">
+                      <span>{formatFileSize(video.file_size)}</span>
+                      {video.file_size > 50 * 1024 * 1024 && (
+                        <span className="text-xs bg-green-100 text-green-600 px-1 rounded" title="大文件">
+                          大
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">-</span>
+                  )}
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
                   <div className="flex items-center gap-2">
@@ -611,7 +636,7 @@ const VideoManagement = () => {
                     <Button 
                       size="sm" 
                       variant="ghost"
-                      onClick={() => handlePlayVideo(video.video_url, video.title)}
+                      onClick={() => handlePlayVideo(video)}
                       className="hover:bg-primary/10"
                       title="播放视频"
                     >
@@ -639,7 +664,7 @@ const VideoManagement = () => {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>取消</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteVideo(video.id)}>
+                          <AlertDialogAction onClick={() => handleDeleteVideo(video.id, video.minio_object_name)}>
                             确认删除
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -671,14 +696,15 @@ const VideoManagement = () => {
           <div key={video.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-all duration-200 hover:border-primary/20 group">
             <div 
               className="aspect-video bg-black relative cursor-pointer overflow-hidden" 
-              onClick={() => handlePlayVideo(video.video_url, video.title)}
+              onClick={() => handlePlayVideo(video)}
               title="点击播放视频"
             >
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all duration-200">
                 <Play className="h-8 w-8 sm:h-12 sm:w-12 text-white opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-200" />
               </div>
-              <div className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-black/50 text-white text-xs px-1 py-0.5 sm:px-2 sm:py-1 rounded">
-                视频
+              <div className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-black/50 text-white text-xs px-1 py-0.5 sm:px-2 sm:py-1 rounded flex items-center gap-1">
+                <Database className="h-3 w-3" />
+                MinIO
               </div>
               <div className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-primary/80 text-white text-xs px-1 py-0.5 sm:px-2 sm:py-1 rounded flex items-center gap-1 max-w-[60%]">
                 <Folder className="h-3 w-3 flex-shrink-0" />
@@ -707,7 +733,7 @@ const VideoManagement = () => {
                 <Button 
                   size="sm" 
                   variant="outline"
-                  onClick={() => handlePlayVideo(video.video_url, video.title)}
+                  onClick={() => handlePlayVideo(video)}
                   className="flex-1 hover:bg-primary hover:text-primary-foreground text-xs lg:text-sm h-8 lg:h-9"
                 >
                   <Play className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
@@ -733,7 +759,7 @@ const VideoManagement = () => {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>取消</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDeleteVideo(video.id)}>
+                      <AlertDialogAction onClick={() => handleDeleteVideo(video.id, video.minio_object_name)}>
                         确认删除
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -920,6 +946,9 @@ const VideoManagement = () => {
                     <CardTitle className="flex items-center gap-2">
                       {currentFolder ? <Folder className="h-5 w-5" /> : <FolderOpen className="h-5 w-5" />}
                       {getCurrentFolderName()}
+                      <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+                        MinIO安全上传
+                      </span>
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">
                       共 {filteredVideos.length} 个视频
@@ -934,7 +963,7 @@ const VideoManagement = () => {
                       className="w-full"
                     >
                       <Upload className="h-4 w-4 mr-2" />
-                      上传视频
+                      安全上传
                     </Button>
                   </div>
                 </div>
@@ -983,7 +1012,7 @@ const VideoManagement = () => {
                     <div className="hidden sm:block">
                       <Button onClick={() => setUploadDialog(true)}>
                         <Upload className="h-4 w-4 mr-2" />
-                        上传视频
+                        安全上传
                       </Button>
                     </div>
                   </div>
@@ -1010,7 +1039,7 @@ const VideoManagement = () => {
                   {!searchTerm && (
                     <Button onClick={() => setUploadDialog(true)}>
                       <Upload className="h-4 w-4 mr-2" />
-                      上传视频
+                      安全上传
                     </Button>
                   )}
                 </div>
@@ -1035,64 +1064,22 @@ const VideoManagement = () => {
 
       {/* 上传视频对话框 */}
       <Dialog open={uploadDialog} onOpenChange={setUploadDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>上传视频</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              上传视频到MinIO
+              <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+                预签名URL
+              </span>
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="videoTitle">视频标题</Label>
-              <Input
-                id="videoTitle"
-                value={videoTitle}
-                onChange={(e) => setVideoTitle(e.target.value)}
-                placeholder="请输入视频标题"
-              />
-            </div>
-            <div>
-              <Label htmlFor="videoDescription">视频描述</Label>
-              <Textarea
-                id="videoDescription"
-                value={videoDescription}
-                onChange={(e) => setVideoDescription(e.target.value)}
-                placeholder="请输入视频描述"
-                rows={3}
-              />
-            </div>
-            <div>
-              <Label htmlFor="videoCategory">选择分类</Label>
-              <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择视频分类" />
-                </SelectTrigger>
-                <SelectContent>
-                  {folders.map(folder => (
-                    <SelectItem key={folder.id} value={folder.id}>
-                      {folder.name} {folder.is_default && '（默认）'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="videoFile">选择视频文件</Label>
-              <Input
-                id="videoFile"
-                type="file"
-                accept="video/*"
-                onChange={handleVideoUpload}
-                ref={videoUploadRef}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setUploadDialog(false)} disabled={uploading}>
-              取消
-            </Button>
-            <Button onClick={() => videoUploadRef.current?.click()} disabled={uploading}>
-              {uploading ? '上传中...' : '选择文件'}
-            </Button>
-          </DialogFooter>
+          
+          <VideoUploadToMinIO
+            folders={folders}
+            onUploadComplete={handleUploadComplete}
+            onCancel={() => setUploadDialog(false)}
+          />
         </DialogContent>
       </Dialog>
 

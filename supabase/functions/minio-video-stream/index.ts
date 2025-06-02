@@ -1,69 +1,115 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import * as minio from 'https://deno.land/x/minio@v7.1.3/mod.ts'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { Client } from "npm:minio@8.0.5"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-Deno.serve(async (req) => {
-  // 处理CORS预检请求
+interface StreamRequest {
+  objectName: string;
+}
+
+// MinIO配置 - 从环境变量读取
+const getMinIOConfig = () => {
+  const endPoint = Deno.env.get('MINIO_ENDPOINT');
+  const port = parseInt(Deno.env.get('MINIO_PORT') || '9000');
+  const useSSL = Deno.env.get('MINIO_USE_SSL') === 'true';
+  const accessKey = Deno.env.get('MINIO_ACCESS_KEY');
+  const secretKey = Deno.env.get('MINIO_SECRET_KEY');
+  const bucketName = Deno.env.get('MINIO_BUCKET_NAME') || 'videos';
+
+  // 验证必需的环境变量
+  if (!endPoint || !accessKey || !secretKey) {
+    throw new Error('缺少必需的MinIO环境变量: MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY');
+  }
+
+  return {
+    endPoint,
+    port,
+    useSSL,
+    accessKey,
+    secretKey,
+    bucketName
+  };
+};
+
+serve(async (req) => {
+  // 处理CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // 获取环境变量
-    const MINIO_ENDPOINT = Deno.env.get('MINIO_ENDPOINT') || 'localhost:9000'
-    const MINIO_ACCESS_KEY = Deno.env.get('MINIO_ACCESS_KEY') || 'minioadmin'
-    const MINIO_SECRET_KEY = Deno.env.get('MINIO_SECRET_KEY') || 'minioadmin'
-    const MINIO_BUCKET = Deno.env.get('MINIO_BUCKET') || 'videos'
-    const MINIO_USE_SSL = Deno.env.get('MINIO_USE_SSL') === 'true'
-
-    // 创建MinIO客户端
-    const minioClient = new minio.Client({
-      endPoint: MINIO_ENDPOINT.split(':')[0],
-      port: parseInt(MINIO_ENDPOINT.split(':')[1] || '9000'),
-      useSSL: MINIO_USE_SSL,
-      accessKey: MINIO_ACCESS_KEY,
-      secretKey: MINIO_SECRET_KEY,
-    })
-
-    // 解析请求体
-    const { objectName } = await req.json()
-
-    if (!objectName) {
-      return new Response(
-        JSON.stringify({ error: '没有提供对象名称' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    if (req.method !== 'POST') {
+      throw new Error('只支持POST请求');
     }
 
-    // 生成预签名URL（有效期1小时）
-    const videoUrl = await minioClient.presignedGetObject(MINIO_BUCKET, objectName, 60 * 60)
+    const { objectName }: StreamRequest = await req.json();
+
+    if (!objectName) {
+      throw new Error('缺少objectName参数');
+    }
+
+    console.log(`生成流播放URL: ${objectName}`);
+
+    // 获取MinIO配置
+    const config = getMinIOConfig();
+
+    // 创建MinIO客户端
+    const minioClient = new Client({
+      endPoint: config.endPoint,
+      port: config.port,
+      useSSL: config.useSSL,
+      accessKey: config.accessKey,
+      secretKey: config.secretKey,
+    });
+
+    // 检查对象是否存在
+    try {
+      await minioClient.statObject(config.bucketName, objectName);
+    } catch (error) {
+      console.error(`对象不存在: ${objectName}`, error);
+      throw new Error(`视频文件不存在: ${objectName}`);
+    }
+
+    // 生成预签名URL用于播放 (1小时有效期)
+    const streamUrl = await minioClient.presignedGetObject(
+      config.bucketName, 
+      objectName, 
+      60 * 60 // 1小时
+    );
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        url: videoUrl
+      JSON.stringify({
+        success: true,
+        streamUrl: streamUrl,
+        objectName: objectName,
+        expiresIn: 3600
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        },
+      },
     )
 
   } catch (error) {
-    console.error('MinIO流式传输错误:', error)
+    console.error('生成流URL失败:', error);
+    
     return new Response(
-      JSON.stringify({ error: error.message || '获取视频失败' }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ 
+        success: false,
+        error: error.message 
+      }),
+      {
+        status: 500,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        },
+      },
     )
   }
 }) 

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简化的MinIO上传测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .log { border: 1px solid #ddd; padding: 10px; height: 200px; overflow-y: auto; background: #f9f9f9; font-family: monospace; font-size: 12px; }
+        .status { padding: 2px 0; }
+        .info { color: #0066cc; }
+        .success { color: #009900; }
+        .error { color: #cc0000; }
+        button { padding: 10px 20px; margin: 5px; border: none; background: #007cba; color: white; cursor: pointer; border-radius: 4px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h1>简化的MinIO上传测试</h1>
+    
+    <div>
+        <input type="file" id="testFile" accept="video/*">
+        <br>
+        <button onclick="testInit()" id="initBtn">测试初始化</button>
+        <button onclick="testSmallUpload()" id="uploadBtn">测试小文件上传</button>
+        <button onclick="clearLogs()">清除日志</button>
+    </div>
+    
+    <h3>测试日志</h3>
+    <div id="logs" class="log"></div>
+    
+    <script>
+        const SUPABASE_URL = 'https://sxsyprzckdnfyhadodhj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs';
+
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.textContent = `[${timestamp}] ${message}`;
+            logs.appendChild(div);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        async function testInit() {
+            log('🧪 测试初始化功能...', 'info');
+            
+            try {
+                const response = await fetch(`${SUPABASE_URL}/functions/v1/minio-chunked-upload-v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'init',
+                        filename: 'test-init.mp4',
+                        title: '初始化测试',
+                        description: '测试初始化功能'
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    log('✅ 初始化测试成功', 'success');
+                    log(`Upload ID: ${result.uploadId}`, 'info');
+                    log(`Object Name: ${result.objectName}`, 'info');
+                    log(`Version: ${result.version}`, 'info');
+                } else {
+                    log(`❌ 初始化失败: ${result.error}`, 'error');
+                }
+
+            } catch (error) {
+                log(`❌ 初始化测试失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSmallUpload() {
+            const fileInput = document.getElementById('testFile');
+            
+            if (!fileInput.files[0]) {
+                log('❌ 请先选择测试文件', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            
+            // 只测试小于6MB的文件使用优化上传
+            const maxSize = 6 * 1024 * 1024; // 6MB - Supabase标准上传限制
+            let testFile;
+            
+            if (file.size <= maxSize) {
+                testFile = file;
+                log(`📁 使用完整文件: ${file.name} (${formatFileSize(file.size)})`, 'info');
+                log('🚀 开始优化上传测试...', 'info');
+                
+                try {
+                    // 使用优化版Edge Function（FormData上传）
+                    const formData = new FormData();
+                    formData.append('file', testFile);
+                    formData.append('title', `优化测试-${testFile.name}`);
+                    formData.append('description', `优化上传测试 ${new Date().toLocaleString()}`);
+                    
+                    log('📤 发送优化上传请求...', 'info');
+                    const uploadResponse = await fetch(`${SUPABASE_URL}/functions/v1/minio-video-upload-optimized`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        },
+                        body: formData
+                    });
+
+                    if (!uploadResponse.ok) {
+                        const errorText = await uploadResponse.text();
+                        throw new Error(`优化上传失败: ${uploadResponse.status} - ${errorText}`);
+                    }
+
+                    const uploadResult = await uploadResponse.json();
+                    if (!uploadResult.success) {
+                        throw new Error(uploadResult.error || '优化上传失败');
+                    }
+
+                    log('🎉 优化上传测试成功！', 'success');
+                    log(`📁 文件ID: ${uploadResult.id}`, 'success');
+                    log(`🔗 视频URL: ${uploadResult.video_url}`, 'success');
+                    
+                } catch (error) {
+                    log(`❌ 优化上传失败: ${error.message}`, 'error');
+                }
+                
+            } else {
+                // 对于大文件，截取前6MB进行测试
+                testFile = file.slice(0, maxSize);
+                log(`📁 使用文件前6MB: ${file.name} (${formatFileSize(maxSize)})`, 'info');
+                log('🚀 开始分块上传测试...', 'info');
+                
+                // 回退到分步上传测试
+                await testStepByStepUpload(testFile, file.name);
+            }
+        }
+
+        async function testStepByStepUpload(testChunk, filename) {
+            try {
+                // 步骤1: 初始化
+                log('📋 初始化...', 'info');
+                const initResponse = await fetch(`${SUPABASE_URL}/functions/v1/minio-chunked-upload-v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'init',
+                        filename: `step-test-${filename}`,
+                        title: '分步测试',
+                        description: '分步上传测试'
+                    })
+                });
+
+                if (!initResponse.ok) {
+                    throw new Error(`初始化失败: ${initResponse.status}`);
+                }
+
+                const initResult = await initResponse.json();
+                if (!initResult.success) {
+                    throw new Error(initResult.error);
+                }
+                log('✅ 初始化成功', 'success');
+
+                // 立即进行上传，减少延迟
+                log('⬆️ 立即上传分块...', 'info');
+                const arrayBuffer = await testChunk.arrayBuffer();
+                const uint8Array = new Uint8Array(arrayBuffer);
+                
+                // 安全的base64编码
+                let base64Data = '';
+                const chunkSize = 1024;
+                
+                for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                    const end = Math.min(i + chunkSize, uint8Array.length);
+                    const slice = uint8Array.slice(i, end);
+                    const binaryString = Array.from(slice, byte => String.fromCharCode(byte)).join('');
+                    base64Data += btoa(binaryString);
+                }
+
+                const uploadResponse = await fetch(`${SUPABASE_URL}/functions/v1/minio-chunked-upload-v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'upload',
+                        uploadId: initResult.uploadId,
+                        objectName: initResult.objectName,
+                        chunkNumber: 1,
+                        chunkData: base64Data
+                    })
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error(`分块上传失败: ${uploadResponse.status}`);
+                }
+
+                const uploadResult = await uploadResponse.json();
+                if (!uploadResult.success) {
+                    throw new Error(uploadResult.error);
+                }
+                log('✅ 分块上传成功', 'success');
+
+                // 立即完成上传
+                log('🏁 立即完成上传...', 'info');
+                const completeResponse = await fetch(`${SUPABASE_URL}/functions/v1/minio-chunked-upload-v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'complete',
+                        uploadId: initResult.uploadId,
+                        objectName: initResult.objectName,
+                        title: '分步测试',
+                        description: '分步上传测试完成',
+                        etags: [uploadResult.etag]
+                    })
+                });
+
+                if (!completeResponse.ok) {
+                    throw new Error(`完成上传失败: ${completeResponse.status}`);
+                }
+
+                const completeResult = await completeResponse.json();
+                if (!completeResult.success) {
+                    throw new Error(completeResult.error);
+                }
+
+                log('🎉 分步上传测试也成功！', 'success');
+                log(`📁 文件ID: ${completeResult.id}`, 'success');
+
+            } catch (error) {
+                log(`❌ 分步测试也失败: ${error.message}`, 'error');
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html> 

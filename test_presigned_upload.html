@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>预签名URL上传测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .upload-area {
+            border: 2px dashed #e5e7eb;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 20px 0;
+        }
+        
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background-color: #f8fafc;
+        }
+        
+        .upload-area.dragging {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        
+        .file-list {
+            margin-top: 20px;
+        }
+        
+        .file-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f9fafb;
+        }
+        
+        .file-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .file-info {
+            flex: 1;
+        }
+        
+        .file-name {
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .file-size {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status.requesting {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status.uploading {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status.completed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status.error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.3s;
+        }
+        
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            background: #2563eb;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .info-box {
+            background: #eff6ff;
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .error-box {
+            background: #fee2e2;
+            border: 1px solid #dc2626;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #dc2626;
+        }
+        
+        .success-box {
+            background: #d1fae5;
+            border: 1px solid #059669;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #059669;
+        }
+        
+        .log {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 预签名URL上传测试</h1>
+        <p>基于MinIO官方文档的presignedPutObject API实现安全上传</p>
+
+        <div class="info-box">
+            <h3>📋 测试流程</h3>
+            <ol>
+                <li>调用Supabase Edge Function获取预签名URL</li>
+                <li>使用预签名URL直接上传到MinIO</li>
+                <li>验证上传结果</li>
+            </ol>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <div>
+                <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <p><strong>拖拽文件到此处或点击选择</strong></p>
+                <p>支持任意类型文件，最大50GB</p>
+            </div>
+            <input type="file" id="fileInput" multiple style="display: none;">
+        </div>
+
+        <div id="fileList" class="file-list"></div>
+
+        <div class="info-box">
+            <h3>🔧 配置信息</h3>
+            <p><strong>Edge Function:</strong> minio-presigned-upload</p>
+            <p><strong>MinIO服务器:</strong> 115.159.33.45:9000</p>
+            <p><strong>存储桶:</strong> videos</p>
+            <p><strong>有效期:</strong> 1小时</p>
+        </div>
+
+        <div id="logs" class="log" style="display: none;"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://sxsyprzckdnfyhadodhj.supabase.co';
+        const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/minio-presigned-upload`;
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs';
+
+        let uploadCount = 0;
+
+        // 日志函数
+        function log(message) {
+            const logsDiv = document.getElementById('logs');
+            logsDiv.style.display = 'block';
+            const timestamp = new Date().toLocaleTimeString();
+            logsDiv.textContent += `[${timestamp}] ${message}\n`;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(message);
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 格式化速度
+        function formatSpeed(bytesPerSecond) {
+            if (!isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0 B/s';
+            const k = 1024;
+            const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+            const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
+            return parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 格式化时间
+        function formatTime(seconds) {
+            if (!isFinite(seconds) || seconds <= 0) return '--';
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            if (minutes > 0) {
+                return `${minutes}分${remainingSeconds}秒`;
+            }
+            return `${remainingSeconds}秒`;
+        }
+
+        // 请求预签名URL
+        async function requestPresignedUrl(fileName, contentType) {
+            log(`开始请求预签名URL: ${fileName}`);
+            
+            const response = await fetch(FUNCTION_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': ANON_KEY,
+                    'authorization': `Bearer ${ANON_KEY}`
+                },
+                body: JSON.stringify({
+                    fileName,
+                    contentType,
+                    expires: 3600 // 1小时
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`获取预签名URL失败: ${errorData.error || '未知错误'}`);
+            }
+
+            const result = await response.json();
+            log(`预签名URL获取成功: ${result.fileName}`);
+            return result;
+        }
+
+        // 使用预签名URL上传文件
+        function uploadWithPresignedUrl(file, uploadUrl) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const startTime = Date.now();
+
+                // 监听上传进度
+                xhr.upload.addEventListener('progress', (event) => {
+                    if (event.lengthComputable) {
+                        const loaded = event.loaded;
+                        const total = event.total;
+                        const percentage = Math.round((loaded / total) * 100);
+                        
+                        // 计算速度和ETA
+                        const timeElapsed = (Date.now() - startTime) / 1000;
+                        const speed = timeElapsed > 0 ? loaded / timeElapsed : 0;
+                        const eta = speed > 0 ? (total - loaded) / speed : 0;
+
+                        updateFileProgress(file.name, percentage, formatSpeed(speed), formatTime(eta));
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        log(`文件上传成功: ${file.name}`);
+                        resolve();
+                    } else {
+                        reject(new Error(`上传失败: ${xhr.status} ${xhr.statusText}`));
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    reject(new Error('网络错误'));
+                });
+
+                xhr.addEventListener('abort', () => {
+                    reject(new Error('上传被取消'));
+                });
+
+                // 开始上传
+                xhr.open('PUT', uploadUrl);
+                xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+                xhr.send(file);
+            });
+        }
+
+        // 创建文件项DOM
+        function createFileItem(file) {
+            uploadCount++;
+            const fileId = `file-${uploadCount}`;
+            const fileList = document.getElementById('fileList');
+            
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.id = fileId;
+            
+            fileItem.innerHTML = `
+                <div class="file-header">
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)}</div>
+                    </div>
+                    <div class="status requesting">获取链接中...</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-info">等待开始...</div>
+            `;
+            
+            fileList.appendChild(fileItem);
+            return fileId;
+        }
+
+        // 更新文件状态
+        function updateFileStatus(fileId, status, text) {
+            const fileItem = document.getElementById(fileId);
+            if (fileItem) {
+                const statusElement = fileItem.querySelector('.status');
+                statusElement.className = `status ${status}`;
+                statusElement.textContent = text;
+            }
+        }
+
+        // 更新文件进度
+        function updateFileProgress(fileName, percentage, speed, eta) {
+            const fileItems = document.querySelectorAll('.file-item');
+            fileItems.forEach(item => {
+                const nameElement = item.querySelector('.file-name');
+                if (nameElement && nameElement.textContent === fileName) {
+                    const progressFill = item.querySelector('.progress-fill');
+                    const progressInfo = item.querySelector('.progress-info');
+                    
+                    progressFill.style.width = `${percentage}%`;
+                    progressInfo.textContent = `上传中... ${percentage}% - ${speed} - 剩余${eta}`;
+                    
+                    updateFileStatus(item.id, 'uploading', `上传中 ${percentage}%`);
+                }
+            });
+        }
+
+        // 处理文件上传
+        async function handleFileUpload(file) {
+            const fileId = createFileItem(file);
+            
+            try {
+                log(`开始处理文件: ${file.name} (${formatFileSize(file.size)})`);
+                
+                // 1. 请求预签名URL
+                updateFileStatus(fileId, 'requesting', '获取上传链接...');
+                const uploadResponse = await requestPresignedUrl(file.name, file.type || 'application/octet-stream');
+                
+                // 2. 使用预签名URL上传
+                updateFileStatus(fileId, 'uploading', '上传中...');
+                await uploadWithPresignedUrl(file, uploadResponse.uploadUrl);
+                
+                // 3. 上传完成
+                updateFileStatus(fileId, 'completed', '上传完成');
+                const progressInfo = document.getElementById(fileId).querySelector('.progress-info');
+                progressInfo.innerHTML = `
+                    <span style="color: #059669; font-weight: 600;">✅ 上传完成</span>
+                    <a href="${uploadResponse.downloadUrl}" target="_blank" class="btn" style="margin-left: 10px;">下载</a>
+                `;
+                
+                log(`文件上传完成: ${file.name} -> ${uploadResponse.fileName}`);
+                
+            } catch (error) {
+                log(`文件上传失败: ${file.name} - ${error.message}`);
+                updateFileStatus(fileId, 'error', `失败: ${error.message}`);
+                
+                const progressInfo = document.getElementById(fileId).querySelector('.progress-info');
+                progressInfo.innerHTML = `<span style="color: #dc2626;">❌ ${error.message}</span>`;
+            }
+        }
+
+        // 文件选择处理
+        function handleFileSelect(files) {
+            Array.from(files).forEach(file => {
+                // 检查文件大小限制
+                if (file.size > 50 * 1024 * 1024 * 1024) { // 50GB
+                    alert(`文件 ${file.name} 超过50GB限制`);
+                    return;
+                }
+                
+                handleFileUpload(file);
+            });
+        }
+
+        // 设置事件监听器
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        // 点击上传区域
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 文件选择
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                handleFileSelect(e.target.files);
+                e.target.value = ''; // 清空以允许重复选择同一文件
+            }
+        });
+
+        // 拖拽处理
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragging');
+        });
+
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragging');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragging');
+            
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFileSelect(e.dataTransfer.files);
+            }
+        });
+
+        log('预签名URL上传测试页面已加载');
+    </script>
+</body>
+</html> 

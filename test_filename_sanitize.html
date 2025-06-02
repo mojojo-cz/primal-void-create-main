@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件名清理测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .test-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        
+        .result {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-case {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .original {
+            font-weight: bold;
+            color: #dc2626;
+        }
+        
+        .cleaned {
+            font-weight: bold;
+            color: #059669;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 文件名清理功能测试</h1>
+        <p>测试S3文件名清理功能，确保符合AWS S3命名规范</p>
+        
+        <div style="margin-bottom: 30px;">
+            <label for="testInput"><strong>输入测试文件名:</strong></label>
+            <input type="text" id="testInput" class="test-input" placeholder="例如: new_副本 (1).mov" value="new_副本 (1).mov">
+            <div id="result" class="result" style="display: none;"></div>
+        </div>
+        
+        <h2>预设测试用例</h2>
+        <div id="testCases"></div>
+    </div>
+
+    <script>
+        // 清理文件名函数（与组件中相同的逻辑）
+        function sanitizeFileName(fileName) {
+            const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+            const extension = fileName.substring(fileName.lastIndexOf('.')) || '';
+            
+            const cleanName = nameWithoutExt
+                .replace(/[^\w\-_.]/g, '_') // 替换特殊字符为下划线
+                .replace(/_{2,}/g, '_') // 合并多个连续下划线
+                .replace(/^_|_$/g, '') // 移除开头和结尾的下划线
+                .substring(0, 100); // 限制长度
+            
+            return cleanName + extension;
+        }
+        
+        // 测试用例
+        const testCases = [
+            'new_副本 (1).mov',
+            'video test file.mp4',
+            'my-video_file.avi',
+            'video@#$%^&*()file.mkv',
+            'normal_video.mp4',
+            '视频文件 - 副本.wmv',
+            'file   with   spaces.mp4',
+            '___leading_trailing___.mp4',
+            'very_very_very_long_filename_that_exceeds_the_normal_limits_and_should_be_truncated_properly_to_ensure_compatibility.mp4',
+            'file.with.multiple.dots.mp4',
+            '特殊字符！@#￥%……&*（）.mov'
+        ];
+        
+        // 渲染测试用例
+        function renderTestCases() {
+            const container = document.getElementById('testCases');
+            container.innerHTML = testCases.map((testCase, index) => {
+                const cleaned = sanitizeFileName(testCase);
+                const timestamp = Date.now();
+                const randomId = Math.random().toString(36).substr(2, 9);
+                const finalName = `${timestamp}_${randomId}_${cleaned}`;
+                
+                return `
+                    <div class="test-case">
+                        <h3>测试用例 ${index + 1}</h3>
+                        <p><strong>原始文件名:</strong> <span class="original">${testCase}</span></p>
+                        <p><strong>清理后:</strong> <span class="cleaned">${cleaned}</span></p>
+                        <p><strong>最终文件名:</strong> <code>${finalName}</code></p>
+                        <p><strong>长度:</strong> ${finalName.length} 字符</p>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 实时测试
+        function testInput() {
+            const input = document.getElementById('testInput');
+            const result = document.getElementById('result');
+            
+            input.addEventListener('input', function() {
+                const original = this.value;
+                if (!original) {
+                    result.style.display = 'none';
+                    return;
+                }
+                
+                const cleaned = sanitizeFileName(original);
+                const timestamp = Date.now();
+                const randomId = Math.random().toString(36).substr(2, 9);
+                const finalName = `${timestamp}_${randomId}_${cleaned}`;
+                
+                result.innerHTML = `
+                    <p><strong>原始:</strong> <span class="original">${original}</span></p>
+                    <p><strong>清理后:</strong> <span class="cleaned">${cleaned}</span></p>
+                    <p><strong>最终文件名:</strong> <code>${finalName}</code></p>
+                    <p><strong>长度:</strong> ${finalName.length} 字符</p>
+                    <p><strong>是否符合S3规范:</strong> ${isValidS3Key(finalName) ? '✅ 是' : '❌ 否'}</p>
+                `;
+                result.style.display = 'block';
+            });
+        }
+        
+        // 验证S3 Key是否符合规范
+        function isValidS3Key(key) {
+            // 基本规则检查
+            if (key.length === 0 || key.length > 1024) return false;
+            
+            // 不能以斜杠开头
+            if (key.startsWith('/')) return false;
+            
+            // 检查是否包含不安全字符
+            const unsafeChars = /[^\w\-_.\/]/;
+            return !unsafeChars.test(key);
+        }
+        
+        // 初始化
+        renderTestCases();
+        testInput();
+        
+        // 触发初始测试
+        document.getElementById('testInput').dispatchEvent(new Event('input'));
+    </script>
+</body>
+</html> 

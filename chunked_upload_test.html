@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MinIO分块上传快速测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #007bff;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .file-info {
+            background-color: #e7f3ff;
+            border: 1px solid #b6d7ff;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 MinIO分块上传快速测试</h1>
+        <p>测试您的分块上传Edge Function是否正常工作</p>
+
+        <div class="section">
+            <h3>📁 选择测试文件</h3>
+            <input type="file" id="testFile" accept="video/*">
+            <div id="fileInfo" class="file-info" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>🚀 测试控制</h3>
+            <button onclick="testChunkedUpload()" id="testBtn">开始分块上传测试</button>
+            <button onclick="clearLog()">清除日志</button>
+            
+            <div class="progress">
+                <div id="progressBar" class="progress-bar"></div>
+            </div>
+            <div id="progressText">等待测试...</div>
+        </div>
+
+        <div class="section">
+            <h3>📝 测试日志</h3>
+            <div id="testLog" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://eotqgpcgzgjtywddvdpd.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvdHFncGNnemdqdHl3ZGR2ZHBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI1NDA1MTgsImV4cCI6MjA0ODExNjUxOH0.Hmu8xOLXNhqEZSfJMQxW50Q-fXE4R8zlnO1L0B-F_Y4';
+        
+        let testFile = null;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('testLog');
+            const line = document.createElement('div');
+            line.className = type;
+            line.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(line);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressBar').style.width = percent + '%';
+            document.getElementById('progressText').textContent = text;
+        }
+
+        function clearLog() {
+            document.getElementById('testLog').innerHTML = '';
+            updateProgress(0, '等待测试...');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 文件选择处理
+        document.getElementById('testFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                testFile = file;
+                const fileInfo = document.getElementById('fileInfo');
+                const sizeInMB = (file.size / 1024 / 1024).toFixed(2);
+                const chunkSize = 5 * 1024 * 1024; // 5MB
+                const chunkCount = Math.ceil(file.size / chunkSize);
+                
+                fileInfo.innerHTML = `
+                    <strong>文件信息:</strong><br>
+                    名称: ${file.name}<br>
+                    大小: ${formatFileSize(file.size)}<br>
+                    类型: ${file.type}<br>
+                    预计分块数: ${chunkCount}<br>
+                    分块大小: 5MB
+                `;
+                fileInfo.style.display = 'block';
+                log(`文件已选择: ${file.name} (${formatFileSize(file.size)}, ${chunkCount}个分块)`, 'info');
+            }
+        });
+
+        async function testChunkedUpload() {
+            if (!testFile) {
+                log('❌ 请先选择测试文件', 'error');
+                return;
+            }
+
+            const testBtn = document.getElementById('testBtn');
+            testBtn.disabled = true;
+            testBtn.textContent = '测试中...';
+
+            try {
+                log('🚀 开始分块上传测试', 'info');
+                updateProgress(5, '初始化上传...');
+
+                // 步骤1: 初始化
+                log('📋 初始化分块上传...', 'info');
+                const initResponse = await fetch(`${SUPABASE_URL}/functions/v1/minio-video-upload-chunked`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'init',
+                        filename: testFile.name,
+                        title: `测试-${testFile.name}`,
+                        description: `分块上传测试 ${new Date().toLocaleString()}`
+                    })
+                });
+
+                if (!initResponse.ok) {
+                    throw new Error(`初始化失败: ${initResponse.status}`);
+                }
+
+                const initResult = await initResponse.json();
+                if (!initResult.success) {
+                    throw new Error(initResult.error || '初始化失败');
+                }
+
+                log(`✅ 初始化成功: ${initResult.uploadId}`, 'success');
+                updateProgress(10, '准备分块...');
+
+                // 步骤2: 创建分块
+                const chunkSize = 5 * 1024 * 1024; // 5MB
+                const totalChunks = Math.ceil(testFile.size / chunkSize);
+                const etags = [];
+
+                log(`📊 创建 ${totalChunks} 个分块...`, 'info');
+
+                // 步骤3: 上传分块
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * chunkSize;
+                    const end = Math.min(start + chunkSize, testFile.size);
+                    const chunk = testFile.slice(start, end);
+                    
+                    log(`⬆️ 上传分块 ${i + 1}/${totalChunks}...`, 'info');
+                    
+                    // 转换为base64
+                    const arrayBuffer = await chunk.arrayBuffer();
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    const base64Data = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
+                    
+                    const uploadResponse = await fetch(`${SUPABASE_URL}/functions/v1/minio-video-upload-chunked`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            action: 'upload',
+                            uploadId: initResult.uploadId,
+                            objectName: initResult.objectName,
+                            chunkNumber: i + 1,
+                            chunkData: base64Data
+                        })
+                    });
+
+                    if (!uploadResponse.ok) {
+                        throw new Error(`分块 ${i + 1} 上传失败: ${uploadResponse.status}`);
+                    }
+
+                    const uploadResult = await uploadResponse.json();
+                    if (!uploadResult.success) {
+                        throw new Error(`分块 ${i + 1} 上传失败: ${uploadResult.error}`);
+                    }
+
+                    etags.push(uploadResult.etag);
+                    log(`✅ 分块 ${i + 1} 上传成功`, 'success');
+                    
+                    const progress = 10 + ((i + 1) / totalChunks) * 80;
+                    updateProgress(progress, `已上传 ${i + 1}/${totalChunks} 个分块`);
+                }
+
+                // 步骤4: 完成上传
+                log('🏁 完成分块上传...', 'info');
+                updateProgress(95, '完成上传...');
+
+                const completeResponse = await fetch(`${SUPABASE_URL}/functions/v1/minio-video-upload-chunked`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'complete',
+                        uploadId: initResult.uploadId,
+                        objectName: initResult.objectName,
+                        title: `测试-${testFile.name}`,
+                        description: `分块上传测试 ${new Date().toLocaleString()}`,
+                        etags: etags
+                    })
+                });
+
+                if (!completeResponse.ok) {
+                    throw new Error(`完成上传失败: ${completeResponse.status}`);
+                }
+
+                const completeResult = await completeResponse.json();
+                if (!completeResult.success) {
+                    throw new Error(completeResult.error || '完成上传失败');
+                }
+
+                updateProgress(100, '测试完成！');
+                log('🎉 分块上传测试成功！', 'success');
+                log(`📁 文件ID: ${completeResult.id}`, 'success');
+                log(`🔗 视频URL: ${completeResult.video_url}`, 'success');
+
+            } catch (error) {
+                log(`❌ 测试失败: ${error.message}`, 'error');
+                updateProgress(0, '测试失败');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = '开始分块上传测试';
+            }
+        }
+
+        // 页面加载时初始化
+        window.addEventListener('load', function() {
+            log('分块上传测试工具已加载', 'info');
+            log('请选择一个视频文件进行测试', 'info');
+        });
+    </script>
+</body>
+</html> 

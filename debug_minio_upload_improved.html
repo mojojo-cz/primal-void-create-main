@@ -101,20 +101,11 @@
                 请求超时时间: 
                 <select id="timeoutSelect">
                     <option value="30000">30秒</option>
-                    <option value="60000">60秒</option>
+                    <option value="60000" selected>60秒</option>
                     <option value="120000">120秒</option>
-                    <option value="300000" selected>300秒 (推荐大文件)</option>
-                    <option value="600000">600秒 (10分钟)</option>
+                    <option value="300000">300秒</option>
                 </select>
             </label>
-            <div style="margin-top: 10px; font-size: 14px; color: #666;">
-                <strong>建议：</strong>
-                <ul style="margin: 5px 0; padding-left: 20px;">
-                    <li>小文件 (< 1MB): 30-60秒</li>
-                    <li>中等文件 (1-10MB): 120-300秒</li>
-                    <li>大文件 (> 10MB): 300-600秒</li>
-                </ul>
-            </div>
         </div>
 
         <div class="test-section">

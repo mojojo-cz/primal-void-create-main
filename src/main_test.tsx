@@ -1,0 +1,1 @@
+import { createRoot } from "react-dom/client"; import "./index.css"; const TestApp = () => { return (<div style={{ padding: "20px" }}><h1>🎉 React应用正常工作！</h1><p>✅ 基础设置正确</p><p>SUPABASE_URL: {import.meta.env.VITE_SUPABASE_URL || "未设置"}</p></div>); }; createRoot(document.getElementById("root")!).render(<TestApp />);

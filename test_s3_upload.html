@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S3视频上传测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #2563eb;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .upload-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
+        
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            color: #9ca3af;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background-color: #2563eb;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #10b981;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        .file-info {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            display: none;
+        }
+        
+        .status {
+            margin: 16px 0;
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .status.success {
+            background-color: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        
+        .status.error {
+            background-color: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        
+        .features {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+        }
+        
+        .features h3 {
+            color: #374151;
+            margin-bottom: 12px;
+        }
+        
+        .features ul {
+            list-style: none;
+        }
+        
+        .features li {
+            padding: 4px 0;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .features li::before {
+            content: "✅";
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                ⚡ S3视频上传测试
+                <span style="font-size: 12px; background: #10b981; color: white; padding: 4px 8px; border-radius: 12px;">新版本</span>
+            </h1>
+            <p>测试基于S3协议的大文件视频上传功能</p>
+        </div>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <h3>拖拽视频文件到这里，或点击选择</h3>
+            <p style="margin-top: 8px; color: #6b7280;">支持所有视频格式，最大50GB</p>
+            <input type="file" id="fileInput" accept="video/*" style="display: none;">
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()" style="margin-top: 16px;">
+                📁 选择视频文件
+            </button>
+        </div>
+        
+        <div class="file-info" id="fileInfo">
+            <h4>文件信息</h4>
+            <div id="fileDetails"></div>
+        </div>
+        
+        <div class="progress-container" id="progressContainer">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-weight: 500;">上传进度</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text">
+                <span id="progressDetails">准备上传...</span>
+                <span id="speedInfo"></span>
+            </div>
+        </div>
+        
+        <div class="status" id="status"></div>
+        
+        <div class="features">
+            <h3>S3上传优势</h3>
+            <ul>
+                <li>使用S3协议直接上传，无CORS限制</li>
+                <li>自动分片并行上传，最大化上传速度</li>
+                <li>支持断点续传和错误重试</li>
+                <li>尊重RLS策略，安全可靠</li>
+                <li>支持最大50GB文件，远超传统限制</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- AWS SDK -->
+    <script src="https://unpkg.com/@aws-sdk/client-s3@3.540.0/dist-cjs/index.js"></script>
+    <script src="https://unpkg.com/@aws-sdk/lib-storage@3.540.0/dist-cjs/index.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+
+    <script>
+        // 配置
+        const SUPABASE_URL = 'https://sxsyprzckdnfyhadodhj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs';
+        
+        // 初始化Supabase客户端
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // DOM元素
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileDetails = document.getElementById('fileDetails');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressDetails = document.getElementById('progressDetails');
+        const speedInfo = document.getElementById('speedInfo');
+        const status = document.getElementById('status');
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // 格式化速度
+        function formatSpeed(bytesPerSecond) {
+            return formatFileSize(bytesPerSecond) + '/s';
+        }
+        
+        // 格式化时间
+        function formatTime(seconds) {
+            if (seconds < 60) return `${Math.round(seconds)}秒`;
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.round(seconds % 60);
+            return `${minutes}分${remainingSeconds}秒`;
+        }
+        
+        // 显示状态
+        function showStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+        
+        // 清理文件名，确保符合S3命名规范
+        function sanitizeFileName(fileName) {
+            // 移除文件扩展名
+            const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+            const extension = fileName.substring(fileName.lastIndexOf('.')) || '';
+            
+            // 清理文件名：只保留字母、数字、连字符、下划线
+            const cleanName = nameWithoutExt
+                .replace(/[^\w\-_.]/g, '_') // 替换特殊字符为下划线
+                .replace(/_{2,}/g, '_') // 合并多个连续下划线
+                .replace(/^_|_$/g, '') // 移除开头和结尾的下划线
+                .substring(0, 100); // 限制长度
+            
+            return cleanName + extension;
+        }
+        
+        // 创建S3客户端
+        async function createS3Client() {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                if (!session) {
+                    throw new Error('用户未登录，请先登录系统');
+                }
+                
+                return new AWS.S3({
+                    forcePathStyle: true,
+                    region: 'ap-northeast-1',
+                    endpoint: 'https://sxsyprzckdnfyhadodhj.supabase.co/storage/v1/s3',
+                    credentials: {
+                        accessKeyId: 'sxsyprzckdnfyhadodhj',
+                        secretAccessKey: SUPABASE_ANON_KEY,
+                        sessionToken: session.access_token,
+                    },
+                });
+            } catch (error) {
+                console.error('创建S3客户端失败:', error);
+                throw error;
+            }
+        }
+        
+        // S3上传函数
+        async function uploadFileToS3(file) {
+            const startTime = Date.now();
+            let lastUploadedBytes = 0;
+            let lastUpdateTime = startTime;
+            
+            try {
+                const s3Client = await createS3Client();
+                const fileName = sanitizeFileName(`${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${file.name}`);
+                
+                // 显示进度
+                progressContainer.style.display = 'block';
+                progressDetails.textContent = '正在上传...';
+                
+                // 创建上传任务
+                const upload = new AWS.S3.ManagedUpload({
+                    service: s3Client,
+                    params: {
+                        Bucket: 'videos',
+                        Key: fileName,
+                        Body: file,
+                        ContentType: file.type,
+                    },
+                });
+                
+                // 监听上传进度
+                upload.on('httpUploadProgress', (progress) => {
+                    const currentTime = Date.now();
+                    const uploadedBytes = progress.loaded || 0;
+                    const totalBytes = progress.total || file.size;
+                    const progressPercVal = Math.round((uploadedBytes / totalBytes) * 100);
+                    
+                    // 更新进度条
+                    progressFill.style.width = progressPercVal + '%';
+                    progressPercent.textContent = progressPercVal + '%';
+                    progressDetails.textContent = `${formatFileSize(uploadedBytes)} / ${formatFileSize(totalBytes)}`;
+                    
+                    // 计算速度和ETA
+                    const timeDiff = (currentTime - lastUpdateTime) / 1000;
+                    if (timeDiff >= 1) {
+                        const bytesDiff = uploadedBytes - lastUploadedBytes;
+                        const speed = bytesDiff / timeDiff;
+                        const remainingBytes = totalBytes - uploadedBytes;
+                        const eta = remainingBytes / speed;
+                        
+                        speedInfo.textContent = `速度: ${formatSpeed(speed)} | 剩余: ${formatTime(eta)}`;
+                        
+                        lastUploadedBytes = uploadedBytes;
+                        lastUpdateTime = currentTime;
+                    }
+                });
+                
+                const result = await upload.promise();
+                
+                // 保存到数据库
+                const { error: dbError } = await supabase
+                    .from('minio_videos')
+                    .insert({
+                        title: file.name,
+                        description: 'S3上传测试',
+                        video_url: `https://115.159.33.45:9000/videos/${fileName}`,
+                        minio_object_name: fileName,
+                        file_size: file.size,
+                        content_type: file.type
+                    });
+                
+                if (dbError) {
+                    console.error('数据库保存失败:', dbError);
+                    throw new Error('文件上传成功但保存到数据库失败');
+                }
+                
+                showStatus(`✅ 上传成功！文件：${file.name} (${formatFileSize(file.size)})`, 'success');
+                console.log('S3上传完成:', result);
+                
+            } catch (error) {
+                console.error('S3上传失败:', error);
+                showStatus(`❌ 上传失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 处理文件选择
+        function handleFileSelect(file) {
+            if (!file) return;
+            
+            if (!file.type.startsWith('video/')) {
+                showStatus('❌ 请选择视频文件', 'error');
+                return;
+            }
+            
+            const maxSize = 50 * 1024 * 1024 * 1024; // 50GB
+            if (file.size > maxSize) {
+                showStatus('❌ 文件大小不能超过50GB', 'error');
+                return;
+            }
+            
+            // 显示文件信息
+            fileDetails.innerHTML = `
+                <p><strong>文件名：</strong>${file.name}</p>
+                <p><strong>大小：</strong>${formatFileSize(file.size)}</p>
+                <p><strong>类型：</strong>${file.type}</p>
+                <p><strong>最后修改：</strong>${new Date(file.lastModified).toLocaleString()}</p>
+            `;
+            fileInfo.style.display = 'block';
+            
+            // 开始上传
+            uploadFileToS3(file);
+        }
+        
+        // 拖拽事件
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+        
+        // 文件输入事件
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+        
+        // 初始化检查
+        window.addEventListener('load', async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    showStatus('⚠️ 未检测到用户登录状态，请确保已在主系统中登录', 'error');
+                } else {
+                    showStatus('✅ 系统就绪，可以开始上传', 'success');
+                }
+            } catch (error) {
+                showStatus('❌ 系统初始化失败: ' + error.message, 'error');
+            }
+        });
+    </script>
+</body>
+</html> 
