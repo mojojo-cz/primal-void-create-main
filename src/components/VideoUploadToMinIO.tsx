@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, FileVideo, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { Upload, FileVideo, AlertCircle, Clock } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
 interface VideoFolder {
@@ -233,10 +233,6 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
       if (selectedFolder && !selectedFolder.is_default) {
         // 自定义文件夹：在描述中添加文件夹名称标签
         finalDescription = `${selectedFolder.name} ${finalDescription || videoTitle}`.trim();
-      } else if (selectedFolderId === 'course-videos' && !finalDescription?.includes('课程')) {
-        finalDescription = `课程视频：${finalDescription || videoTitle}`;
-      } else if (selectedFolderId === 'demo-videos' && !finalDescription?.includes('演示')) {
-        finalDescription = `演示视频：${finalDescription || videoTitle}`;
       }
 
       // 4. 保存到minio_videos表（而不是videos表）
@@ -283,29 +279,29 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* 文件选择区域 */}
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-        <FileVideo className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <div className="space-y-2">
-          <p className="text-lg font-medium text-gray-700">选择视频文件</p>
-          <p className="text-sm text-gray-500">支持最大50GB视频文件</p>
+      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center">
+        <FileVideo className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-4" />
+        <div className="space-y-1 sm:space-y-2">
+          <p className="text-base sm:text-lg font-medium text-gray-700">选择视频文件</p>
+          <p className="text-xs sm:text-sm text-gray-500">支持最大50GB视频文件</p>
           <Input
             type="file"
             accept="video/*"
             onChange={handleFileSelect}
             disabled={uploading}
-            className="max-w-xs mx-auto"
+            className="max-w-xs mx-auto text-sm"
           />
         </div>
         
         {selectedFile && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+          <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-blue-50 rounded-lg">
             <div className="flex items-center justify-center gap-2 text-blue-700">
               <FileVideo className="w-4 h-4" />
-              <span className="font-medium">{selectedFile.name}</span>
+              <span className="font-medium text-sm sm:text-base truncate">{selectedFile.name}</span>
             </div>
-            <p className="text-sm text-blue-600 mt-1">
+            <p className="text-xs sm:text-sm text-blue-600 mt-1">
               大小: {formatFileSize(selectedFile.size)}
             </p>
           </div>
@@ -313,39 +309,41 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
       </div>
 
       {/* 表单字段 */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <div>
-          <Label htmlFor="videoTitle">视频标题 *</Label>
+          <Label htmlFor="videoTitle" className="text-sm">视频标题 *</Label>
           <Input
             id="videoTitle"
             value={videoTitle}
             onChange={(e) => setVideoTitle(e.target.value)}
             placeholder="请输入视频标题"
             disabled={uploading}
+            className="text-sm"
           />
         </div>
 
         <div>
-          <Label htmlFor="videoDescription">视频描述</Label>
+          <Label htmlFor="videoDescription" className="text-sm">视频描述</Label>
           <Textarea
             id="videoDescription"
             value={videoDescription}
             onChange={(e) => setVideoDescription(e.target.value)}
             placeholder="请输入视频描述"
-            rows={3}
+            rows={2}
             disabled={uploading}
+            className="text-sm"
           />
         </div>
 
         <div>
-          <Label htmlFor="videoCategory">选择分类</Label>
+          <Label htmlFor="videoCategory" className="text-sm">选择分类</Label>
           <Select value={selectedFolderId} onValueChange={setSelectedFolderId} disabled={uploading}>
-            <SelectTrigger>
+            <SelectTrigger className="text-sm">
               <SelectValue placeholder="选择视频分类" />
             </SelectTrigger>
             <SelectContent>
               {folders.map(folder => (
-                <SelectItem key={folder.id} value={folder.id}>
+                <SelectItem key={folder.id} value={folder.id} className="text-sm">
                   {folder.name} {folder.is_default && '（默认）'}
                 </SelectItem>
               ))}
@@ -357,15 +355,18 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
       {/* 上传进度 */}
       {uploading && progress && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center justify-between text-xs sm:text-sm">
             <span>上传进度: {progress.percentage}%</span>
-            <span>{formatSpeed(progress.speed)} • 剩余{formatTime(progress.eta)}</span>
+            <span className="hidden sm:inline">{formatSpeed(progress.speed)} • 剩余{formatTime(progress.eta)}</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div 
               className="bg-blue-500 h-2 rounded-full transition-all duration-300"
               style={{ width: `${progress.percentage}%` }}
             />
+          </div>
+          <div className="sm:hidden text-xs text-center text-gray-600">
+            {formatSpeed(progress.speed)} • 剩余{formatTime(progress.eta)}
           </div>
         </div>
       )}
@@ -374,32 +375,16 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
       {uploading && (
         <div className="flex items-center justify-center gap-2 text-blue-600">
           <Clock className="w-4 h-4 animate-spin" />
-          <span>正在上传到MinIO服务器...</span>
+          <span className="text-sm">正在上传到MinIO服务器...</span>
         </div>
       )}
 
-      {/* 安全提示 */}
-      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-        <div className="flex items-start gap-2">
-          <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-          <div className="text-sm text-green-700">
-            <p className="font-medium mb-1">🔒 安全上传特性</p>
-            <ul className="space-y-1 text-xs">
-              <li>• 使用预签名URL安全上传，前端不暴露MinIO密钥</li>
-              <li>• 文件自动重命名和安全验证</li>
-              <li>• 临时访问权限，1小时有效期</li>
-              <li>• 支持大文件上传（最大50GB）</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
       {/* 操作按钮 */}
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         <Button 
           onClick={handleUpload} 
           disabled={!selectedFile || !videoTitle.trim() || uploading}
-          className="flex-1"
+          className="flex-1 text-sm sm:text-base"
         >
           <Upload className="w-4 h-4 mr-2" />
           {uploading ? '上传中...' : '开始上传'}
@@ -408,6 +393,7 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
           variant="outline" 
           onClick={onCancel}
           disabled={uploading}
+          className="text-sm sm:text-base"
         >
           取消
         </Button>

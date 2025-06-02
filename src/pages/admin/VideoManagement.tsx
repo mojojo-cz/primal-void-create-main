@@ -93,20 +93,6 @@ const DEFAULT_FOLDERS: VideoFolder[] = [
     description: '系统默认文件夹，用于存放未分类的视频',
     is_default: true,
     color: 'gray'
-  },
-  {
-    id: 'course-videos',
-    name: '课程视频',
-    description: '课程相关的教学视频',
-    is_default: false,
-    color: 'blue'
-  },
-  {
-    id: 'demo-videos',
-    name: '演示视频',
-    description: '产品演示和介绍视频',
-    is_default: false,
-    color: 'green'
   }
 ];
 
@@ -152,6 +138,10 @@ const VideoManagement = () => {
   // 分页状态 - 使用用户偏好设置
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setCurrentPageSize] = useState(() => getCurrentPageSize());
+  
+  // 批量选择状态
+  const [selectedVideos, setSelectedVideos] = useState<string[]>([]);
+  const [batchDeleteDialog, setBatchDeleteDialog] = useState(false);
   
   // 对话框状态
   const [uploadDialog, setUploadDialog] = useState(false);
@@ -213,35 +203,8 @@ const VideoManagement = () => {
       });
     }
     
-    // 默认文件夹的智能分类逻辑
-    return videos.filter(video => {
-      const content = `${video.title} ${video.description || ''}`.toLowerCase();
-      switch (currentFolder) {
-        case 'course-videos':
-          return content.includes('课程') || content.includes('教学') || content.includes('学习');
-        case 'demo-videos':
-          return content.includes('演示') || content.includes('展示') || content.includes('介绍');
-        case 'default':
-        default:
-          // 默认文件夹：不属于其他分类的视频
-          const belongsToOther = folders.some(folder => {
-            if (folder.is_default && folder.id !== 'default') {
-              // 检查是否属于其他默认分类
-              if (folder.id === 'course-videos') {
-                return content.includes('课程') || content.includes('教学') || content.includes('学习');
-              }
-              if (folder.id === 'demo-videos') {
-                return content.includes('演示') || content.includes('展示') || content.includes('介绍');
-              }
-            } else if (!folder.is_default) {
-              // 检查是否属于自定义文件夹
-              return content.includes(folder.name.toLowerCase());
-            }
-            return false;
-          });
-          return !belongsToOther;
-      }
-    });
+    // 默认文件夹：返回所有视频
+    return videos;
   };
 
   // 过滤和分页
@@ -260,6 +223,88 @@ const VideoManagement = () => {
     setCurrentPageSize(newPageSize);
     setPageSize(newPageSize);
     setCurrentPage(1); // 重置到第一页
+  };
+
+  // 批量选择相关函数
+  const handleSelectVideo = (videoId: string) => {
+    setSelectedVideos(prev => 
+      prev.includes(videoId) 
+        ? prev.filter(id => id !== videoId)
+        : [...prev, videoId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedVideos.length === paginatedVideos.length) {
+      setSelectedVideos([]);
+    } else {
+      setSelectedVideos(paginatedVideos.map(video => video.id));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedVideos([]);
+  };
+
+  // 批量删除
+  const handleBatchDelete = async () => {
+    if (selectedVideos.length === 0) return;
+
+    try {
+      // 检查是否有视频被课程使用
+      const { data: sections, error: checkError } = await supabase
+        .from("course_sections")
+        .select("id, title, course_id, video_id")
+        .in("video_id", selectedVideos);
+      
+      if (checkError) throw checkError;
+      
+      if (sections && sections.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "无法删除",
+          description: `选中的视频中有${sections.length}个正在被课程使用，请先移除关联`
+        });
+        return;
+      }
+
+      // 获取要删除的视频信息
+      const videosToDelete = videos.filter(video => selectedVideos.includes(video.id));
+      
+      // 批量删除数据库记录
+      const { error: dbError } = await supabase
+        .from("minio_videos")
+        .delete()
+        .in("id", selectedVideos);
+      
+      if (dbError) throw dbError;
+      
+      // 批量删除MinIO对象
+      for (const video of videosToDelete) {
+        try {
+          await supabase.functions.invoke('minio-video-delete', {
+            body: { objectName: video.minio_object_name }
+          });
+        } catch (error) {
+          console.warn(`删除MinIO对象失败: ${video.minio_object_name}`, error);
+        }
+      }
+      
+      await fetchVideos();
+      clearSelection();
+      setBatchDeleteDialog(false);
+      
+      toast({
+        title: "批量删除成功",
+        description: `已成功删除${selectedVideos.length}个视频`
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "批量删除失败",
+        description: error.message || "批量删除视频失败"
+      });
+    }
   };
 
   // 格式化文件大小
@@ -520,6 +565,14 @@ const VideoManagement = () => {
   // 分页控制
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    clearSelection(); // 切换页面时清除选择
+  };
+
+  // 处理搜索
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // 搜索时重置到第一页
+    clearSelection(); // 搜索时清除选择
   };
 
   // 渲染列表视图
@@ -528,6 +581,15 @@ const VideoManagement = () => {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-[50px] text-center">
+              <input
+                type="checkbox"
+                checked={selectedVideos.length === paginatedVideos.length && paginatedVideos.length > 0}
+                onChange={handleSelectAll}
+                className="h-4 w-4"
+                title="全选/取消全选"
+              />
+            </TableHead>
             <TableHead className="w-[50px] text-center">#</TableHead>
             <TableHead className="min-w-[200px]">标题</TableHead>
             <TableHead className="hidden md:table-cell min-w-[150px]">描述</TableHead>
@@ -540,9 +602,18 @@ const VideoManagement = () => {
         <TableBody>
           {paginatedVideos.map((video, index) => {
             const displayIndex = startIndex + index + 1;
+            const isSelected = selectedVideos.includes(video.id);
             
             return (
-              <TableRow key={video.id} className="hover:bg-muted/30">
+              <TableRow key={video.id} className={`hover:bg-muted/30 ${isSelected ? 'bg-blue-50' : ''}`}>
+                <TableCell className="text-center">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => handleSelectVideo(video.id)}
+                    className="h-4 w-4"
+                  />
+                </TableCell>
                 <TableCell className="font-medium text-center text-muted-foreground">
                   {displayIndex}
                 </TableCell>
@@ -612,10 +683,6 @@ const VideoManagement = () => {
                         // 检查是否属于自定义文件夹
                         const customFolder = folders.find(f => !f.is_default && content.includes(f.name.toLowerCase()));
                         if (customFolder) return customFolder.name;
-                        
-                        // 检查默认分类
-                        if (content.includes('课程') || content.includes('教学') || content.includes('学习')) return '课程视频';
-                        if (content.includes('演示') || content.includes('展示') || content.includes('介绍')) return '演示视频';
                         
                         return '默认分类';
                       })()}
@@ -688,12 +755,21 @@ const VideoManagement = () => {
         
         // 检查是否属于自定义文件夹
         const customFolder = folders.find(f => !f.is_default && content.includes(f.name.toLowerCase()));
-        const category = customFolder ? customFolder.name :
-                        (content.includes('课程') || content.includes('教学') || content.includes('学习')) ? '课程视频' :
-                        (content.includes('演示') || content.includes('展示') || content.includes('介绍')) ? '演示视频' : '默认分类';
+        const category = customFolder ? customFolder.name : '默认分类';
+        const isSelected = selectedVideos.includes(video.id);
         
         return (
-          <div key={video.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-all duration-200 hover:border-primary/20 group">
+          <div key={video.id} className={`border rounded-lg overflow-hidden hover:shadow-md transition-all duration-200 hover:border-primary/20 group ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : ''} relative`}>
+            {/* 复选框 */}
+            <div className="absolute top-2 left-2 z-10">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => handleSelectVideo(video.id)}
+                className="h-4 w-4 rounded border-2 border-white shadow-lg bg-white"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
             <div 
               className="aspect-video bg-black relative cursor-pointer overflow-hidden" 
               onClick={() => handlePlayVideo(video)}
@@ -822,40 +898,8 @@ const VideoManagement = () => {
                 // 计算文件夹中的视频数量
                 let folderVideoCount = 0;
                 if (folder.is_default) {
-                  switch (folder.id) {
-                    case 'course-videos':
-                      folderVideoCount = videos.filter(v => {
-                        const content = `${v.title} ${v.description || ''}`.toLowerCase();
-                        return content.includes('课程') || content.includes('教学') || content.includes('学习');
-                      }).length;
-                      break;
-                    case 'demo-videos':
-                      folderVideoCount = videos.filter(v => {
-                        const content = `${v.title} ${v.description || ''}`.toLowerCase();
-                        return content.includes('演示') || content.includes('展示') || content.includes('介绍');
-                      }).length;
-                      break;
-                    case 'default':
-                      folderVideoCount = videos.filter(v => {
-                        const content = `${v.title} ${v.description || ''}`.toLowerCase();
-                        const belongsToOther = folders.some(f => {
-                          if (f.is_default && f.id !== 'default') {
-                            if (f.id === 'course-videos') {
-                              return content.includes('课程') || content.includes('教学') || content.includes('学习');
-                            }
-                            if (f.id === 'demo-videos') {
-                              return content.includes('演示') || content.includes('展示') || content.includes('介绍');
-                            }
-                          } else if (!f.is_default) {
-                            return content.includes(f.name.toLowerCase());
-                          }
-                          return false;
-                        });
-                        return !belongsToOther;
-                      }).length;
-                      break;
-                    default:
-                      folderVideoCount = 0;
+                  if (folder.id === 'default') {
+                    folderVideoCount = videos.length;
                   }
                 } else {
                   // 自定义文件夹
@@ -963,10 +1007,40 @@ const VideoManagement = () => {
                       className="w-full"
                     >
                       <Upload className="h-4 w-4 mr-2" />
-                      安全上传
+                      课程视频上传
                     </Button>
                   </div>
                 </div>
+                
+                {/* 批量操作工具栏 */}
+                {selectedVideos.length > 0 && (
+                  <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-blue-700">
+                        已选择 {selectedVideos.length} 个视频
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearSelection}
+                        className="text-blue-600 hover:text-blue-800 h-6 px-2"
+                      >
+                        取消选择
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setBatchDeleteDialog(true)}
+                        className="h-8"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        批量删除
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 
                 {/* 控制栏 */}
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
@@ -977,8 +1051,7 @@ const VideoManagement = () => {
                       placeholder="搜索视频..."
                       value={searchTerm}
                       onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setCurrentPage(1); // 搜索时重置到第一页
+                        handleSearch(e.target.value);
                       }}
                       className="pl-10"
                     />
@@ -986,6 +1059,17 @@ const VideoManagement = () => {
                   
                   {/* 右侧控制组 */}
                   <div className="flex items-center justify-between sm:justify-end gap-2">
+                    {/* 全选按钮 */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAll}
+                      className="h-8"
+                      title={selectedVideos.length === paginatedVideos.length ? "取消全选" : "全选当前页"}
+                    >
+                      {selectedVideos.length === paginatedVideos.length && paginatedVideos.length > 0 ? '取消全选' : '全选'}
+                    </Button>
+                    
                     {/* 视图切换按钮 */}
                     <div className="flex border rounded-lg p-1">
                       <Button
@@ -1012,7 +1096,7 @@ const VideoManagement = () => {
                     <div className="hidden sm:block">
                       <Button onClick={() => setUploadDialog(true)}>
                         <Upload className="h-4 w-4 mr-2" />
-                        安全上传
+                        课程视频上传
                       </Button>
                     </div>
                   </div>
@@ -1039,7 +1123,7 @@ const VideoManagement = () => {
                   {!searchTerm && (
                     <Button onClick={() => setUploadDialog(true)}>
                       <Upload className="h-4 w-4 mr-2" />
-                      安全上传
+                      课程视频上传
                     </Button>
                   )}
                 </div>
@@ -1064,10 +1148,10 @@ const VideoManagement = () => {
 
       {/* 上传视频对话框 */}
       <Dialog open={uploadDialog} onOpenChange={setUploadDialog}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Upload className="h-4 w-4 sm:h-5 sm:w-5" />
               上传视频到MinIO
               <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
                 预签名URL
@@ -1075,11 +1159,13 @@ const VideoManagement = () => {
             </DialogTitle>
           </DialogHeader>
           
-          <VideoUploadToMinIO
-            folders={folders}
-            onUploadComplete={handleUploadComplete}
-            onCancel={() => setUploadDialog(false)}
-          />
+          <div className="max-h-[calc(90vh-8rem)] overflow-y-auto">
+            <VideoUploadToMinIO
+              folders={folders}
+              onUploadComplete={handleUploadComplete}
+              onCancel={() => setUploadDialog(false)}
+              />
+            </div>
         </DialogContent>
       </Dialog>
 
@@ -1127,33 +1213,39 @@ const VideoManagement = () => {
                 rows={3}
               />
             </div>
-                         <div>
-               <Label htmlFor="folderColor">文件夹颜色</Label>
-               <Select value={folderForm.color} onValueChange={(value) => setFolderForm(prev => ({ ...prev, color: value }))}>
-                 <SelectTrigger>
-                   <SelectValue placeholder="选择文件夹颜色" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="blue">蓝色</SelectItem>
-                   <SelectItem value="green">绿色</SelectItem>
-                   <SelectItem value="purple">紫色</SelectItem>
-                   <SelectItem value="orange">橙色</SelectItem>
-                   <SelectItem value="red">红色</SelectItem>
-                   <SelectItem value="gray">灰色</SelectItem>
-                 </SelectContent>
-               </Select>
-             </div>
           </div>
-                     <DialogFooter>
-             <Button variant="outline" onClick={closeFolderDialog} disabled={folderSubmitting}>
-               取消
-             </Button>
-             <Button onClick={handleFolderSubmit} disabled={folderSubmitting}>
-               {folderSubmitting ? '处理中...' : (folderDialog.mode === 'add' ? '创建' : '更新')}
-             </Button>
-           </DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeFolderDialog} disabled={folderSubmitting}>
+              取消
+            </Button>
+            <Button onClick={handleFolderSubmit} disabled={folderSubmitting}>
+              {folderSubmitting ? '处理中...' : (folderDialog.mode === 'add' ? '创建' : '更新')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 批量删除确认对话框 */}
+      <AlertDialog open={batchDeleteDialog} onOpenChange={setBatchDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>批量删除视频</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除选中的 {selectedVideos.length} 个视频吗？此操作不可撤销。
+              <br />
+              <span className="text-sm text-muted-foreground mt-2 block">
+                系统会自动检查视频是否被课程使用，被使用的视频将无法删除。
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBatchDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

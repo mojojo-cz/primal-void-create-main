@@ -71,20 +71,6 @@ const DEFAULT_FOLDERS: VideoFolder[] = [
     description: '系统默认文件夹，用于存放未分类的视频',
     is_default: true,
     color: 'gray'
-  },
-  {
-    id: 'course-videos',
-    name: '课程视频',
-    description: '课程相关的教学视频',
-    is_default: false,
-    color: 'blue'
-  },
-  {
-    id: 'demo-videos',
-    name: '演示视频',
-    description: '产品演示和介绍视频',
-    is_default: false,
-    color: 'green'
   }
 ];
 
@@ -209,7 +195,7 @@ const CourseManagement = () => {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [selectedVideoId, setSelectedVideoId] = useState<string>('');
   const [uploadedVideoTitle, setUploadedVideoTitle] = useState('');
-  const [selectedUploadFolderId, setSelectedUploadFolderId] = useState<string>('course-videos');
+  const [selectedUploadFolderId, setSelectedUploadFolderId] = useState<string>('default');
   const [videoUploadDescription, setVideoUploadDescription] = useState('');
   const [selectedBrowseFolderId, setSelectedBrowseFolderId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('upload');
@@ -543,7 +529,7 @@ const CourseManagement = () => {
     setSelectedVideoId('');
     setUploadedVideoTitle('');
     setVideoUploadDescription('');
-    setSelectedUploadFolderId('course-videos');
+    setSelectedUploadFolderId('default');
     setSelectedBrowseFolderId('');
     setActiveTab('upload');
   };
@@ -610,10 +596,6 @@ const CourseManagement = () => {
       if (selectedFolder && !selectedFolder.is_default) {
         // 自定义文件夹：在描述中添加文件夹名称标签
         finalDescription = `${selectedFolder.name} ${finalDescription || uploadedVideoTitle}`.trim();
-      } else if (selectedUploadFolderId === 'course-videos' && !finalDescription?.includes('课程')) {
-        finalDescription = `课程视频：${finalDescription || uploadedVideoTitle}`;
-      } else if (selectedUploadFolderId === 'demo-videos' && !finalDescription?.includes('演示')) {
-        finalDescription = `演示视频：${finalDescription || uploadedVideoTitle}`;
       }
       
       // 3. 保存到视频表
@@ -639,7 +621,7 @@ const CourseManagement = () => {
       // 清空表单
       setUploadedVideoTitle('');
       setVideoUploadDescription('');
-      setSelectedUploadFolderId('course-videos');
+      setSelectedUploadFolderId('default');
       
       toast({
         title: "上传成功",
@@ -680,44 +662,8 @@ const CourseManagement = () => {
         });
       }
       
-      // 默认文件夹的智能分类逻辑
-      return videos.filter(video => {
-        try {
-          const content = `${video?.title || ''} ${video?.description || ''}`.toLowerCase();
-          switch (folderId) {
-            case 'course-videos':
-              return content.includes('课程') || content.includes('教学') || content.includes('学习');
-            case 'demo-videos':
-              return content.includes('演示') || content.includes('展示') || content.includes('介绍');
-            case 'default':
-              // 默认文件夹：不属于其他分类的视频
-              const belongsToOther = folders.some(folder => {
-                try {
-                  if (folder.is_default && folder.id !== 'default') {
-                    if (folder.id === 'course-videos') {
-                      return content.includes('课程') || content.includes('教学') || content.includes('学习');
-                    }
-                    if (folder.id === 'demo-videos') {
-                      return content.includes('演示') || content.includes('展示') || content.includes('介绍');
-                    }
-                  } else if (!folder.is_default) {
-                    return content.includes(folder.name.toLowerCase());
-                  }
-                  return false;
-                } catch (error) {
-                  console.error('检查文件夹归属时出错:', error, folder);
-                  return false;
-                }
-              });
-              return !belongsToOther;
-            default:
-              return false;
-          }
-        } catch (error) {
-          console.error('过滤视频时出错:', error, video);
-          return false;
-        }
-      });
+      // 默认文件夹：返回所有视频
+      return videos;
     } catch (error) {
       console.error('getFilteredVideosByFolder函数异常:', error);
       return [];
@@ -1592,9 +1538,10 @@ const CourseManagement = () => {
                     className="w-full border rounded px-3 py-2"
                   >
                     <option value="">全部视频</option>
-                    <option value="course-videos">课程视频</option>
-                    <option value="demo-videos">演示视频</option>
                     <option value="default">默认文件夹</option>
+                    {folders.filter(f => !f.is_default).map(folder => (
+                      <option key={folder.id} value={folder.id}>{folder.name}</option>
+                    ))}
                   </select>
                 </div>
                 
