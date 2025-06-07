@@ -193,13 +193,21 @@ const AccountManagement = () => {
     checkAuth();
   }, []);
 
-  // 监听用户资料变化，重新加载数据
+  // 初始化加载数据
   useEffect(() => {
     if (profile && !authLoading) {
-      log("用户资料变更，重新加载数据");
+      log("初始化或用户切换，加载数据");
       fetchProfiles();
     }
-  }, [profile, authLoading]);
+  }, [profile?.id, profile?.user_type, authLoading]);
+
+  // 监听搜索词变化，用于调试
+  useEffect(() => {
+    if (searchTerm !== "") {
+      log("搜索词发生变化:", searchTerm);
+      console.trace("搜索词变化的调用堆栈");
+    }
+  }, [searchTerm]); // 只在用户ID或用户类型变化时重新加载
 
   // 编辑账号
   const handleEdit = (profile: Profile) => {
@@ -271,6 +279,26 @@ const AccountManagement = () => {
     
     setSubmitting(true);
     try {
+      // 如果用户名发生变化，检查新用户名是否已存在
+      if (editForm.username?.trim() !== editDialog.profile.username) {
+        const { data: usernameExists, error: usernameCheckError } = await supabase
+          .rpc('check_username_exists', { username: editForm.username?.trim() });
+          
+        if (usernameCheckError) {
+          log("检查用户名失败", usernameCheckError);
+          throw new Error("检查用户名时发生错误");
+        }
+        
+        if (usernameExists) {
+          toast({
+            variant: "destructive",
+            title: "验证失败",
+            description: "该用户名已被使用，请选择其他用户名"
+          });
+          setSubmitting(false);
+          return;
+        }
+      }
       // 构建更新数据，确保格式正确
       const updateData: Record<string, any> = {
         username: editForm.username?.trim(),
@@ -374,9 +402,12 @@ const AccountManagement = () => {
 
   // 打开重置密码对话框
   const handleResetPassword = (profile: Profile) => {
+    log("点击重置密码按钮，目标用户:", profile.username);
+    log("当前搜索词:", searchTerm);
     setResetPasswordDialog({ open: true, profile });
     setNewPassword("");
     setConfirmPassword("");
+    log("重置密码对话框已打开，当前搜索词:", searchTerm);
   };
 
   // 关闭重置密码对话框
@@ -610,9 +641,17 @@ const AccountManagement = () => {
               setCurrentPage(1); // 搜索时重置到第一页
             }}
             className="pl-10"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            name="accountSearchTerm"
+            id="accountSearchTerm"
+            data-form-type="other"
           />
           {searchTerm && (
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6"
@@ -684,9 +723,10 @@ const AccountManagement = () => {
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2">
                           <Button
+                            type="button"
                             size="sm"
                             variant="outline"
-                            className="h-8"
+                            className="h-8 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors"
                             onClick={() => handleEdit(profile)}
                           >
                             <FileEdit className="h-4 w-4 mr-1" />
@@ -696,9 +736,10 @@ const AccountManagement = () => {
                           {/* 重置密码按钮 - 只有管理员可以看到 */}
                           {isAdmin && (
                             <Button
+                              type="button"
                               size="sm"
                               variant="outline"
-                              className="h-8 border-orange-300 text-orange-600 hover:bg-orange-50"
+                              className="h-8 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"
                               onClick={() => handleResetPassword(profile)}
                             >
                               <Key className="h-4 w-4 mr-1" />
@@ -711,6 +752,7 @@ const AccountManagement = () => {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
+                                    type="button"
                                     size="sm"
                                     variant="destructive"
                                     className="h-8 opacity-50 cursor-not-allowed"
@@ -732,9 +774,10 @@ const AccountManagement = () => {
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
+                                  type="button"
                                   size="sm"
                                   variant="destructive"
-                                  className="h-8"
+                                  className="h-8 transition-colors"
                                 >
                                   <Trash2 className="h-4 w-4 mr-1" />
                                   删除
@@ -888,10 +931,10 @@ const AccountManagement = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeEditDialog} disabled={submitting}>
+            <Button type="button" variant="outline" onClick={closeEditDialog} disabled={submitting}>
               取消
             </Button>
-            <Button onClick={handleSaveEdit} disabled={submitting}>
+            <Button type="button" onClick={handleSaveEdit} disabled={submitting}>
               {submitting ? "保存中..." : "保存"}
             </Button>
           </DialogFooter>
@@ -941,6 +984,9 @@ const AccountManagement = () => {
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="请输入新密码（至少6位）"
                   disabled={resetPasswordSubmitting}
+                  autoComplete="new-password"
+                  name="resetNewPassword"
+                  id="resetNewPassword"
                 />
               </div>
               
@@ -953,6 +999,9 @@ const AccountManagement = () => {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="请再次输入新密码"
                   disabled={resetPasswordSubmitting}
+                  autoComplete="new-password"
+                  name="resetConfirmPassword"
+                  id="resetConfirmPassword"
                 />
               </div>
               
@@ -974,6 +1023,7 @@ const AccountManagement = () => {
           )}
           <DialogFooter>
             <Button 
+              type="button"
               variant="outline" 
               onClick={closeResetPasswordDialog} 
               disabled={resetPasswordSubmitting}
@@ -981,9 +1031,10 @@ const AccountManagement = () => {
               取消
             </Button>
             <Button 
+              type="button"
               onClick={handlePasswordReset} 
               disabled={resetPasswordSubmitting}
-              className="bg-orange-600 hover:bg-orange-700"
+              className="bg-amber-600 hover:bg-amber-700 text-white transition-colors"
             >
               {resetPasswordSubmitting ? "重置中..." : "确认重置"}
             </Button>
