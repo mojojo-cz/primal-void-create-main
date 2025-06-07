@@ -75,7 +75,7 @@ PresignedUpload组件
     ↓
 Supabase Edge Function (minio-presigned-upload)
     ↓  ↑
-MinIO服务器 (115.159.33.45:9000)
+MinIO服务器 (minio.xianrankaoyan.vip:9000)
     ↓
 Supabase数据库 (minio_videos表)
 ```

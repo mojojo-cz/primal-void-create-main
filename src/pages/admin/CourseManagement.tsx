@@ -53,6 +53,7 @@ import VideoPlayer from "@/components/VideoPlayer";
 import { Badge } from "@/components/ui/badge";
 import EnhancedPagination from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
+import VideoUploadToMinIO from "@/components/VideoUploadToMinIO";
 
 // 文件夹类型
 interface VideoFolder {
@@ -124,6 +125,9 @@ interface SectionWithVideo {
     id: string;
     title: string;
     video_url: string;
+    minio_object_name: string;
+    play_url?: string | null;
+    play_url_expires_at?: string | null;
   } | null;
 }
 
@@ -142,12 +146,13 @@ const defaultSectionForm = {
   video: null as SectionWithVideo['video'] | null,
 };
 
-// 视频类型
+// 视频类型 - 匹配minio_videos表基础结构
 interface Video {
   id: string;
   title: string;
   description: string | null;
   video_url: string;
+  minio_object_name: string;
   created_at: string;
 }
 
@@ -174,6 +179,7 @@ function mapSectionsForForm(sections: SectionWithVideo[]): NewCourseForm['sectio
       title: s.video.title,
       description: '', // 编辑课程时章节视频只需id和title，其他字段可为空
       video_url: s.video.video_url,
+      minio_object_name: s.video.minio_object_name,
       created_at: ''
     } : null
   }));
@@ -192,14 +198,9 @@ const CourseManagement = () => {
   const [sectionForm, setSectionForm] = useState<typeof defaultSectionForm>(defaultSectionForm);
   const [videoUploadDialog, setVideoUploadDialog] = useState<{ open: boolean; sectionId: string; courseId: string }>({ open: false, sectionId: '', courseId: '' });
   const [videoLibrary, setVideoLibrary] = useState<Video[]>([]);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [selectedVideoId, setSelectedVideoId] = useState<string>('');
-  const [uploadedVideoTitle, setUploadedVideoTitle] = useState('');
-  const [selectedUploadFolderId, setSelectedUploadFolderId] = useState<string>('default');
-  const [videoUploadDescription, setVideoUploadDescription] = useState('');
   const [selectedBrowseFolderId, setSelectedBrowseFolderId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('upload');
-  const videoUploadRef = useRef<HTMLInputElement>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; courseId: string; title: string }>({ open: false, courseId: '', title: '' });
   const [deleteSectionDialog, setDeleteSectionDialog] = useState<{ open: boolean; sectionId: string; title: string }>({ open: false, sectionId: '', title: '' });
   const [previewCoverImage, setPreviewCoverImage] = useState(false);
@@ -223,55 +224,94 @@ const CourseManagement = () => {
   // 获取课程及章节和视频信息
   const fetchCourses = async () => {
     setLoading(true);
-    // 查询课程
-    const { data: courseData, error: courseError } = await supabase
-      .from("courses")
-      .select("id, title, description, cover_image, status, created_at, updated_at")
-      .order("created_at", { ascending: false });
-    if (courseError || !courseData) {
+    try {
+      // 查询课程
+      const { data: courseData, error: courseError } = await supabase
+        .from("courses")
+        .select("id, title, description, cover_image, status, created_at, updated_at")
+        .order("created_at", { ascending: false });
+      
+      if (courseError) {
+        console.error('获取课程失败:', courseError);
+        toast({
+          variant: "destructive",
+          title: "获取课程失败",
+          description: courseError.message || "无法获取课程信息"
+        });
+        setCourses([]);
+        setLoading(false);
+        return;
+      }
+      
+      if (!courseData) {
+        setCourses([]);
+        setLoading(false);
+        return;
+      }
+      
+      // 查询所有章节及视频 - 改为从minio_videos表获取视频信息
+      const { data: sectionData, error: sectionError } = await supabase
+        .from("course_sections")
+        .select("id, title, description, order, course_id, video_id, minio_videos(id, title, video_url, minio_object_name, play_url, play_url_expires_at)")
+        .order("order", { ascending: true });
+      
+      if (sectionError) {
+        console.error('获取章节失败:', sectionError);
+        console.log('查询语句：SELECT id, title, description, order, course_id, video_id, minio_videos(id, title, video_url) FROM course_sections ORDER BY order ASC');
+        // 即使章节查询失败，也显示课程，只是没有章节
+        setCourses(courseData.map(c => ({ ...c, sections: [] })));
+        setLoading(false);
+        toast({
+          variant: "destructive",
+          title: "获取章节失败",
+          description: sectionError.message || "无法获取章节信息，但课程信息已加载"
+        });
+        return;
+      }
+      
+      // 按课程分组章节
+      const courseMap: Record<string, SectionWithVideo[]> = {};
+      (sectionData || []).forEach((s: any) => {
+        if (!s.course_id) return;
+        if (!courseMap[s.course_id]) courseMap[s.course_id] = [];
+        courseMap[s.course_id].push({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          order: s.order,
+          video_id: s.video_id,
+          video: s.minio_videos ? {
+            id: s.minio_videos.id,
+            title: s.minio_videos.title,
+            video_url: s.minio_videos.video_url,
+            minio_object_name: s.minio_videos.minio_object_name,
+            play_url: s.minio_videos.play_url,
+            play_url_expires_at: s.minio_videos.play_url_expires_at,
+          } : null,
+        });
+      });
+      
+      // 合并到课程
+      setCourses(courseData.map(c => ({ ...c, sections: courseMap[c.id] || [] })));
+      setLoading(false);
+    } catch (error: any) {
+      console.error('获取课程和章节异常:', error);
+      toast({
+        variant: "destructive",
+        title: "加载数据异常",
+        description: error.message || "获取课程和章节时发生异常"
+      });
       setCourses([]);
       setLoading(false);
-      return;
     }
-    // 查询所有章节及视频
-    const { data: sectionData, error: sectionError } = await supabase
-      .from("course_sections")
-      .select("id, title, description, order, course_id, video_id, videos(id, title, video_url)")
-      .order("order", { ascending: true });
-    if (sectionError || !sectionData) {
-      setCourses(courseData.map(c => ({ ...c, sections: [] })));
-      setLoading(false);
-      return;
-    }
-    // 按课程分组章节
-    const courseMap: Record<string, SectionWithVideo[]> = {};
-    sectionData.forEach((s: any) => {
-      if (!s.course_id) return;
-      if (!courseMap[s.course_id]) courseMap[s.course_id] = [];
-      courseMap[s.course_id].push({
-        id: s.id,
-        title: s.title,
-        description: s.description,
-        order: s.order,
-        video_id: s.video_id,
-        video: s.videos ? {
-          id: s.videos.id,
-          title: s.videos.title,
-          video_url: s.videos.video_url,
-        } : null,
-      });
-    });
-    // 合并到课程
-    setCourses(courseData.map(c => ({ ...c, sections: courseMap[c.id] || [] })));
-    setLoading(false);
   };
 
-  // 获取视频库
+  // 获取视频库 - 改为从minio_videos表获取，与视频管理模块同步
   const fetchVideoLibrary = async () => {
     try {
       const { data, error } = await supabase
-        .from("videos")
-        .select("id, title, description, video_url, created_at")
+        .from("minio_videos")
+        .select("id, title, description, video_url, minio_object_name, created_at")
         .order("created_at", { ascending: false });
       
       if (error) {
@@ -296,29 +336,51 @@ const CourseManagement = () => {
     }
   };
 
-  // 局部刷新某课程的章节
+  // 局部刷新某课程的章节 - 改为从minio_videos表获取视频信息
   const fetchSections = async (courseId: string) => {
-    const { data: sectionData, error: sectionError } = await supabase
-      .from("course_sections")
-      .select("id, title, description, order, course_id, video_id, videos(id, title, video_url)")
-      .eq("course_id", courseId)
-      .order("order", { ascending: true });
-    if (!sectionError && sectionData) {
+    try {
+      const { data: sectionData, error: sectionError } = await supabase
+        .from("course_sections")
+        .select("id, title, description, order, course_id, video_id, minio_videos(id, title, video_url, minio_object_name, play_url, play_url_expires_at)")
+        .eq("course_id", courseId)
+        .order("order", { ascending: true });
+      
+      if (sectionError) {
+        console.error('获取章节失败:', sectionError);
+        toast({
+          variant: "destructive",
+          title: "获取章节失败",
+          description: sectionError.message || "无法获取章节信息"
+        });
+        return;
+      }
+      
+      // 即使没有章节也要更新状态
       setCourses(prev => prev.map(c => c.id === courseId ? {
         ...c,
-        sections: sectionData.map((s: any) => ({
+        sections: (sectionData || []).map((s: any) => ({
           id: s.id,
           title: s.title,
           description: s.description,
           order: s.order,
           video_id: s.video_id,
-          video: s.videos ? {
-            id: s.videos.id,
-            title: s.videos.title,
-            video_url: s.videos.video_url,
+          video: s.minio_videos ? {
+            id: s.minio_videos.id,
+            title: s.minio_videos.title,
+            video_url: s.minio_videos.video_url,
+            minio_object_name: s.minio_videos.minio_object_name,
+            play_url: s.minio_videos.play_url,
+            play_url_expires_at: s.minio_videos.play_url_expires_at,
           } : null,
         }))
       } : c));
+    } catch (error: any) {
+      console.error('获取章节异常:', error);
+      toast({
+        variant: "destructive",
+        title: "获取章节异常",
+        description: error.message || "获取章节时发生异常"
+      });
     }
   };
 
@@ -414,14 +476,65 @@ const CourseManagement = () => {
     }
   };
 
-  // 播放视频
-  const handlePlayVideo = (url: string, title: string) => {
-    setVideoDialog({ open: true, url, title });
+  // 播放视频 - 适配MinIO视频（智能缓存优化版）
+  const handlePlayVideo = async (video: SectionWithVideo['video']) => {
+    if (!video) return;
+    
+    try {
+      // 检查是否有存储的播放URL且未过期
+      if (video.play_url && video.play_url_expires_at) {
+        const expiresAt = new Date(video.play_url_expires_at);
+        const now = new Date();
+        const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+        
+        // 如果URL将在10小时内过期，则重新生成（适应长视频播放）
+        if (timeUntilExpiry > 10 * 60 * 60 * 1000) {
+          // URL仍然有效，直接使用
+          setVideoDialog({ 
+            open: true, 
+            url: video.play_url, 
+            title: video.title 
+          });
+          return;
+        }
+      }
+      
+      // 如果没有播放URL或将在10小时内过期，调用Edge Function生成新的播放URL
+      const { data, error } = await supabase.functions.invoke('minio-presigned-upload', {
+        body: { 
+          action: 'generatePlayUrl',
+          objectName: video.minio_object_name 
+        }
+      });
+      
+      if (error) throw error;
+
+      if (data?.playUrl) {
+        // 暂时不更新数据库中的播放URL，直接使用生成的URL
+        
+        setVideoDialog({ 
+          open: true, 
+          url: data.playUrl, 
+          title: video.title 
+        });
+      } else {
+        throw new Error('未能获取视频播放URL');
+      }
+    } catch (error: any) {
+      console.error('播放失败:', error);
+      toast({
+        variant: "destructive",
+        title: "播放失败",
+        description: error.message || "无法播放视频"
+      });
+    }
   };
 
   // 打开新增/编辑章节弹窗
   const openSectionDialog = (mode: 'add' | 'edit', courseId: string, section?: SectionWithVideo) => {
     setSectionDialog({ open: true, mode, courseId, section });
+    fetchVideoLibrary(); // 加载视频库
+    
     if (mode === 'edit' && section) {
       setSectionForm({
         id: section.id,
@@ -448,6 +561,25 @@ const CourseManagement = () => {
   const handleSectionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setSectionForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // 处理章节视频选择
+  const handleSectionVideoSelect = (videoId: string) => {
+    const selectedVideo = videoLibrary.find(v => v.id === videoId);
+    setSectionForm(prev => ({
+      ...prev,
+      video_id: videoId,
+      video: selectedVideo || null
+    }));
+  };
+
+  // 清除章节视频选择
+  const clearSectionVideoSelect = () => {
+    setSectionForm(prev => ({
+      ...prev,
+      video_id: '',
+      video: null
+    }));
   };
 
   // 新增/编辑章节提交
@@ -482,8 +614,8 @@ const CourseManagement = () => {
         }).eq('id', sectionForm.id);
       }
       closeSectionDialog();
-      // 只刷新当前课程的章节
-      fetchSections(sectionDialog.courseId);
+      // 刷新所有课程数据，确保页面显示最新状态
+      await fetchCourses();
       toast({
         title: "操作成功",
         description: sectionDialog.mode === 'add' ? "章节已添加" : "章节已更新"
@@ -520,16 +652,12 @@ const CourseManagement = () => {
     setVideoUploadDialog({ open: true, sectionId, courseId });
     fetchVideoLibrary(); // 重新加载视频库
     setSelectedVideoId('');
-    setUploadedVideoTitle('');
   };
 
   // 关闭视频上传/选择弹窗
   const closeVideoDialog = () => {
     setVideoUploadDialog({ open: false, sectionId: '', courseId: '' });
     setSelectedVideoId('');
-    setUploadedVideoTitle('');
-    setVideoUploadDescription('');
-    setSelectedUploadFolderId('default');
     setSelectedBrowseFolderId('');
     setActiveTab('upload');
   };
@@ -551,91 +679,40 @@ const CourseManagement = () => {
     }
   };
 
-  // 视频上传
-  const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  // MinIO 视频上传完成处理 - 修复：上传完成后关联章节并关闭对话框
+  const handleMinIOUploadComplete = async (uploadedVideoId?: string) => {
+    fetchVideoLibrary(); // 刷新视频库
     
-    // 检查文件类型
-    if (!file.type.startsWith('video/')) {
-      toast({
-        variant: "destructive",
-        title: "文件类型错误",
-        description: "请选择视频文件"
-      });
-      return;
-    }
-    
-    try {
-      setUploadingVideo(true);
-      
-      // 处理文件名，避免使用中文和特殊字符
-      const timestamp = Date.now();
-      // 提取文件扩展名
-      const fileExtension = file.name.split('.').pop() || '';
-      // 创建安全的文件名：时间戳 + 随机字符串 + 扩展名
-      const safeFileName = `${timestamp}_${Math.random().toString(36).substring(2, 10)}.${fileExtension}`;
-      
-      // 1. 上传到 Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('videos') // 需要先在 Supabase 创建名为 videos 的 bucket
-        .upload(safeFileName, file);
-      
-      if (uploadError) throw new Error('视频上传失败：' + uploadError.message);
-      
-      // 2. 获取公开URL
-      const { data: urlData } = await supabase.storage
-        .from('videos')
-        .getPublicUrl(safeFileName);
-      
-      const videoUrl = urlData?.publicUrl;
-      
-      // 根据选择的文件夹调整描述（用于分类）
-      let finalDescription = videoUploadDescription;
-      const selectedFolder = folders.find(f => f.id === selectedUploadFolderId);
-      if (selectedFolder && !selectedFolder.is_default) {
-        // 自定义文件夹：在描述中添加文件夹名称标签
-        finalDescription = `${selectedFolder.name} ${finalDescription || uploadedVideoTitle}`.trim();
+    // 如果有上传的视频ID，自动关联到当前章节
+    if (uploadedVideoId && videoUploadDialog.sectionId) {
+      try {
+        await supabase
+          .from('course_sections')
+          .update({ video_id: uploadedVideoId })
+          .eq('id', videoUploadDialog.sectionId);
+        
+        await fetchCourses(); // 刷新课程数据
+        
+        toast({
+          title: "上传并关联成功",
+          description: "视频已成功上传并关联到章节"
+        });
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "关联失败",
+          description: error.message || "视频上传成功但关联失败"
+        });
       }
-      
-      // 3. 保存到视频表
-      const { data: videoData, error: insertError } = await supabase
-        .from('videos')
-        .insert([{
-          title: uploadedVideoTitle || file.name,
-          description: finalDescription || null,
-          video_url: videoUrl,
-        }])
-        .select('id')
-        .single();
-      
-      if (insertError) throw new Error('保存视频信息失败：' + insertError.message);
-      
-      setSelectedVideoId(videoData.id);
-      fetchVideoLibrary(); // 刷新视频库
-      
-      if (event.target.files) {
-        event.target.value = '';
-      }
-      
-      // 清空表单
-      setUploadedVideoTitle('');
-      setVideoUploadDescription('');
-      setSelectedUploadFolderId('default');
-      
+    } else {
       toast({
         title: "上传成功",
-        description: "视频已成功上传"
+        description: "视频已成功上传到MinIO"
       });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "上传失败",
-        description: error.message || '上传失败'
-      });
-    } finally {
-      setUploadingVideo(false);
     }
+    
+    // 关闭对话框
+    closeVideoDialog();
   };
 
   // 根据文件夹过滤视频库
@@ -697,7 +774,12 @@ const CourseManagement = () => {
   };
 
   // 新增课程中添加章节
-  const addSectionToNewCourse = () => {
+  const addSectionToNewCourse = async () => {
+    // 如果视频库还没有加载，先加载视频库
+    if (!videoLibrary || videoLibrary.length === 0) {
+      await fetchVideoLibrary();
+    }
+    
     const newOrder = form.sections.length > 0 
       ? Math.max(...form.sections.map(s => s.order || 0)) + 1 
       : 1;
@@ -732,6 +814,33 @@ const CourseManagement = () => {
       updatedSections[index] = {
         ...updatedSections[index],
         [field]: field === 'order' ? Number(value) : value
+      };
+      return { ...prev, sections: updatedSections };
+    });
+  };
+
+  // 处理新增课程中章节的视频选择
+  const handleNewCourseSectionVideoSelect = (index: number, videoId: string) => {
+    const selectedVideo = videoLibrary.find(v => v.id === videoId);
+    setForm(prev => {
+      const updatedSections = [...prev.sections];
+      updatedSections[index] = {
+        ...updatedSections[index],
+        video_id: videoId || null,
+        video: selectedVideo || null
+      };
+      return { ...prev, sections: updatedSections };
+    });
+  };
+
+  // 清除新增课程中章节的视频选择
+  const clearNewCourseSectionVideoSelect = (index: number) => {
+    setForm(prev => {
+      const updatedSections = [...prev.sections];
+      updatedSections[index] = {
+        ...updatedSections[index],
+        video_id: null,
+        video: null
       };
       return { ...prev, sections: updatedSections };
     });
@@ -1201,7 +1310,7 @@ const CourseManagement = () => {
                                                       size="sm" 
                                                       variant="secondary"
                                                       className="h-8 gap-1 hover:no-underline"
-                                                      onClick={() => handlePlayVideo(section.video!.video_url, section.video!.title)}
+                                                      onClick={() => handlePlayVideo(section.video)}
                                                     >
                                                       <Play className="h-3 w-3" />
                                                       <span>播放</span>
@@ -1405,6 +1514,48 @@ const CourseManagement = () => {
                             onChange={(e) => handleNewCourseSectionChange(idx, 'order', e.target.value)}
                           />
                         </div>
+                        
+                        {/* 视频选择区域 */}
+                        <div>
+                          <label className="block text-sm font-medium mb-2">关联视频（可选）</label>
+                          {section.video ? (
+                            <div className="p-2 border rounded-lg bg-blue-50">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <p className="font-medium text-blue-900 text-sm truncate">{section.video.title}</p>
+                                  <p className="text-xs text-blue-700">已选择视频</p>
+                                </div>
+                                <Button 
+                                  type="button" 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => clearNewCourseSectionVideoSelect(idx)}
+                                  className="ml-2 text-xs"
+                                >
+                                  清除
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <select 
+                                className="w-full border rounded px-2 py-1 text-sm bg-white"
+                                value={section.video_id || ''}
+                                onChange={(e) => handleNewCourseSectionVideoSelect(idx, e.target.value)}
+                              >
+                                <option value="">请选择视频</option>
+                                {videoLibrary.map(video => (
+                                  <option key={video.id} value={video.id}>
+                                    {video.title}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="text-xs text-gray-500">
+                                从现有视频库中选择视频，或保持为空
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1422,7 +1573,7 @@ const CourseManagement = () => {
       
       {/* 章节编辑弹窗 */}
       <Dialog open={sectionDialog.open} onOpenChange={closeSectionDialog}>
-        <DialogContent className="sm:max-w-md w-full">
+        <DialogContent className="sm:max-w-lg w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{sectionDialog.mode === 'add' ? '新增章节' : '编辑章节'}</DialogTitle>
           </DialogHeader>
@@ -1439,6 +1590,48 @@ const CourseManagement = () => {
               <label className="block mb-1 font-medium">排序（数字越小越靠前）</label>
               <Input name="order" type="number" min={1} value={sectionForm.order} onChange={handleSectionChange} />
             </div>
+            
+            {/* 视频选择区域 */}
+            <div>
+              <label className="block mb-2 font-medium">关联视频（可选）</label>
+              {sectionForm.video ? (
+                <div className="p-3 border rounded-lg bg-blue-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-blue-900">{sectionForm.video.title}</p>
+                      <p className="text-sm text-blue-700">已选择视频</p>
+                    </div>
+                    <Button 
+                      type="button" 
+                      size="sm" 
+                      variant="outline"
+                      onClick={clearSectionVideoSelect}
+                    >
+                      清除
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <select 
+                    className="w-full border rounded px-3 py-2 bg-white"
+                    value={sectionForm.video_id}
+                    onChange={(e) => handleSectionVideoSelect(e.target.value)}
+                  >
+                    <option value="">请选择视频</option>
+                    {videoLibrary.map(video => (
+                      <option key={video.id} value={video.id}>
+                        {video.title}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-gray-500">
+                    从现有视频库中选择视频，或保持为空
+                  </p>
+                </div>
+              )}
+            </div>
+            
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeSectionDialog}>取消</Button>
               <Button type="submit">保存</Button>
@@ -1479,51 +1672,14 @@ const CourseManagement = () => {
               </button>
             </div>
             
-            {/* 上传新视频Tab */}
+            {/* 上传新视频Tab - 使用MinIO上传组件 */}
             {activeTab === 'upload' && (
-              <div className="space-y-4 py-4">
-                <div>
-                  <label className="block mb-1 font-medium">视频标题</label>
-                  <Input value={uploadedVideoTitle} onChange={(e) => setUploadedVideoTitle(e.target.value)} placeholder="请输入视频标题（可选）" />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium">视频描述</label>
-                  <Textarea 
-                    value={videoUploadDescription} 
-                    onChange={(e) => setVideoUploadDescription(e.target.value)} 
-                    placeholder="请输入视频描述（可选）" 
-                    rows={3}
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium">选择文件夹</label>
-                  <Select value={selectedUploadFolderId} onValueChange={setSelectedUploadFolderId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择视频分类" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {folders.map(folder => (
-                        <SelectItem key={folder.id} value={folder.id}>
-                          <div className="flex items-center gap-2">
-                            <Folder className="h-4 w-4" />
-                            {folder.name} {folder.is_default && '（系统）'}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block mb-1 font-medium">上传视频文件</label>
-                  <Input 
-                    type="file" 
-                    ref={videoUploadRef}
-                    accept="video/*" 
-                    onChange={handleVideoUpload}
-                    disabled={uploadingVideo}
-                  />
-                  {uploadingVideo && <div className="mt-2 text-sm">上传中，请稍候...</div>}
-                </div>
+              <div className="py-4">
+                <VideoUploadToMinIO
+                  folders={folders}
+                  onUploadComplete={handleMinIOUploadComplete}
+                  onCancel={closeVideoDialog}
+                />
               </div>
             )}
             
@@ -1634,16 +1790,19 @@ const CourseManagement = () => {
             )}
           </div>
           
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeVideoDialog}>取消</Button>
-            <Button 
-              type="button" 
-              onClick={applyVideoToSection} 
-              disabled={!selectedVideoId || uploadingVideo}
-            >
-              应用所选视频
-            </Button>
-          </DialogFooter>
+          {/* 只在"选择现有视频"Tab时显示DialogFooter */}
+          {activeTab === 'select' && (
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeVideoDialog}>取消</Button>
+              <Button 
+                type="button" 
+                onClick={applyVideoToSection} 
+                disabled={!selectedVideoId}
+              >
+                应用所选视频
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
       

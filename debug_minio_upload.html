@@ -100,7 +100,7 @@
         const SUPABASE_URL = 'https://sxsyprzckdnfyhadodhj.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs';
         const MINIO_CONFIG = {
-            endpoint: '115.159.33.45:9000',
+            endpoint: 'minio.xianrankaoyan.vip:9000',
             bucket: 'videos'
         };
 
@@ -147,7 +147,7 @@
             } catch (error) {
                 log(`MinIO连接失败: ${error.message}`, 'error');
                 log('建议检查：', 'warning');
-                log('1. MinIO服务器是否运行在 115.159.33.45:9000', 'warning');
+                log('1. MinIO服务器是否运行在 minio.xianrankaoyan.vip:9000', 'warning');
                 log('2. 网络连接是否正常', 'warning');
                 log('3. 防火墙是否阻止连接', 'warning');
             }

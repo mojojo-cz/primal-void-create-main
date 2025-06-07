@@ -260,14 +260,14 @@ const VideoManagement = () => {
       if (checkError) throw checkError;
       
       if (sections && sections.length > 0) {
-        toast({
-          variant: "destructive",
+      toast({
+        variant: "destructive",
           title: "无法删除",
           description: `选中的视频中有${sections.length}个正在被课程使用，请先移除关联`
-        });
-        return;
-      }
-
+      });
+      return;
+    }
+    
       // 获取要删除的视频信息
       const videosToDelete = videos.filter(video => selectedVideos.includes(video.id));
       
@@ -317,8 +317,8 @@ const VideoManagement = () => {
   };
       
   // 上传完成处理
-  const handleUploadComplete = async () => {
-    setUploadDialog(false);
+  const handleUploadComplete = async (uploadedVideoId?: string) => {
+      setUploadDialog(false);
     await fetchVideos();
   };
 
@@ -342,7 +342,7 @@ const VideoManagement = () => {
             title: video.title 
           });
           return;
-        }
+      }
       }
       
       // 如果没有播放URL或将在10小时内过期，调用Edge Function生成新的播放URL
@@ -1212,16 +1212,16 @@ const VideoManagement = () => {
                 placeholder="请输入文件夹描述"
                 rows={3}
               />
-            </div>
+             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeFolderDialog} disabled={folderSubmitting}>
-              取消
-            </Button>
-            <Button onClick={handleFolderSubmit} disabled={folderSubmitting}>
-              {folderSubmitting ? '处理中...' : (folderDialog.mode === 'add' ? '创建' : '更新')}
-            </Button>
-          </DialogFooter>
+                     <DialogFooter>
+             <Button variant="outline" onClick={closeFolderDialog} disabled={folderSubmitting}>
+               取消
+             </Button>
+             <Button onClick={handleFolderSubmit} disabled={folderSubmitting}>
+               {folderSubmitting ? '处理中...' : (folderDialog.mode === 'add' ? '创建' : '更新')}
+             </Button>
+           </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -49,7 +49,7 @@ export type Database = {
             foreignKeyName: "course_sections_video_id_fkey"
             columns: ["video_id"]
             isOneToOne: false
-            referencedRelation: "videos"
+            referencedRelation: "minio_videos"
             referencedColumns: ["id"]
           },
         ]
@@ -148,6 +148,8 @@ export type Database = {
           file_size: number | null
           id: string
           minio_object_name: string
+          play_url: string | null
+          play_url_expires_at: string | null
           title: string
           updated_at: string
           video_url: string
@@ -159,6 +161,8 @@ export type Database = {
           file_size?: number | null
           id?: string
           minio_object_name: string
+          play_url?: string | null
+          play_url_expires_at?: string | null
           title: string
           updated_at?: string
           video_url: string
@@ -170,6 +174,8 @@ export type Database = {
           file_size?: number | null
           id?: string
           minio_object_name?: string
+          play_url?: string | null
+          play_url_expires_at?: string | null
           title?: string
           updated_at?: string
           video_url?: string
@@ -388,7 +394,42 @@ export type TablesUpdate<
       : never
     : never
 
-// MinIO视频类型定义
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof Database },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof Database },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
+
 export type MinIOVideo = Tables<'minio_videos'>
 export type MinIOVideoInsert = TablesInsert<'minio_videos'>
 export type MinIOVideoUpdate = TablesUpdate<'minio_videos'> 

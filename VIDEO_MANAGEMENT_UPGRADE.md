@@ -93,9 +93,9 @@ CREATE TABLE minio_videos (
 
 ### 环境变量配置
 ```bash
-MINIO_ENDPOINT=115.159.33.45
+MINIO_ENDPOINT=minio.xianrankaoyan.vip
 MINIO_PORT=9000
-MINIO_USE_SSL=false
+MINIO_USE_SSL=true
 MINIO_ACCESS_KEY=***
 MINIO_SECRET_KEY=***
 MINIO_BUCKET_NAME=videos

@@ -103,12 +103,13 @@
 
         <div class="step">
             <h3>步骤 1: 访问MinIO控制台</h3>
-            <div class="credentials">
-控制台地址: http://115.159.33.45:9001
-用户名: WRJDY2MYP6RF0Y5EO4M2
-密码: jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7
+            <div class="config-item">
+                服务器地址: minio.xianrankaoyan.vip:9000<br>
+                协议: HTTPS (SSL已配置)<br>
+                控制台地址: https://minio.xianrankaoyan.vip:9001<br>
+                存储桶: videos<br>
+                <a href="https://minio.xianrankaoyan.vip:9001" target="_blank" class="link-button">打开MinIO控制台</a>
             </div>
-            <a href="http://115.159.33.45:9001" target="_blank" class="link-button">打开MinIO控制台</a>
         </div>
 
         <div class="step">
@@ -161,7 +162,7 @@
             <h3>步骤 5: 如果仍然失败</h3>
             <p>如果问题仍然存在，可能需要检查：</p>
             <ul>
-                <li><strong>网络连接</strong>: 确保可以访问 115.159.33.45:9000</li>
+                <li><strong>网络连接</strong>: 确保可以访问 minio.xianrankaoyan.vip:9000</li>
                 <li><strong>MinIO服务状态</strong>: 确认MinIO服务正在运行</li>
                 <li><strong>凭据正确性</strong>: 验证Access Key和Secret Key</li>
                 <li><strong>防火墙设置</strong>: 确保端口9000和9001开放</li>
@@ -177,10 +178,10 @@
             <p>如果您有命令行访问权限，可以使用以下命令测试MinIO连接：</p>
             <div class="credentials">
 # 测试MinIO健康状态
-curl -I http://115.159.33.45:9000/minio/health/live
+curl -I https://minio.xianrankaoyan.vip:9000/minio/health/live
 
 # 测试存储桶访问
-curl -I http://115.159.33.45:9000/videos/
+curl -I https://minio.xianrankaoyan.vip:9000/videos/
 
 # 如果返回200 OK，说明配置正确
             </div>

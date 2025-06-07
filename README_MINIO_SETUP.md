@@ -69,11 +69,11 @@ supabase functions deploy minio-video-delete
 4. 添加以下环境变量：
 
 ```env
-MINIO_ENDPOINT=your-minio-server:9000
+MINIO_ENDPOINT=minio.xianrankaoyan.vip
 MINIO_ACCESS_KEY=your-access-key
 MINIO_SECRET_KEY=your-secret-key
 MINIO_BUCKET=videos
-MINIO_USE_SSL=false
+MINIO_USE_SSL=true
 ```
 
 ### 步骤5: 设置MinIO服务器

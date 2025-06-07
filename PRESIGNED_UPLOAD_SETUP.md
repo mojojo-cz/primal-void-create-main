@@ -73,9 +73,9 @@ curl https://sxsyprzckdnfyhadodhj.supabase.co/functions/v1/minio-presigned-uploa
 
 ```typescript
 const MINIO_CONFIG = {
-  endPoint: '115.159.33.45',
+  endPoint: 'minio.xianrankaoyan.vip',
   port: 9000,
-  useSSL: false,
+  useSSL: true,
   accessKey: 'WRJDY2MYP6RF0Y5EO4M2',
   secretKey: 'jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7',
   bucketName: 'videos'
@@ -109,8 +109,8 @@ POST /functions/v1/minio-presigned-upload
 // 响应
 {
   "success": true,
-  "uploadUrl": "http://115.159.33.45:9000/videos/...",
-  "downloadUrl": "http://115.159.33.45:9000/videos/...",
+  "uploadUrl": "https://minio.xianrankaoyan.vip:9000/videos/...",
+  "downloadUrl": "https://minio.xianrankaoyan.vip:9000/videos/...",
   "fileName": "1737384567_abc123_video.mp4",
   "originalFileName": "video.mp4",
   "contentType": "video/mp4",
@@ -142,7 +142,7 @@ GET /functions/v1/minio-presigned-upload
     "maxFileSize": "50GB",
     "maxExpires": "24小时",
     "bucket": "videos",
-    "server": "115.159.33.45:9000"
+    "server": "minio.xianrankaoyan.vip:9000"
   }
 }
 ```

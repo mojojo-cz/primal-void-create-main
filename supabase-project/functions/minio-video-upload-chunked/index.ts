@@ -4,9 +4,9 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // MinIO配置
 const minioClient = new Client({
-  endPoint: '115.159.33.45',
+  endPoint: 'minio.xianrankaoyan.vip',
   port: 9000,
-  useSSL: false,
+  useSSL: true,
   accessKey: 'WRJDY2MYP6RF0Y5EO4M2',
   secretKey: 'jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7'
 });
@@ -165,7 +165,7 @@ async function completeMultipartUpload(data: ChunkUploadRequest) {
   await minioClient.completeMultipartUpload('videos', objectName, uploadId, parts);
 
   // 生成文件URL
-  const videoUrl = `http://115.159.33.45:9000/videos/${objectName}`;
+      const videoUrl = `https://minio.xianrankaoyan.vip:9000/videos/${objectName}`;
 
   // 计算文件大小估算
   const fileSize = parts.length * 5 * 1024 * 1024; // 假设每个分片5MB

@@ -25,9 +25,9 @@
 
 | 变量名 | 值 | 说明 |
 |-------|----|----|
-| `MINIO_ENDPOINT` | `115.159.33.45` | MinIO服务器地址 |
+| `MINIO_ENDPOINT` | `minio.xianrankaoyan.vip` | MinIO服务器地址 |
 | `MINIO_PORT` | `9000` | MinIO服务器端口 |
-| `MINIO_USE_SSL` | `false` | 是否使用SSL |
+| `MINIO_USE_SSL` | `true` | 是否使用SSL |
 | `MINIO_ACCESS_KEY` | `WRJDY2MYP6RF0Y5EO4M2` | MinIO访问密钥 |
 | `MINIO_SECRET_KEY` | `jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7` | MinIO秘密密钥 |
 | `MINIO_BUCKET_NAME` | `videos` | 默认存储桶名称 |
@@ -44,13 +44,13 @@
 #### 方式2：通过Supabase CLI（推荐）
 ```bash
 # 设置MinIO端点
-supabase secrets set MINIO_ENDPOINT=115.159.33.45
+supabase secrets set MINIO_ENDPOINT=minio.xianrankaoyan.vip
 
 # 设置MinIO端口
 supabase secrets set MINIO_PORT=9000
 
 # 设置SSL配置
-supabase secrets set MINIO_USE_SSL=false
+supabase secrets set MINIO_USE_SSL=true
 
 # 设置访问密钥
 supabase secrets set MINIO_ACCESS_KEY=WRJDY2MYP6RF0Y5EO4M2

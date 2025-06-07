@@ -7,11 +7,11 @@
 ## 🎯 您的MinIO配置信息
 
 **已配置的MinIO连接信息：**
-- **服务器地址**: 115.159.33.45:9000
+- **服务器地址**: minio.xianrankaoyan.vip:9000
 - **访问密钥**: WRJDY2MYP6RF0Y5EO4M2  
 - **秘密密钥**: jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7
 - **存储桶名称**: videos
-- **SSL**: 否（HTTP连接）
+- **SSL**: 是（HTTPS连接）
 
 ## ✅ 部署状态
 
@@ -31,7 +31,7 @@
 
 2. **创建videos存储桶**  
    访问MinIO控制台创建存储桶：
-   - 访问: http://115.159.33.45:9001
+   - 访问: https://minio.xianrankaoyan.vip:9001
    - 登录用户名: WRJDY2MYP6RF0Y5EO4M2
    - 登录密码: jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7
    - 创建名为 `videos` 的存储桶
@@ -139,4 +139,12 @@ supabase functions logs minio-video-delete
 2. 访问MinIO控制台创建videos存储桶
 3. 在系统中使用MinIO视频管理功能
 
-如有任何问题，请检查MinIO服务器状态和网络连接。 
+如有任何问题，请检查MinIO服务器状态和网络连接。
+
+## 📋 系统配置
+
+### MinIO对象存储服务器
+- **服务器地址**: minio.xianrankaoyan.vip:9000
+- **协议**: HTTPS (SSL证书已配置)
+- **存储桶**: videos
+- **访问方式**: 通过Edge Functions安全访问 

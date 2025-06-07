@@ -18,7 +18,7 @@ interface VideoFolder {
 
 interface VideoUploadToMinIOProps {
   folders: VideoFolder[];
-  onUploadComplete: () => void;
+  onUploadComplete: (uploadedVideoId?: string) => void;
   onCancel: () => void;
 }
 
@@ -235,8 +235,8 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
         finalDescription = `${selectedFolder.name} ${finalDescription || videoTitle}`.trim();
       }
 
-      // 4. 保存到minio_videos表（而不是videos表）
-      const { error: insertError } = await supabase
+      // 4. 保存到minio_videos表并获取插入的视频ID
+      const { data: insertData, error: insertError } = await supabase
         .from('minio_videos')
         .insert([{
           title: videoTitle.trim(),
@@ -247,9 +247,13 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
           content_type: selectedFile.type,
           play_url: uploadResponse.playUrl,
           play_url_expires_at: uploadResponse.playUrlExpiresAt ? new Date(uploadResponse.playUrlExpiresAt) : null
-        }]);
+        }])
+        .select('id')
+        .single();
 
       if (insertError) throw new Error('保存视频信息失败：' + insertError.message);
+
+      const uploadedVideoId = insertData?.id;
 
       toast({
         title: "上传成功",
@@ -263,8 +267,8 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
       setSelectedFile(null);
       setProgress(null);
 
-      // 通知父组件上传完成
-      onUploadComplete();
+      // 通知父组件上传完成，并传递视频ID
+      onUploadComplete(uploadedVideoId);
 
     } catch (error: any) {
       console.error('视频上传失败:', error);
@@ -280,30 +284,46 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* 文件选择区域 */}
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center">
-        <FileVideo className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-4" />
-        <div className="space-y-1 sm:space-y-2">
-          <p className="text-base sm:text-lg font-medium text-gray-700">选择视频文件</p>
-          <p className="text-xs sm:text-sm text-gray-500">支持最大50GB视频文件</p>
-          <Input
-            type="file"
-            accept="video/*"
-            onChange={handleFileSelect}
-            disabled={uploading}
-            className="max-w-xs mx-auto text-sm"
-          />
-        </div>
-        
-        {selectedFile && (
-          <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-blue-50 rounded-lg">
-            <div className="flex items-center justify-center gap-2 text-blue-700">
-              <FileVideo className="w-4 h-4" />
-              <span className="font-medium text-sm sm:text-base truncate">{selectedFile.name}</span>
+      {/* 文件选择区域 - 固定高度优化 */}
+      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center min-h-[140px] sm:min-h-[160px] flex flex-col justify-center">
+        {!selectedFile ? (
+          <>
+            <FileVideo className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-4" />
+            <div className="space-y-1 sm:space-y-2">
+              <p className="text-base sm:text-lg font-medium text-gray-700">选择视频文件</p>
+              <p className="text-xs sm:text-sm text-gray-500">支持最大50GB视频文件</p>
+              <Input
+                type="file"
+                accept="video/*"
+                onChange={handleFileSelect}
+                disabled={uploading}
+                className="max-w-xs mx-auto text-sm"
+              />
             </div>
-            <p className="text-xs sm:text-sm text-blue-600 mt-1">
-              大小: {formatFileSize(selectedFile.size)}
-            </p>
+          </>
+        ) : (
+          <div className="space-y-2 sm:space-y-3">
+            <div className="flex items-center justify-center gap-2 text-blue-700">
+              <FileVideo className="w-6 h-6 sm:w-8 sm:h-8" />
+              <div className="text-center">
+                <p className="font-medium text-sm sm:text-base truncate max-w-[200px] sm:max-w-[300px]">
+                  {selectedFile.name}
+                </p>
+                <p className="text-xs sm:text-sm text-blue-600">
+                  大小: {formatFileSize(selectedFile.size)}
+                </p>
+              </div>
+            </div>
+            <div className="text-center">
+              <Input
+                type="file"
+                accept="video/*"
+                onChange={handleFileSelect}
+                disabled={uploading}
+                className="max-w-xs mx-auto text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">点击重新选择文件</p>
+            </div>
           </div>
         )}
       </div>
