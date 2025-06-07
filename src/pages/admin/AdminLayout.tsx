@@ -11,7 +11,8 @@ import {
   Settings,
   Menu,
   X,
-  Database
+  Database,
+  LogOut
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -35,6 +36,24 @@ const AdminLayout = () => {
       toast({
         title: "访问受限",
         description: "教师账号无法访问此功能",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // 退出登录处理函数
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "退出成功",
+        description: "您已安全退出系统",
+      });
+      navigate("/auth/login");
+    } catch (error) {
+      toast({
+        title: "退出失败",
+        description: "退出登录时发生错误，请重试",
         variant: "destructive"
       });
     }
@@ -106,12 +125,19 @@ const AdminLayout = () => {
   const personalItems = [
     {
       to: "/admin/settings",
-      label: "设置",
+      label: "系统设置",
       icon: <Settings className="h-5 w-5" />,
       restricted: isTeacher,
       disabled: false
     }
   ];
+
+  // 退出登录按钮配置（单独处理，不在personalItems中）
+  const logoutItem = {
+    label: "退出登录",
+    icon: <LogOut className="h-5 w-5" />,
+    onClick: handleLogout
+  };
   
   return (
     <div className="min-h-screen">
@@ -274,6 +300,18 @@ const AdminLayout = () => {
                 </NavLink>
               );
             })}
+            
+            {/* 退出登录按钮 */}
+            <button
+              onClick={() => {
+                logoutItem.onClick();
+                setIsMobileSidebarOpen(false);
+              }}
+              className="sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg w-full text-left hover:bg-red-50 hover:text-red-600 transition-colors"
+            >
+              {logoutItem.icon}
+              <span className="font-medium">{logoutItem.label}</span>
+            </button>
             </div>
           </div>
         </nav>
