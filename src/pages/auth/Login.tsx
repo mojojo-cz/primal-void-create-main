@@ -283,25 +283,6 @@ const Login = () => {
                 <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
               </Link>
             </div>
-            
-            {/* 登录方式说明 */}
-            <div className="w-full p-3 bg-muted/50 rounded-lg">
-              <p className="text-xs text-muted-foreground text-center mb-2 font-medium">支持的登录方式</p>
-              <div className="flex justify-center gap-6 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <User className="h-3 w-3" />
-                  用户名
-                </div>
-                <div className="flex items-center gap-1">
-                  <Smartphone className="h-3 w-3" />
-                  手机号
-                </div>
-                <div className="flex items-center gap-1">
-                  <Mail className="h-3 w-3" />
-                  邮箱
-                </div>
-              </div>
-            </div>
           </CardFooter>
         </Card>
       </div>
