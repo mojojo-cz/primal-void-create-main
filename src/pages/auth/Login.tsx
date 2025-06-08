@@ -90,7 +90,7 @@ const Login = () => {
       
       // 根据不同类型处理账号
       if (accountType === 'phone') {
-        // 如果是手机号，转换为虚拟邮箱
+      // 如果是手机号，转换为虚拟邮箱
         loginEmail = `${values.account}@phone.auth`;
         console.log("手机号转换后的邮箱:", loginEmail);
       } else if (accountType === 'username') {
@@ -180,19 +180,19 @@ const Login = () => {
             </CardTitle>
             <CardDescription className="text-center text-sm">
               输入您的账号信息登录系统
-            </CardDescription>
-          </CardHeader>
+          </CardDescription>
+        </CardHeader>
           
           <CardContent className="space-y-4">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="account"
-                  render={({ field }) => (
-                    <FormItem>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="account"
+                render={({ field }) => (
+                  <FormItem>
                       <FormLabel className="text-sm font-medium">账号</FormLabel>
-                      <FormControl>
+                    <FormControl>
                         <div className="relative">
                           <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
                             {getAccountIcon(field.value)}
@@ -203,19 +203,19 @@ const Login = () => {
                             {...field} 
                           />
                         </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
                       <FormLabel className="text-sm font-medium">密码</FormLabel>
-                      <FormControl>
+                    <FormControl>
                         <div className="relative">
                           <Input 
                             type={showPassword ? "text" : "password"} 
@@ -237,12 +237,12 @@ const Login = () => {
                             )}
                           </Button>
                         </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
                 <Button 
                   type="submit" 
                   className="w-full h-11 edu-gradient-primary hover:shadow-lg transition-all duration-200 text-white font-medium group" 
@@ -259,17 +259,17 @@ const Login = () => {
                       <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                     </div>
                   )}
-                </Button>
-              </form>
-            </Form>
-            
+              </Button>
+            </form>
+          </Form>
+          
             {/* 弱化的忘记密码提示 */}
             <div className="mt-6 p-3 bg-muted/30 rounded-lg border border-muted/50">
               <p className="text-xs text-muted-foreground text-center">
                 忘记密码？请联系管理员重置密码
               </p>
-            </div>
-          </CardContent>
+          </div>
+        </CardContent>
           
           <CardFooter className="flex flex-col space-y-4 pt-6">
             {/* 注册链接 */}
@@ -281,10 +281,10 @@ const Login = () => {
               >
                 立即注册
                 <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
-            </div>
-          </CardFooter>
-        </Card>
+            </Link>
+          </div>
+        </CardFooter>
+      </Card>
       </div>
 
       {/* 底部版权信息 */}

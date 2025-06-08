@@ -8,6 +8,7 @@ interface VideoPlayerProps {
   autoPlay?: boolean;
   autoFullscreen?: boolean;
   className?: string;
+  startTime?: number;
   onPlay?: () => void;
   onPause?: () => void;
   onEnded?: () => void;
@@ -19,6 +20,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   autoPlay = false,
   autoFullscreen = false,
   className = '',
+  startTime = 0,
   onPlay,
   onPause,
   onEnded
@@ -195,6 +197,29 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
     return () => clearTimeout(timer);
   }, [showControls, isFullscreen]);
+
+  // 设置视频起始播放位置
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && startTime > 0) {
+      const setVideoTime = () => {
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          video.currentTime = startTime;
+          video.removeEventListener('loadedmetadata', setVideoTime);
+        }
+      };
+
+      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        video.currentTime = startTime;
+      } else {
+        video.addEventListener('loadedmetadata', setVideoTime);
+      }
+
+      return () => {
+        video.removeEventListener('loadedmetadata', setVideoTime);
+      };
+    }
+  }, [startTime, src]);
 
   return (
     <div 

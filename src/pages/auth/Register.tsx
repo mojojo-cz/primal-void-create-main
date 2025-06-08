@@ -161,41 +161,41 @@ const Register = () => {
             </CardTitle>
             <CardDescription className="text-center text-sm">
               创建新账户，加入考研学习社区
-            </CardDescription>
-          </CardHeader>
+          </CardDescription>
+        </CardHeader>
           
           <CardContent className="space-y-4">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 {/* 基本信息区域 */}
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="username"
-                      render={({ field }) => (
-                        <FormItem>
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
                           <FormLabel className="text-sm font-medium flex items-center gap-1">
                             <User className="h-3 w-3" />
                             用户名 *
                           </FormLabel>
-                          <FormControl>
+                    <FormControl>
                             <Input 
                               placeholder="设置登录用户名" 
                               className="h-10 border-muted-foreground/20 focus:border-success transition-colors"
                               {...field} 
                             />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="full_name"
-                      render={({ field }) => (
-                        <FormItem>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="full_name"
+                render={({ field }) => (
+                  <FormItem>
                           <FormLabel className="text-sm font-medium flex items-center gap-1">
                             <UserCircle className="h-3 w-3" />
                             真实姓名 *
@@ -222,36 +222,36 @@ const Register = () => {
                           <Phone className="h-3 w-3" />
                           手机号码 *
                         </FormLabel>
-                        <FormControl>
+                    <FormControl>
                           <Input 
                             type="tel" 
                             placeholder="请输入11位手机号码" 
                             className="h-10 border-muted-foreground/20 focus:border-success transition-colors"
                             {...field} 
                           />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
                         <FormLabel className="text-sm font-medium flex items-center gap-1">
                           <Shield className="h-3 w-3" />
                           登录密码 *
                         </FormLabel>
-                        <FormControl>
+                    <FormControl>
                           <div className="relative">
                             <Input 
                               type={showPassword ? "text" : "password"} 
                               placeholder="设置登录密码（至少6位）" 
                               className="pr-10 h-10 border-muted-foreground/20 focus:border-success transition-colors"
                               {...field} 
-                            />
+              />
                             <Button
                               type="button"
                               variant="ghost"
@@ -266,11 +266,11 @@ const Register = () => {
                               )}
                             </Button>
                           </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
                 </div>
 
                 {/* 学校信息区域 */}
@@ -279,83 +279,83 @@ const Register = () => {
                     <School className="h-3 w-3" />
                     学校信息 (选填)
                   </p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="school"
-                      render={({ field }) => (
-                        <FormItem>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="school"
+                  render={({ field }) => (
+                    <FormItem>
                           <FormLabel className="text-sm">学校</FormLabel>
-                          <FormControl>
+                      <FormControl>
                             <Input 
                               placeholder="如：北京大学" 
                               className="h-9 text-sm border-muted-foreground/20 focus:border-success transition-colors"
                               {...field} 
                             />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="department"
-                      render={({ field }) => (
-                        <FormItem>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="department"
+                  render={({ field }) => (
+                    <FormItem>
                           <FormLabel className="text-sm">学院</FormLabel>
-                          <FormControl>
+                      <FormControl>
                             <Input 
                               placeholder="如：计算机学院" 
                               className="h-9 text-sm border-muted-foreground/20 focus:border-success transition-colors"
                               {...field} 
                             />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
                   <div className="grid grid-cols-2 gap-4 mt-4">
-                    <FormField
-                      control={form.control}
-                      name="major"
-                      render={({ field }) => (
-                        <FormItem>
+                <FormField
+                  control={form.control}
+                  name="major"
+                  render={({ field }) => (
+                    <FormItem>
                           <FormLabel className="text-sm">专业</FormLabel>
-                          <FormControl>
+                      <FormControl>
                             <Input 
                               placeholder="如：计算机科学" 
                               className="h-9 text-sm border-muted-foreground/20 focus:border-success transition-colors"
                               {...field} 
                             />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="grade"
-                      render={({ field }) => (
-                        <FormItem>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="grade"
+                  render={({ field }) => (
+                    <FormItem>
                           <FormLabel className="text-sm">年级/届</FormLabel>
-                          <FormControl>
+                      <FormControl>
                             <Input 
                               placeholder="如：2024届" 
                               className="h-9 text-sm border-muted-foreground/20 focus:border-success transition-colors"
                               {...field} 
                             />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                   </div>
-                </div>
-                
+              </div>
+              
                 <Button 
                   type="submit" 
                   className="w-full h-11 edu-gradient-success hover:shadow-lg transition-all duration-200 text-white font-medium group mt-6" 
@@ -373,9 +373,9 @@ const Register = () => {
                       <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                     </div>
                   )}
-                </Button>
-              </form>
-            </Form>
+              </Button>
+            </form>
+          </Form>
             
             {/* 弱化的注册须知 */}
             <div className="mt-6 p-3 bg-muted/30 rounded-lg border border-muted/50">
@@ -383,7 +383,7 @@ const Register = () => {
                 手机号用于账号安全验证，学校信息可帮助我们提供更精准的服务
               </p>
             </div>
-          </CardContent>
+        </CardContent>
           
           <CardFooter className="flex flex-col space-y-4 pt-6">
             {/* 登录链接 */}
@@ -395,10 +395,10 @@ const Register = () => {
               >
                 前往登录
                 <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
-            </div>
-          </CardFooter>
-        </Card>
+            </Link>
+          </div>
+        </CardFooter>
+      </Card>
       </div>
 
       {/* 底部版权信息 */}

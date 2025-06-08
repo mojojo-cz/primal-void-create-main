@@ -9,6 +9,50 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      course_enrollments: {
+        Row: {
+          course_id: string | null
+          created_at: string | null
+          enrolled_at: string | null
+          id: string
+          last_accessed_at: string | null
+          progress: number | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string | null
+          enrolled_at?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          progress?: number | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string | null
+          enrolled_at?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          progress?: number | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_enrollments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       course_sections: {
         Row: {
           course_id: string | null
@@ -305,6 +349,14 @@ export type Database = {
         Args: { username: string }
         Returns: boolean
       }
+      get_email_by_username: {
+        Args: { username_input: string }
+        Returns: string
+      }
+      get_login_email_by_username: {
+        Args: { username_input: string }
+        Returns: string
+      }
       get_user_type: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -433,3 +485,7 @@ export const Constants = {
 export type MinIOVideo = Tables<'minio_videos'>
 export type MinIOVideoInsert = TablesInsert<'minio_videos'>
 export type MinIOVideoUpdate = TablesUpdate<'minio_videos'> 
+
+export type CourseEnrollment = Tables<'course_enrollments'>
+export type CourseEnrollmentInsert = TablesInsert<'course_enrollments'>
+export type CourseEnrollmentUpdate = TablesUpdate<'course_enrollments'> 

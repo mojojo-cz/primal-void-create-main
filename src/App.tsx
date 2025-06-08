@@ -17,6 +17,7 @@ import VideoManagement from "./pages/admin/VideoManagement";
 import AccountManagement from "./pages/admin/AccountManagement";
 import Settings from "./pages/admin/Settings";
 import StudentPage from "./pages/StudentPage";
+import CourseStudyPage from "./pages/CourseStudyPage";
 import ColorShowcase from "./pages/ColorShowcase";
 
 const queryClient = new QueryClient();
@@ -64,6 +65,16 @@ const App = () => (
               element={
                 <ProtectedRoute allowedUserTypes={["student"]}>
                   <StudentPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* 课程学习页面 */}
+            <Route 
+              path="/student/course/:courseId" 
+              element={
+                <ProtectedRoute allowedUserTypes={["student"]}>
+                  <CourseStudyPage />
                 </ProtectedRoute>
               } 
             />

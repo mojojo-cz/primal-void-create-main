@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>拖拽排序调试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+        .log { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>拖拽排序调试工具</h1>
+    
+    <div class="test-section">
+        <h2>测试临时Order生成</h2>
+        <button onclick="testTempOrderGeneration()">测试临时Order生成</button>
+        <div id="tempOrderResult" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>测试数组操作</h2>
+        <button onclick="testArrayReordering()">测试数组重排序</button>
+        <div id="arrayResult" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>模拟拖拽数据流</h2>
+        <button onclick="simulateDragEnd()">模拟拖拽操作</button>
+        <div id="dragResult" class="log"></div>
+    </div>
+
+    <script>
+        // 模拟真实的section数据结构
+        const mockSections = [
+            { id: 'section-123456', title: '第一章', order: 1 },
+            { id: 'section-789abc', title: '第二章', order: 2 },
+            { id: 'section-defghi', title: '第三章', order: 3 },
+            { id: 'section-jklmno', title: '第四章', order: 4 }
+        ];
+
+        function testTempOrderGeneration() {
+            const result = document.getElementById('tempOrderResult');
+            result.innerHTML = '<h3>临时Order生成测试结果：</h3>';
+            
+            mockSections.forEach(section => {
+                try {
+                    // 测试当前代码中的方法
+                    const tempOrder1 = 1000 + parseInt(section.id.slice(-6), 16);
+                    result.innerHTML += `<div>ID: ${section.id} → 临时Order (十六进制): ${tempOrder1}</div>`;
+                    
+                    // 测试改进的方法
+                    const tempOrder2 = 1000 + Math.abs(section.id.hashCode());
+                    result.innerHTML += `<div>ID: ${section.id} → 临时Order (哈希): ${tempOrder2}</div>`;
+                    
+                    // 测试最简单的方法
+                    const tempOrder3 = Date.now() + Math.random() * 1000;
+                    result.innerHTML += `<div>ID: ${section.id} → 临时Order (时间戳): ${tempOrder3}</div>`;
+                    
+                } catch (error) {
+                    result.innerHTML += `<div class="error">错误处理 ${section.id}: ${error.message}</div>`;
+                }
+                result.innerHTML += '<hr>';
+            });
+        }
+
+        // 为字符串添加hashCode方法
+        String.prototype.hashCode = function() {
+            var hash = 0, i, chr;
+            if (this.length === 0) return hash;
+            for (i = 0; i < this.length; i++) {
+                chr = this.charCodeAt(i);
+                hash = ((hash << 5) - hash) + chr;
+                hash |= 0; // Convert to 32bit integer
+            }
+            return hash;
+        };
+
+        function testArrayReordering() {
+            const result = document.getElementById('arrayResult');
+            result.innerHTML = '<h3>数组重排序测试：</h3>';
+            
+            // 模拟从索引2拖到索引0
+            const sections = [...mockSections];
+            const sourceIndex = 2;
+            const destinationIndex = 0;
+            
+            result.innerHTML += `<div>原始顺序: ${sections.map(s => s.title).join(' → ')}</div>`;
+            
+            // 执行重排序
+            const reorderedSections = Array.from(sections);
+            const [removed] = reorderedSections.splice(sourceIndex, 1);
+            reorderedSections.splice(destinationIndex, 0, removed);
+            
+            result.innerHTML += `<div>重排序后: ${reorderedSections.map(s => s.title).join(' → ')}</div>`;
+            
+            // 显示新的order值
+            result.innerHTML += '<h4>新的order值：</h4>';
+            reorderedSections.forEach((section, index) => {
+                result.innerHTML += `<div>${section.title}: order = ${index + 1}</div>`;
+            });
+        }
+
+        function simulateDragEnd() {
+            const result = document.getElementById('dragResult');
+            result.innerHTML = '<h3>模拟拖拽操作：</h3>';
+            
+            // 模拟拖拽结果对象
+            const dragResult = {
+                source: { index: 2 },
+                destination: { index: 0 }
+            };
+            
+            const sections = [...mockSections];
+            
+            result.innerHTML += `<div>拖拽: 从索引${dragResult.source.index} 到索引${dragResult.destination.index}</div>`;
+            
+            // 检查拖拽是否有效
+            if (!dragResult.destination) {
+                result.innerHTML += '<div class="error">❌ 无目标位置</div>';
+                return;
+            }
+            
+            if (dragResult.source.index === dragResult.destination.index) {
+                result.innerHTML += '<div class="error">❌ 源位置和目标位置相同</div>';
+                return;
+            }
+            
+            result.innerHTML += '<div class="success">✅ 有效的拖拽操作</div>';
+            
+            // 执行重排序
+            const reorderedSections = Array.from(sections);
+            const [removed] = reorderedSections.splice(dragResult.source.index, 1);
+            reorderedSections.splice(dragResult.destination.index, 0, removed);
+            
+            result.innerHTML += '<h4>重排序步骤：</h4>';
+            result.innerHTML += `<div>1. 移除索引${dragResult.source.index}的元素: ${removed.title}</div>`;
+            result.innerHTML += `<div>2. 插入到索引${dragResult.destination.index}</div>`;
+            result.innerHTML += `<div>3. 最终顺序: ${reorderedSections.map(s => s.title).join(' → ')}</div>`;
+            
+            // 模拟数据库更新逻辑
+            result.innerHTML += '<h4>数据库更新模拟：</h4>';
+            result.innerHTML += '<div>第一步：设置临时order值</div>';
+            reorderedSections.forEach(section => {
+                // 使用更可靠的临时order生成方法
+                const tempOrder = 10000 + Math.abs(section.id.hashCode()) % 1000;
+                result.innerHTML += `<div>  ${section.title}: order = ${tempOrder}</div>`;
+            });
+            
+            result.innerHTML += '<div>第二步：设置最终order值</div>';
+            reorderedSections.forEach((section, index) => {
+                result.innerHTML += `<div>  ${section.title}: order = ${index + 1}</div>`;
+            });
+        }
+    </script>
+</body>
+</html> 

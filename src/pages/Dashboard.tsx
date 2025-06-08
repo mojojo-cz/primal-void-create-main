@@ -54,7 +54,7 @@ const Dashboard = () => {
       <div className="bg-background border-b border-border/40">
         <div className="px-4 md:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
               <div className="sidebar-logo w-8 h-8 rounded-lg flex items-center justify-center">
                 {systemSettings.system_logo ? (
                   <img 
@@ -120,21 +120,21 @@ const Dashboard = () => {
                 </h3>
                 <p className="text-sm text-amber-800 leading-relaxed">
                   您的账户已成功注册，但需要班主任或管理员将账户授权为学员账户后，才能访问课程内容和学习资料。请联系相关人员开通权限
-                </p>
+              </p>
               </div>
             </CardContent>
           </Card>
 
           {/* 账户状态卡片 */}
           <div className="grid gap-4 md:grid-cols-2">
-            <Card>
+          <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <User className="h-4 w-4" />
                   账户状态
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between py-2 border-b border-border/40">
                     <span className="text-sm text-muted-foreground">账户类型</span>
@@ -151,18 +151,18 @@ const Dashboard = () => {
                       <span className="text-sm font-medium text-green-600">已完成</span>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card>
+          <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Shield className="h-4 w-4" />
                   学习权限
                 </CardTitle>
-              </CardHeader>
-              <CardContent>
+            </CardHeader>
+            <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between py-2 border-b border-border/40">
                     <span className="text-sm text-muted-foreground">课程访问</span>

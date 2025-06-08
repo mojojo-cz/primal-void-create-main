@@ -249,15 +249,17 @@ const CourseManagement = () => {
         return;
       }
       
-      // 查询所有章节及视频 - 改为从minio_videos表获取视频信息
+      // 分两步查询：先查章节，再查视频，最后在客户端关联
+      // 1. 查询所有章节
       const { data: sectionData, error: sectionError } = await supabase
         .from("course_sections")
-        .select("id, title, description, order, course_id, video_id, minio_videos(id, title, video_url, minio_object_name, play_url, play_url_expires_at)")
-        .order("order", { ascending: true });
+        .select(`id, title, description, "order", course_id, video_id`)
+        .order('"order"', { ascending: true });
+      
+
       
       if (sectionError) {
         console.error('获取章节失败:', sectionError);
-        console.log('查询语句：SELECT id, title, description, order, course_id, video_id, minio_videos(id, title, video_url) FROM course_sections ORDER BY order ASC');
         // 即使章节查询失败，也显示课程，只是没有章节
         setCourses(courseData.map(c => ({ ...c, sections: [] })));
         setLoading(false);
@@ -268,31 +270,60 @@ const CourseManagement = () => {
         });
         return;
       }
+
+      // 2. 获取所有相关的视频ID
+      const videoIds = [...new Set(sectionData?.filter(s => s.video_id).map(s => s.video_id) || [])];
+      let videoMap: Record<string, any> = {};
       
-      // 按课程分组章节
+      if (videoIds.length > 0) {
+        const { data: videoData, error: videoError } = await supabase
+          .from("minio_videos")
+          .select("id, title, video_url, minio_object_name, play_url, play_url_expires_at")
+          .in("id", videoIds);
+        
+
+        
+        if (videoError) {
+          console.error('获取视频失败:', videoError);
+        } else if (videoData) {
+          // 构建视频映射
+          videoData.forEach(video => {
+            videoMap[video.id] = video;
+          });
+        }
+      }
+      
+      // 按课程分组章节，同时关联视频信息
       const courseMap: Record<string, SectionWithVideo[]> = {};
       (sectionData || []).forEach((s: any) => {
         if (!s.course_id) return;
         if (!courseMap[s.course_id]) courseMap[s.course_id] = [];
+        
+        // 从视频映射中获取视频信息
+        const video = s.video_id && videoMap[s.video_id] ? videoMap[s.video_id] : null;
+        
         courseMap[s.course_id].push({
           id: s.id,
           title: s.title,
           description: s.description,
           order: s.order,
           video_id: s.video_id,
-          video: s.minio_videos ? {
-            id: s.minio_videos.id,
-            title: s.minio_videos.title,
-            video_url: s.minio_videos.video_url,
-            minio_object_name: s.minio_videos.minio_object_name,
-            play_url: s.minio_videos.play_url,
-            play_url_expires_at: s.minio_videos.play_url_expires_at,
+          video: video ? {
+            id: video.id,
+            title: video.title,
+            video_url: video.video_url,
+            minio_object_name: video.minio_object_name,
+            play_url: video.play_url,
+            play_url_expires_at: video.play_url_expires_at,
           } : null,
         });
       });
       
+
+      
       // 合并到课程
-      setCourses(courseData.map(c => ({ ...c, sections: courseMap[c.id] || [] })));
+      const coursesWithSections = courseData.map(c => ({ ...c, sections: courseMap[c.id] || [] }));
+      setCourses(coursesWithSections);
       setLoading(false);
     } catch (error: any) {
       console.error('获取课程和章节异常:', error);
@@ -336,14 +367,17 @@ const CourseManagement = () => {
     }
   };
 
-  // 局部刷新某课程的章节 - 改为从minio_videos表获取视频信息
+  // 局部刷新某课程的章节 - 使用两步查询方法
   const fetchSections = async (courseId: string) => {
     try {
+      // 1. 查询指定课程的章节
       const { data: sectionData, error: sectionError } = await supabase
         .from("course_sections")
-        .select("id, title, description, order, course_id, video_id, minio_videos(id, title, video_url, minio_object_name, play_url, play_url_expires_at)")
+        .select(`id, title, description, "order", course_id, video_id`)
         .eq("course_id", courseId)
-        .order("order", { ascending: true });
+        .order('"order"', { ascending: true });
+      
+
       
       if (sectionError) {
         console.error('获取章节失败:', sectionError);
@@ -354,25 +388,52 @@ const CourseManagement = () => {
         });
         return;
       }
+
+      // 2. 获取相关的视频信息
+      const videoIds = [...new Set(sectionData?.filter(s => s.video_id).map(s => s.video_id) || [])];
+      let videoMap: Record<string, any> = {};
       
-      // 即使没有章节也要更新状态
-      setCourses(prev => prev.map(c => c.id === courseId ? {
-        ...c,
-        sections: (sectionData || []).map((s: any) => ({
+      if (videoIds.length > 0) {
+        const { data: videoData, error: videoError } = await supabase
+          .from("minio_videos")
+          .select("id, title, video_url, minio_object_name, play_url, play_url_expires_at")
+          .in("id", videoIds);
+        
+
+        
+        if (!videoError && videoData) {
+          videoData.forEach(video => {
+            videoMap[video.id] = video;
+          });
+        }
+      }
+      
+      // 3. 构建包含视频信息的章节数据
+      const newSections = (sectionData || []).map((s: any) => {
+        const video = s.video_id && videoMap[s.video_id] ? videoMap[s.video_id] : null;
+        
+        return {
           id: s.id,
           title: s.title,
           description: s.description,
           order: s.order,
           video_id: s.video_id,
-          video: s.minio_videos ? {
-            id: s.minio_videos.id,
-            title: s.minio_videos.title,
-            video_url: s.minio_videos.video_url,
-            minio_object_name: s.minio_videos.minio_object_name,
-            play_url: s.minio_videos.play_url,
-            play_url_expires_at: s.minio_videos.play_url_expires_at,
+          video: video ? {
+            id: video.id,
+            title: video.title,
+            video_url: video.video_url,
+            minio_object_name: video.minio_object_name,
+            play_url: video.play_url,
+            play_url_expires_at: video.play_url_expires_at,
           } : null,
-        }))
+        };
+      });
+      
+
+      
+      setCourses(prev => prev.map(c => c.id === courseId ? {
+        ...c,
+        sections: newSections
       } : c));
     } catch (error: any) {
       console.error('获取章节异常:', error);
@@ -447,7 +508,7 @@ const CourseManagement = () => {
           course_id: courseData.id,
           title: section.title,
           description: section.description,
-          order: section.order || idx + 1,
+          "order": section.order || idx + 1,
           video_id: section.video_id,
         }));
         
@@ -601,7 +662,7 @@ const CourseManagement = () => {
           course_id: sectionDialog.courseId,
           title: sectionForm.title,
           description: sectionForm.description,
-          order: sectionForm.order,
+          "order": sectionForm.order,
           video_id: sectionForm.video_id || null,
         }]);
       } else if (sectionDialog.mode === 'edit' && sectionForm.id) {
@@ -609,13 +670,13 @@ const CourseManagement = () => {
         await supabase.from('course_sections').update({
           title: sectionForm.title,
           description: sectionForm.description,
-          order: sectionForm.order,
+          "order": sectionForm.order,
           video_id: sectionForm.video_id || null,
         }).eq('id', sectionForm.id);
       }
       closeSectionDialog();
-      // 刷新所有课程数据，确保页面显示最新状态
-      await fetchCourses();
+      // 只刷新当前课程的章节数据，提高性能
+      await fetchSections(sectionDialog.courseId);
       toast({
         title: "操作成功",
         description: sectionDialog.mode === 'add' ? "章节已添加" : "章节已更新"
@@ -846,34 +907,117 @@ const CourseManagement = () => {
     });
   };
 
-  // 章节排序后的处理函数
-  const reorderSections = async (courseId: string, sectionId: string, newOrder: number) => {
+  // 章节排序后的处理函数 - 使用NULL-first策略
+  const reorderSections = async (courseId: string, fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    
+    const course = courses.find(c => c.id === courseId);
+    if (!course || !course.sections) return;
+    
+    console.log('🔄 Reordering sections with NEGATIVE-first strategy:', { courseId, fromIndex, toIndex });
+    
     try {
-      await supabase
-        .from('course_sections')
-        .update({ order: newOrder })
-        .eq('id', sectionId);
-      return true;
-    } catch (error) {
-      console.error('重新排序失败:', error);
-      return false;
+      // 创建新的排序顺序
+      const newSections = [...course.sections];
+      const [removed] = newSections.splice(fromIndex, 1);
+      newSections.splice(toIndex, 0, removed);
+      
+      console.log('🔄 Sections after reorder:', newSections.map(s => ({ id: s.id, title: s.title, order: s.order })));
+      
+      // 第一步：将该课程下所有章节的order字段设置为负数
+      console.log('📝 Step 1: Setting all section orders to negative values');
+      const negativeOrderPromises = newSections.map((section, index) => {
+        const negativeOrder = -(index + 1); // 使用负数：-1, -2, -3, ...
+        console.log(`Setting ${section.title} to temporary negative order: ${negativeOrder}`);
+        return supabase
+          .from('course_sections')
+          .update({ "order": negativeOrder })
+          .eq('id', section.id);
+      });
+      
+      const negativeResults = await Promise.all(negativeOrderPromises);
+      const negativeErrors = negativeResults.filter(result => result.error);
+      if (negativeErrors.length > 0) {
+        console.error('❌ Negative order update errors:', negativeErrors);
+        throw new Error(`设置负数order失败: ${negativeErrors.map(e => e.error?.message).join(', ')}`);
+      }
+      
+      console.log('✅ Step 1 completed: All orders set to negative values');
+      
+      // 第二步：设置新的正数order值
+      console.log('📝 Step 2: Setting new positive order values');
+      const finalOrderPromises = newSections.map((section, index) => {
+        const newOrder = index + 1;
+        console.log(`🔄 Setting section ${section.title} to final order ${newOrder}`);
+        return supabase
+          .from('course_sections')
+          .update({ "order": newOrder })
+          .eq('id', section.id);
+      });
+      
+      const finalResults = await Promise.all(finalOrderPromises);
+      const finalErrors = finalResults.filter(result => result.error);
+      if (finalErrors.length > 0) {
+        console.error('❌ Final order update errors:', finalErrors);
+        throw new Error(`最终order更新失败: ${finalErrors.map(e => e.error?.message).join(', ')}`);
+      }
+      
+      console.log('✅ Reorder completed successfully with NEGATIVE-first strategy');
+      
+      // 更新本地状态
+      const newCourses = courses.map(c => 
+        c.id === courseId 
+          ? { ...c, sections: newSections.map((section, index) => ({ ...section, order: index + 1 })) }
+          : c
+      );
+      setCourses(newCourses);
+      
+    } catch (error: any) {
+      console.error('❌ Reorder failed:', error);
+      await fetchSections(courseId);
+      toast({
+        variant: "destructive",
+        title: "重排序失败",
+        description: error.message || "章节重排序失败"
+      });
     }
   };
 
   // 处理章节拖拽结束事件
   const handleDragEnd = async (result: any, courseId: string, sections: SectionWithVideo[]) => {
-    if (!result.destination) return;
+    console.log('🚀 handleDragEnd called with NEGATIVE-first strategy:', { result, courseId, sections: sections.length });
+    
+    if (!result.destination) {
+      console.log('❌ No destination, canceling drag');
+      return;
+    }
     
     const { source, destination } = result;
-    if (source.index === destination.index) return;
+    if (source.index === destination.index) {
+      console.log('❌ Source and destination are the same, no change needed');
+      return;
+    }
+    
+    console.log('✅ Valid drag operation:', { from: source.index, to: destination.index });
+    
+    // 验证sections数据
+    if (!sections || sections.length === 0) {
+      console.error('❌ Invalid sections data:', sections);
+      throw new Error('无效的章节数据');
+    }
+    
+    console.log('📋 Sections before reorder:', sections.map(s => ({ id: s.id, title: s.title, order: s.order })));
     
     // 创建新的排序顺序
     const reorderedSections = Array.from(sections);
     const [removed] = reorderedSections.splice(source.index, 1);
     reorderedSections.splice(destination.index, 0, removed);
     
-    // 更新本地UI显示
-    const newCourses = courses.map(course => {
+    console.log('📋 Sections after reorder:', reorderedSections.map(s => ({ id: s.id, title: s.title, order: s.order })));
+    
+    // 🚀 乐观更新：立即更新UI，提供即时反馈
+    console.log('🎨 Optimistic UI update: updating local state immediately');
+    const optimisticCourses = courses.map(course => {
       if (course.id === courseId) {
         return {
           ...course,
@@ -885,144 +1029,270 @@ const CourseManagement = () => {
       }
       return course;
     });
-    setCourses(newCourses);
+    setCourses(optimisticCourses);
     
-    // 保存到数据库
+    // 💾 后台数据库更新
+    console.log('💾 Starting background database update with NEGATIVE-first strategy...');
+    
     try {
-      // 为每个章节创建更新操作
-      const updatePromises = reorderedSections.map((section, index) => 
-        supabase
+      // 第一步：将该课程下所有章节的order字段设置为负数，避免唯一约束冲突
+      console.log('📝 Step 1: Setting all section orders to negative values');
+      const negativeOrderPromises = reorderedSections.map((section, index) => {
+        const negativeOrder = -(index + 1); // 使用负数：-1, -2, -3, ...
+        console.log(`Setting ${section.title} to temporary negative order: ${negativeOrder}`);
+        return supabase
           .from('course_sections')
-          .update({ order: index + 1 })
-          .eq('id', section.id)
-      );
-      
-      await Promise.all(updatePromises);
-      toast({
-        title: "排序更新成功",
-        description: "章节顺序已更新"
+          .update({ "order": negativeOrder })
+          .eq('id', section.id);
       });
+      
+      const negativeResults = await Promise.all(negativeOrderPromises);
+      const negativeErrors = negativeResults.filter(result => result.error);
+      if (negativeErrors.length > 0) {
+        console.error('❌ Negative order update errors:', negativeErrors);
+        throw new Error(`设置负数order失败: ${negativeErrors.map(e => e.error?.message).join(', ')}`);
+      }
+      
+      console.log('✅ Step 1 completed: All orders set to negative values');
+      
+      // 第二步：设置新的正数order值
+      console.log('📝 Step 2: Setting new positive order values');
+      const finalOrderPromises = reorderedSections.map((section, index) => {
+        const newOrder = index + 1;
+        console.log(`Setting section ${section.title} to final order ${newOrder}`);
+        return supabase
+          .from('course_sections')
+          .update({ "order": newOrder })
+          .eq('id', section.id);
+      });
+      
+      const finalResults = await Promise.all(finalOrderPromises);
+      console.log('📝 Final order results:', finalResults);
+      
+      // 检查是否有更新失败
+      const finalErrors = finalResults.filter(result => result.error);
+      if (finalErrors.length > 0) {
+        console.error('❌ Final order update errors:', finalErrors);
+        throw new Error(`最终order更新失败: ${finalErrors.map(e => e.error?.message).join(', ')}`);
+      }
+      
+      console.log('✅ Background database update completed successfully');
+      
+      // 🎉 显示成功提示（静默，不干扰用户）
+      toast({
+        title: "排序已保存",
+        description: "章节顺序已同步到服务器"
+      });
+      
     } catch (error: any) {
+      console.error('❌ Background database update failed:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        courseId,
+        sectionsCount: sections.length,
+        reorderedCount: reorderedSections?.length || 0
+      });
+      
+      // 💥 回滚乐观更新：恢复原始状态
+      console.log('🔄 Rolling back optimistic update...');
+      const restoredCourses = courses.map(course => {
+        if (course.id === courseId) {
+          return {
+            ...course,
+            sections: sections // 恢复到原始sections
+          };
+        }
+        return course;
+      });
+      setCourses(restoredCourses);
+      
       toast({
         variant: "destructive",
-        title: "排序更新失败",
-        description: error.message || "更新章节顺序失败"
+        title: "排序保存失败",
+        description: error.message || "章节顺序保存失败，已恢复原始顺序"
       });
     }
   };
 
   // 向上移动章节
   const moveSectionUp = async (courseId: string, sectionIndex: number) => {
-    if (sectionIndex === 0) return; // 已经是第一个
+    if (sectionIndex <= 0) return;
     
     const course = courses.find(c => c.id === courseId);
-    if (!course) return;
+    if (!course || !course.sections) return;
     
-    const sections = [...course.sections];
-    const currentSection = sections[sectionIndex];
-    const prevSection = sections[sectionIndex - 1];
+    console.log('🔼 Moving section up with NEGATIVE-first strategy:', sectionIndex);
     
-    // 交换顺序
-    const tempOrder = currentSection.order;
+    // 创建新的排序顺序（交换相邻两个元素）
+    const newSections = [...course.sections];
+    [newSections[sectionIndex - 1], newSections[sectionIndex]] = 
+    [newSections[sectionIndex], newSections[sectionIndex - 1]];
     
-    // 更新本地状态
-    const newCourses = courses.map(c => {
-      if (c.id === courseId) {
-        const newSections = [...c.sections];
-        newSections[sectionIndex].order = prevSection.order;
-        newSections[sectionIndex - 1].order = tempOrder;
-        
-        // 按新顺序排序
-        newSections.sort((a, b) => a.order - b.order);
-        
-        return {
-          ...c,
-          sections: newSections
-        };
+    console.log('🔼 Sections after swap:', newSections.map(s => ({ id: s.id, title: s.title, order: s.order })));
+    
+    // 🚀 乐观更新：立即更新UI
+    console.log('🎨 Optimistic UI update: moving section up immediately');
+    const optimisticCourses = courses.map(c => 
+      c.id === courseId 
+        ? { ...c, sections: newSections.map((section, index) => ({ ...section, order: index + 1 })) }
+        : c
+    );
+    setCourses(optimisticCourses);
+    
+         // 💾 后台数据库更新
+     try {
+       // 第一步：将涉及的章节order字段设置为负数
+       console.log('📝 Step 1: Setting affected sections to negative values');
+       const affectedSections = [newSections[sectionIndex - 1], newSections[sectionIndex]];
+      const negativeOrderPromises = affectedSections.map((section, index) => {
+        const negativeOrder = -(index + 1); // 使用负数：-1, -2
+        console.log(`Setting ${section.title} to temporary negative order: ${negativeOrder}`);
+        return supabase
+          .from('course_sections')
+          .update({ "order": negativeOrder })
+          .eq('id', section.id);
+      });
+      
+      const negativeResults = await Promise.all(negativeOrderPromises);
+      const negativeErrors = negativeResults.filter(result => result.error);
+      if (negativeErrors.length > 0) {
+        console.error('❌ Negative order update errors:', negativeErrors);
+        throw new Error(`设置负数order失败: ${negativeErrors.map(e => e.error?.message).join(', ')}`);
       }
-      return c;
-    });
-    setCourses(newCourses);
-    
-    // 保存到数据库
-    try {
-      await Promise.all([
-        supabase
+      
+      console.log('✅ Step 1 completed: Affected sections set to negative values');
+      
+      // 第二步：设置最终的order值
+      console.log('📝 Step 2: Setting final order values');
+      const updatePromises = newSections.map((section, index) => {
+        const newOrder = index + 1;
+        console.log(`🔽 Setting section ${section.title} to final order ${newOrder}`);
+        return supabase
           .from('course_sections')
-          .update({ order: prevSection.order })
-          .eq('id', currentSection.id),
-        supabase
-          .from('course_sections')
-          .update({ order: tempOrder })
-          .eq('id', prevSection.id)
-      ]);
+          .update({ "order": newOrder })
+          .eq('id', section.id);
+      });
+      
+      const updateResults = await Promise.all(updatePromises);
+      const updateErrors = updateResults.filter(result => result.error);
+      if (updateErrors.length > 0) {
+        console.error('❌ Final order update errors:', updateErrors);
+        throw new Error(`最终order更新失败: ${updateErrors.map(e => e.error?.message).join(', ')}`);
+      }
+      
+      console.log('✅ Move down completed successfully with NEGATIVE-first strategy');
+      
+      // 更新本地状态
+      const newCourses = courses.map(c => 
+        c.id === courseId 
+          ? { ...c, sections: newSections.map((section, index) => ({ ...section, order: index + 1 })) }
+          : c
+      );
+      setCourses(newCourses);
       
       toast({
-        title: "排序更新成功",
-        description: "章节顺序已更新"
+        title: "移动成功",
+        description: "章节已向下移动"
       });
+      
     } catch (error: any) {
+      console.error('❌ Move down failed:', error);
+      await fetchSections(courseId);
       toast({
         variant: "destructive",
-        title: "排序更新失败",
-        description: error.message || "更新章节顺序失败"
+        title: "移动失败",
+        description: error.message || "向下移动章节失败"
       });
     }
   };
-  
+
   // 向下移动章节
   const moveSectionDown = async (courseId: string, sectionIndex: number) => {
     const course = courses.find(c => c.id === courseId);
-    if (!course || sectionIndex === course.sections.length - 1) return; // 已经是最后一个
+    if (!course || !course.sections || sectionIndex >= course.sections.length - 1) return;
     
-    const sections = [...course.sections];
-    const currentSection = sections[sectionIndex];
-    const nextSection = sections[sectionIndex + 1];
+    console.log('🔽 Moving section down with NEGATIVE-first strategy:', sectionIndex);
     
-    // 交换顺序
-    const tempOrder = currentSection.order;
+    // 创建新的排序顺序（交换相邻两个元素）
+    const newSections = [...course.sections];
+    [newSections[sectionIndex], newSections[sectionIndex + 1]] = 
+    [newSections[sectionIndex + 1], newSections[sectionIndex]];
     
-    // 更新本地状态
-    const newCourses = courses.map(c => {
-      if (c.id === courseId) {
-        const newSections = [...c.sections];
-        newSections[sectionIndex].order = nextSection.order;
-        newSections[sectionIndex + 1].order = tempOrder;
-        
-        // 按新顺序排序
-        newSections.sort((a, b) => a.order - b.order);
-        
-        return {
-          ...c,
-          sections: newSections
-        };
-      }
-      return c;
-    });
-    setCourses(newCourses);
+    console.log('🔽 Sections after swap:', newSections.map(s => ({ id: s.id, title: s.title, order: s.order })));
     
-    // 保存到数据库
+    // 🚀 乐观更新：立即更新UI
+    console.log('🎨 Optimistic UI update: moving section down immediately');
+    const optimisticCourses = courses.map(c => 
+      c.id === courseId 
+        ? { ...c, sections: newSections.map((section, index) => ({ ...section, order: index + 1 })) }
+        : c
+    );
+    setCourses(optimisticCourses);
+    
+    // 💾 后台数据库更新
     try {
-      await Promise.all([
-        supabase
+      // 第一步：将涉及的章节order字段设置为负数
+      console.log('📝 Step 1: Setting affected sections to negative values');
+      const affectedSections = [newSections[sectionIndex], newSections[sectionIndex + 1]];
+      const negativeOrderPromises = affectedSections.map((section, index) => {
+        const negativeOrder = -(index + 1); // 使用负数：-1, -2
+        console.log(`Setting ${section.title} to temporary negative order: ${negativeOrder}`);
+        return supabase
           .from('course_sections')
-          .update({ order: nextSection.order })
-          .eq('id', currentSection.id),
-        supabase
+          .update({ "order": negativeOrder })
+          .eq('id', section.id);
+      });
+      
+      const negativeResults = await Promise.all(negativeOrderPromises);
+      const negativeErrors = negativeResults.filter(result => result.error);
+      if (negativeErrors.length > 0) {
+        console.error('❌ Negative order update errors:', negativeErrors);
+        throw new Error(`设置负数order失败: ${negativeErrors.map(e => e.error?.message).join(', ')}`);
+      }
+      
+      console.log('✅ Step 1 completed: Affected sections set to negative values');
+      
+      // 第二步：设置最终的order值
+      console.log('📝 Step 2: Setting final order values');
+      const updatePromises = newSections.map((section, index) => {
+        const newOrder = index + 1;
+        console.log(`🔽 Setting section ${section.title} to final order ${newOrder}`);
+        return supabase
           .from('course_sections')
-          .update({ order: tempOrder })
-          .eq('id', nextSection.id)
-      ]);
+          .update({ "order": newOrder })
+          .eq('id', section.id);
+      });
+      
+      const updateResults = await Promise.all(updatePromises);
+      const updateErrors = updateResults.filter(result => result.error);
+      if (updateErrors.length > 0) {
+        console.error('❌ Final order update errors:', updateErrors);
+        throw new Error(`最终order更新失败: ${updateErrors.map(e => e.error?.message).join(', ')}`);
+      }
+      
+      console.log('✅ Move down background update completed successfully');
       
       toast({
-        title: "排序更新成功",
-        description: "章节顺序已更新"
+        title: "移动已保存",
+        description: "章节向下移动已同步到服务器"
       });
+      
     } catch (error: any) {
+      console.error('❌ Move down background update failed:', error);
+      
+      // 💥 回滚乐观更新：恢复原始状态
+      console.log('🔄 Rolling back optimistic update...');
+      const restoredCourses = courses.map(c => 
+        c.id === courseId 
+          ? { ...c, sections: course.sections } // 恢复到原始sections
+          : c
+      );
+      setCourses(restoredCourses);
+      
       toast({
-        variant: "destructive", 
-        title: "排序更新失败",
-        description: error.message || "更新章节顺序失败"
+        variant: "destructive",
+        title: "移动保存失败",
+        description: error.message || "向下移动保存失败，已恢复原始顺序"
       });
     }
   };
@@ -1273,9 +1543,15 @@ const CourseManagement = () => {
                                               ref={provided.innerRef}
                                               {...provided.draggableProps}
                                             >
-                                              <td className="py-2 px-3 w-16" {...provided.dragHandleProps}>
+                                              <td className="py-2 px-3 w-16">
                                                 <div className="flex items-center gap-1">
-                                                  <GripVertical className="w-4 h-4 text-gray-400" />
+                                                  <div 
+                                                    {...provided.dragHandleProps}
+                                                    className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-100"
+                                                    title="拖拽排序"
+                                                  >
+                                                    <GripVertical className="w-4 h-4 text-gray-400" />
+                                                  </div>
                                                   <div className="flex flex-col">
                                                     <Button 
                                                       size="icon" 
@@ -1283,6 +1559,7 @@ const CourseManagement = () => {
                                                       className="h-6 w-6"
                                                       disabled={idx === 0}
                                                       onClick={() => moveSectionUp(course.id, idx)}
+                                                      title="上移"
                                                     >
                                                       <ArrowUp className="h-3 w-3" />
                                                     </Button>
@@ -1292,6 +1569,7 @@ const CourseManagement = () => {
                                                       className="h-6 w-6"
                                                       disabled={idx === course.sections.length - 1}
                                                       onClick={() => moveSectionDown(course.id, idx)}
+                                                      title="下移"
                                                     >
                                                       <ArrowDown className="h-3 w-3" />
                                                     </Button>

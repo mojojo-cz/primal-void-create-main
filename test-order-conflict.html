@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order冲突测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .test-section { border: 1px solid #ddd; margin: 15px 0; padding: 15px; border-radius: 6px; }
+        .log { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; padding: 15px; margin: 15px 0; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .log-entry { margin: 3px 0; }
+        .log-error { color: #dc3545; font-weight: bold; }
+        .log-success { color: #28a745; }
+        .log-warning { color: #ffc107; }
+        .log-info { color: #17a2b8; }
+        .section-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 15px 0; }
+        .section-card { border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #f9f9f9; }
+        .section-card.highlight { background: #e3f2fd; border-color: #2196f3; }
+        .btn { padding: 8px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #0056b3; }
+        .btn-danger { background: #dc3545; }
+        .btn-success { background: #28a745; }
+        .btn-warning { background: #ffc107; color: black; }
+        .scenario { background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Order唯一约束冲突测试</h1>
+        
+        <div class="test-section">
+            <h2>测试场景</h2>
+            <div class="scenario">
+                <strong>冲突场景：</strong>将order=8的章节拖拽到第1位置<br>
+                <strong>问题：</strong>直接设置order=1会与现有章节冲突<br>
+                <strong>解决方案：</strong>两阶段更新 - 先设临时值，再设最终值
+            </div>
+            
+            <button class="btn" onclick="testOrderConflict()">测试Order冲突场景</button>
+            <button class="btn btn-warning" onclick="testTempOrderGeneration()">测试临时Order生成</button>
+            <button class="btn btn-success" onclick="testTwoPhaseUpdate()">测试两阶段更新</button>
+            <button class="btn btn-danger" onclick="clearLog()">清空日志</button>
+        </div>
+
+        <div class="test-section">
+            <h2>当前章节状态</h2>
+            <div id="sectionsDisplay" class="section-grid">
+                <!-- 章节状态显示 -->
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>测试日志</h2>
+            <div id="testLog" class="log">
+                <div class="log-entry">📋 Order冲突测试 - 模拟真实拖拽场景</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟课程章节数据
+        let sections = [
+            { id: 'section-1', title: '第1章：项目介绍', order: 1 },
+            { id: 'section-2', title: '第2章：环境搭建', order: 2 },
+            { id: 'section-3', title: '第3章：基础语法', order: 3 },
+            { id: 'section-4', title: '第4章：数据类型', order: 4 },
+            { id: 'section-5', title: '第5章：控制流', order: 5 },
+            { id: 'section-6', title: '第6章：函数定义', order: 6 },
+            { id: 'section-7', title: '第7章：面向对象', order: 7 },
+            { id: 'section-8', title: '第8章：高级特性', order: 8 },
+            { id: 'section-9', title: '第9章：项目实战', order: 9 },
+            { id: 'section-10', title: '第10章：部署发布', order: 10 }
+        ];
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('testLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('testLog').innerHTML = '<div class="log-entry">📋 日志已清空</div>';
+        }
+
+        function renderSections(highlightIds = []) {
+            const container = document.getElementById('sectionsDisplay');
+            container.innerHTML = '';
+            
+            sections.forEach(section => {
+                const div = document.createElement('div');
+                div.className = `section-card ${highlightIds.includes(section.id) ? 'highlight' : ''}`;
+                div.innerHTML = `
+                    <strong>${section.title}</strong><br>
+                    Order: ${section.order}
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function testOrderConflict() {
+            log('🚀 开始测试Order冲突场景', 'info');
+            log('📋 场景：将第8章拖拽到第1位置', 'info');
+            
+            // 找到要移动的章节
+            const sourceSection = sections.find(s => s.order === 8);
+            const targetSection = sections.find(s => s.order === 1);
+            
+            log(`📍 源章节: ${sourceSection.title} (order=${sourceSection.order})`, 'info');
+            log(`📍 目标位置: 第1位 (当前被 "${targetSection.title}" 占用)`, 'info');
+            
+            // 渲染并高亮相关章节
+            renderSections([sourceSection.id, targetSection.id]);
+            
+            // 模拟直接更新冲突
+            log('❌ 尝试直接设置 order=1...', 'error');
+            log('❌ 数据库错误: 违反唯一约束 (course_id, order)', 'error');
+            log('❌ DETAIL: Key (course_id, order)=(course-123, 1) already exists', 'error');
+            
+            log('🔧 需要使用两阶段更新策略避免冲突', 'warning');
+        }
+
+        function testTempOrderGeneration() {
+            log('🔧 测试临时Order生成策略', 'info');
+            
+            // 获取当前最大order值
+            const currentMaxOrder = Math.max(...sections.map(s => s.order || 0));
+            log(`📊 当前最大Order值: ${currentMaxOrder}`, 'info');
+            
+            // 测试不同的临时order生成方法
+            const methods = [
+                { name: '固定值法', value: 10000 },
+                { name: '基于最大值法', value: currentMaxOrder + 1000 },
+                { name: '安全边界法', value: Math.max(10000, currentMaxOrder + 1000) }
+            ];
+            
+            methods.forEach((method, index) => {
+                log(`🧪 方法${index + 1}: ${method.name} = ${method.value}`, 'info');
+                
+                // 检查是否与现有值冲突
+                const hasConflict = sections.some(s => s.order === method.value);
+                if (hasConflict) {
+                    log(`  ❌ 冲突！与现有章节order值重复`, 'error');
+                } else {
+                    log(`  ✅ 安全，无冲突`, 'success');
+                }
+            });
+            
+            // 推荐的临时order生成
+            const recommendedBase = Math.max(10000, currentMaxOrder + 1000);
+            log(`💡 推荐临时Order基础值: ${recommendedBase}`, 'success');
+            
+            // 为所有章节生成临时order
+            sections.forEach((section, index) => {
+                const tempOrder = recommendedBase + index + 1;
+                log(`  ${section.title}: 临时order = ${tempOrder}`, 'info');
+            });
+        }
+
+        function testTwoPhaseUpdate() {
+            log('🗄️ 测试两阶段更新流程', 'info');
+            log('📋 场景：将第8章移动到第1位置', 'info');
+            
+            // 模拟拖拽重排序
+            const sourceIndex = sections.findIndex(s => s.order === 8);
+            const targetIndex = 0; // 移动到第1位
+            
+            log(`📍 源索引: ${sourceIndex}, 目标索引: ${targetIndex}`, 'info');
+            
+            // 执行数组重排序
+            const reorderedSections = Array.from(sections);
+            const [removed] = reorderedSections.splice(sourceIndex, 1);
+            reorderedSections.splice(targetIndex, 0, removed);
+            
+            log(`📋 重排序后: ${reorderedSections.map(s => s.title.split('：')[0]).join(' → ')}`, 'info');
+            
+            // 第一阶段：设置临时order
+            log('📝 第一阶段：设置临时order值', 'warning');
+            const currentMaxOrder = Math.max(...sections.map(s => s.order || 0));
+            const tempOrderBase = Math.max(10000, currentMaxOrder + 1000);
+            
+            reorderedSections.forEach((section, index) => {
+                const tempOrder = tempOrderBase + index + 1;
+                log(`  UPDATE ${section.title}: order = ${tempOrder}`, 'info');
+            });
+            
+            // 模拟第一阶段完成
+            setTimeout(() => {
+                log('✅ 第一阶段完成：所有临时order设置成功', 'success');
+                
+                // 第二阶段：设置最终order
+                log('📝 第二阶段：设置最终order值', 'warning');
+                reorderedSections.forEach((section, index) => {
+                    const finalOrder = index + 1;
+                    log(`  UPDATE ${section.title}: order = ${finalOrder}`, 'info');
+                });
+                
+                setTimeout(() => {
+                    log('✅ 第二阶段完成：所有最终order设置成功', 'success');
+                    log('🎉 两阶段更新完成！章节顺序已更新', 'success');
+                    
+                    // 更新本地数据并重新渲染
+                    sections = reorderedSections.map((section, index) => ({
+                        ...section,
+                        order: index + 1
+                    }));
+                    renderSections();
+                    
+                }, 1000);
+            }, 1000);
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            renderSections();
+            log('🎯 Order冲突测试工具已加载', 'success');
+            log('💡 点击上方按钮开始测试不同场景', 'info');
+        });
+    </script>
+</body>
+</html> 

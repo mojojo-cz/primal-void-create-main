@@ -9,6 +9,50 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      course_enrollments: {
+        Row: {
+          course_id: string | null
+          created_at: string | null
+          enrolled_at: string | null
+          id: string
+          last_accessed_at: string | null
+          progress: number | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string | null
+          enrolled_at?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          progress?: number | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string | null
+          enrolled_at?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          progress?: number | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_enrollments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       course_sections: {
         Row: {
           course_id: string | null
@@ -49,7 +93,7 @@ export type Database = {
             foreignKeyName: "course_sections_video_id_fkey"
             columns: ["video_id"]
             isOneToOne: false
-            referencedRelation: "videos"
+            referencedRelation: "minio_videos"
             referencedColumns: ["id"]
           },
         ]
@@ -148,6 +192,8 @@ export type Database = {
           file_size: number | null
           id: string
           minio_object_name: string
+          play_url: string | null
+          play_url_expires_at: string | null
           title: string
           updated_at: string
           video_url: string
@@ -159,6 +205,8 @@ export type Database = {
           file_size?: number | null
           id?: string
           minio_object_name: string
+          play_url?: string | null
+          play_url_expires_at?: string | null
           title: string
           updated_at?: string
           video_url: string
@@ -170,6 +218,8 @@ export type Database = {
           file_size?: number | null
           id?: string
           minio_object_name?: string
+          play_url?: string | null
+          play_url_expires_at?: string | null
           title?: string
           updated_at?: string
           video_url?: string
@@ -245,6 +295,79 @@ export type Database = {
         }
         Relationships: []
       }
+      video_progress: {
+        Row: {
+          completed_at: string | null
+          course_id: string | null
+          created_at: string | null
+          current_position: number | null
+          duration: number | null
+          first_played_at: string | null
+          id: string
+          is_completed: boolean | null
+          last_played_at: string | null
+          progress_percentage: number | null
+          section_id: string | null
+          updated_at: string | null
+          user_id: string | null
+          video_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          course_id?: string | null
+          created_at?: string | null
+          current_position?: number | null
+          duration?: number | null
+          first_played_at?: string | null
+          id?: string
+          is_completed?: boolean | null
+          last_played_at?: string | null
+          progress_percentage?: number | null
+          section_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          video_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          course_id?: string | null
+          created_at?: string | null
+          current_position?: number | null
+          duration?: number | null
+          first_played_at?: string | null
+          id?: string
+          is_completed?: boolean | null
+          last_played_at?: string | null
+          progress_percentage?: number | null
+          section_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          video_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_progress_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_progress_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "course_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_progress_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "minio_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       videos: {
         Row: {
           course_id: string | null
@@ -298,6 +421,14 @@ export type Database = {
       check_username_exists: {
         Args: { username: string }
         Returns: boolean
+      }
+      get_email_by_username: {
+        Args: { username_input: string }
+        Returns: string
+      }
+      get_login_email_by_username: {
+        Args: { username_input: string }
+        Returns: string
       }
       get_user_type: {
         Args: Record<PropertyKey, never>

@@ -288,18 +288,18 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center min-h-[140px] sm:min-h-[160px] flex flex-col justify-center">
         {!selectedFile ? (
           <>
-            <FileVideo className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-4" />
-            <div className="space-y-1 sm:space-y-2">
-              <p className="text-base sm:text-lg font-medium text-gray-700">选择视频文件</p>
-              <p className="text-xs sm:text-sm text-gray-500">支持最大50GB视频文件</p>
-              <Input
-                type="file"
-                accept="video/*"
-                onChange={handleFileSelect}
-                disabled={uploading}
-                className="max-w-xs mx-auto text-sm"
-              />
-            </div>
+        <FileVideo className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-4" />
+        <div className="space-y-1 sm:space-y-2">
+          <p className="text-base sm:text-lg font-medium text-gray-700">选择视频文件</p>
+          <p className="text-xs sm:text-sm text-gray-500">支持最大50GB视频文件</p>
+          <Input
+            type="file"
+            accept="video/*"
+            onChange={handleFileSelect}
+            disabled={uploading}
+            className="max-w-xs mx-auto text-sm"
+          />
+        </div>
           </>
         ) : (
           <div className="space-y-2 sm:space-y-3">
