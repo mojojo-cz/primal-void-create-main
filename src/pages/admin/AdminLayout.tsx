@@ -45,11 +45,19 @@ const AdminLayout = () => {
   const handleLogout = async () => {
     try {
       await signOut();
+      // 清理 Supabase 本地缓存
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
+      // 显示成功提示
       toast({
         title: "退出成功",
         description: "您已安全退出系统",
       });
-      navigate("/auth/login");
+      // 强制刷新页面并跳转到登录页，彻底重置所有状态
+      window.location.replace("/auth/login");
     } catch (error) {
       toast({
         title: "退出失败",

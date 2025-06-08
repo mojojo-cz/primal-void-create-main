@@ -138,10 +138,10 @@ const StudentPage = () => {
     switch (activeTab) {
       case "learning":
         return (
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div>
-              <h2 className="text-2xl font-bold mb-2">学习中</h2>
-              <p className="text-muted-foreground">继续上次未完成的课程学习</p>
+              <h2 className="text-xl md:text-2xl font-bold mb-2">学习中</h2>
+              <p className="text-sm md:text-base text-muted-foreground">继续上次未完成的课程学习</p>
             </div>
             
             {isLoading ? (
@@ -149,23 +149,24 @@ const StudentPage = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : learningData.length > 0 ? (
-              <div className="grid gap-4">
+              <div className="grid gap-3 md:gap-4">
                 {learningData.map((item) => (
                   <Card key={item.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg">
+                    <CardContent className="p-4 md:p-6">
+                      {/* 移动端垂直布局，桌面端水平布局 */}
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1">
+                          <div className="flex items-center justify-center w-10 h-10 md:w-12 md:h-12 bg-primary/10 rounded-lg flex-shrink-0">
                             {getStatusIcon(item.status)}
                           </div>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg mb-1">{item.course_title}</h3>
-                            <p className="text-muted-foreground mb-2">{item.chapter_title}</p>
-                            <div className="flex items-center gap-4">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-base md:text-lg mb-1 line-clamp-2">{item.course_title}</h3>
+                            <p className="text-sm md:text-base text-muted-foreground mb-2 line-clamp-1">{item.chapter_title}</p>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                               {getStatusBadge(item.status, item.progress)}
                               {item.status !== 'not_started' && (
                                 <div className="flex items-center gap-2">
-                                  <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div className="w-24 sm:w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
                                     <div 
                                       className="h-full bg-primary transition-all" 
                                       style={{ width: `${item.progress}%` }}
@@ -183,7 +184,8 @@ const StudentPage = () => {
                           </div>
                         </div>
                         <Button 
-                          className="ml-4"
+                          className="w-full md:w-auto md:ml-4"
+                          size="sm"
                           disabled={item.status === 'completed'}
                         >
                           {item.status === 'completed' ? '已完成' : '继续学习'}
@@ -195,10 +197,10 @@ const StudentPage = () => {
               </div>
             ) : (
               <Card>
-                <CardContent className="text-center py-12">
-                  <PlayCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">暂无学习记录</h3>
-                  <p className="text-muted-foreground">开始学习课程后，这里会显示您的学习进度</p>
+                <CardContent className="text-center py-8 md:py-12">
+                  <PlayCircle className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-base md:text-lg font-medium mb-2">暂无学习记录</h3>
+                  <p className="text-sm md:text-base text-muted-foreground">开始学习课程后，这里会显示您的学习进度</p>
                 </CardContent>
               </Card>
             )}
@@ -207,31 +209,31 @@ const StudentPage = () => {
 
       case "courses":
         return (
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div>
-              <h2 className="text-2xl font-bold mb-2">我的课程</h2>
-              <p className="text-muted-foreground">浏览所有可学习的课程内容</p>
+              <h2 className="text-xl md:text-2xl font-bold mb-2">我的课程</h2>
+              <p className="text-sm md:text-base text-muted-foreground">浏览所有可学习的课程内容</p>
             </div>
             
             {courses.length > 0 ? (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {courses.map((course) => (
                   <Card key={course.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <BookOpen className="h-5 w-5 text-primary" />
-                        {course.title}
+                    <CardHeader className="pb-3 md:pb-6">
+                      <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                        <BookOpen className="h-4 w-4 md:h-5 md:w-5 text-primary flex-shrink-0" />
+                        <span className="line-clamp-2">{course.title}</span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <p className="text-muted-foreground mb-4 line-clamp-3">
+                    <CardContent className="pt-0">
+                      <p className="text-sm md:text-base text-muted-foreground mb-4 line-clamp-3">
                         {course.description || '暂无课程描述'}
                       </p>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <span className="text-xs text-muted-foreground">
                           创建时间：{new Date(course.created_at).toLocaleDateString()}
                         </span>
-                        <Button size="sm">开始学习</Button>
+                        <Button size="sm" className="w-full sm:w-auto">开始学习</Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -239,10 +241,10 @@ const StudentPage = () => {
               </div>
             ) : (
               <Card>
-                <CardContent className="text-center py-12">
-                  <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">暂无课程</h3>
-                  <p className="text-muted-foreground">目前还没有可学习的课程</p>
+                <CardContent className="text-center py-8 md:py-12">
+                  <BookOpen className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-base md:text-lg font-medium mb-2">暂无课程</h3>
+                  <p className="text-sm md:text-base text-muted-foreground">目前还没有可学习的课程</p>
                 </CardContent>
               </Card>
             )}
@@ -251,51 +253,51 @@ const StudentPage = () => {
 
       case "profile":
         return (
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div>
-              <h2 className="text-2xl font-bold mb-2">个人信息</h2>
-              <p className="text-muted-foreground">查看和管理您的个人资料</p>
+              <h2 className="text-xl md:text-2xl font-bold mb-2">个人信息</h2>
+              <p className="text-sm md:text-base text-muted-foreground">查看和管理您的个人资料</p>
             </div>
             
             <Card>
-              <CardHeader>
-                <CardTitle>基本信息</CardTitle>
+              <CardHeader className="pb-3 md:pb-6">
+                <CardTitle className="text-base md:text-lg">基本信息</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid gap-4 md:grid-cols-2 md:gap-6">
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">学号</h4>
-                    <p className="text-lg">{profile?.username}</p>
+                    <p className="text-base md:text-lg">{profile?.username}</p>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">姓名</h4>
-                    <p className="text-lg">{profile?.full_name || '未设置'}</p>
+                    <p className="text-base md:text-lg">{profile?.full_name || '未设置'}</p>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">手机号</h4>
-                    <p className="text-lg">{profile?.phone_number || '未设置'}</p>
+                    <p className="text-base md:text-lg">{profile?.phone_number || '未设置'}</p>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">账户类型</h4>
-                    <p className="text-lg">学员</p>
+                    <p className="text-base md:text-lg">学员</p>
                   </div>
                   {profile?.school && (
                     <>
                       <div>
                         <h4 className="text-sm font-medium text-muted-foreground mb-2">学校</h4>
-                        <p className="text-lg">{profile.school}</p>
+                        <p className="text-base md:text-lg">{profile.school}</p>
                       </div>
                       <div>
                         <h4 className="text-sm font-medium text-muted-foreground mb-2">专业</h4>
-                        <p className="text-lg">{profile.major || '未设置'}</p>
+                        <p className="text-base md:text-lg">{profile.major || '未设置'}</p>
                       </div>
                       <div>
                         <h4 className="text-sm font-medium text-muted-foreground mb-2">学院</h4>
-                        <p className="text-lg">{profile.department || '未设置'}</p>
+                        <p className="text-base md:text-lg">{profile.department || '未设置'}</p>
                       </div>
                       <div>
                         <h4 className="text-sm font-medium text-muted-foreground mb-2">年级</h4>
-                        <p className="text-lg">{profile.grade || '未设置'}</p>
+                        <p className="text-base md:text-lg">{profile.grade || '未设置'}</p>
                       </div>
                     </>
                   )}
@@ -303,13 +305,13 @@ const StudentPage = () => {
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">账户状态</h4>
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-lg text-green-600">正常</span>
+                      <span className="text-base md:text-lg text-green-600">正常</span>
                     </div>
                   </div>
                   {profile?.access_expires_at && (
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground mb-2">有效期至</h4>
-                      <p className="text-lg">{new Date(profile.access_expires_at).toLocaleDateString()}</p>
+                      <p className="text-base md:text-lg">{new Date(profile.access_expires_at).toLocaleDateString()}</p>
                     </div>
                   )}
                 </div>
