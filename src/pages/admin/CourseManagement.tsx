@@ -2086,21 +2086,21 @@ const CourseManagement = () => {
       
       {/* 视频播放弹窗 */}
       <Dialog open={videoDialog.open} onOpenChange={open => setVideoDialog(v => ({ ...v, open }))}>
-        <DialogContent className="max-w-4xl w-full">
-          <DialogHeader>
-            <DialogTitle>{videoDialog.title}</DialogTitle>
+        <DialogContent className="max-w-4xl p-0 bg-black border-0 overflow-hidden [&>button:has(svg[data-lucide=x])]:hidden">
+          <DialogHeader className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/60 to-transparent p-4">
+            <DialogTitle className="text-white text-lg font-medium">{videoDialog.title}</DialogTitle>
           </DialogHeader>
-          <div className="w-full aspect-video">
+          <div className="aspect-video bg-black">
             {videoDialog.url ? (
               <VideoPlayer
                 src={videoDialog.url}
                 title={videoDialog.title}
                 autoPlay={true}
                 autoFullscreen={false}
-                className="w-full h-full rounded-lg"
+                className="w-full h-full"
               />
             ) : (
-              <div className="w-full h-full bg-black flex items-center justify-center rounded-lg">
+              <div className="w-full h-full bg-black flex items-center justify-center">
                 <span className="text-white">无视频资源</span>
               </div>
             )}

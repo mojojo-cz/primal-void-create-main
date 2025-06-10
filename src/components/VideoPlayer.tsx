@@ -64,12 +64,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const videoElement = videoRef.current;
     const containerElement = containerRef.current;
 
+    console.log('[VideoPlayer] enterFullscreen 开始', { videoElement, containerElement });
+
     try {
+      // 移动端优先尝试视频元素的webkitEnterFullscreen（iOS Safari特有）
+      if (videoElement && typeof (videoElement as any).webkitEnterFullscreen === 'function') {
+        console.log('[VideoPlayer] 使用 webkitEnterFullscreen (iOS)');
+        (videoElement as any).webkitEnterFullscreen();
+        return;
+      }
+
+      // 屏幕方向锁定（如果支持）
       if (videoElement) {
         if (videoElement.readyState >= HTMLMediaElement.HAVE_METADATA && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
           if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
             try {
               const targetOrientation = videoElement.videoWidth > videoElement.videoHeight ? 'landscape' : 'portrait';
+              console.log('[VideoPlayer] 尝试锁定屏幕方向:', targetOrientation);
               await (screen.orientation as any).lock(targetOrientation);
             } catch (orientError: any) {
               console.warn(`[VideoPlayer] Screen orientation lock failed: ${orientError.message || orientError}`);
@@ -78,38 +89,51 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       }
       
-      if (videoElement && typeof (videoElement as any).webkitEnterFullscreen === 'function') {
-        (videoElement as any).webkitEnterFullscreen();
-        return;
-      }
-      
-      if (videoElement && videoElement.requestFullscreen) {
-        await videoElement.requestFullscreen();
-        return;
-      } else if (videoElement && (videoElement as any).webkitRequestFullscreen) {
-        await (videoElement as any).webkitRequestFullscreen();
-        return;
-      } else if (videoElement && (videoElement as any).mozRequestFullScreen) {
-        await (videoElement as any).mozRequestFullScreen();
-        return;
-      } else if (videoElement && (videoElement as any).msRequestFullscreen) {
-        await (videoElement as any).msRequestFullscreen();
-        return;
+      // 优先尝试视频元素全屏
+      if (videoElement) {
+        if (videoElement.requestFullscreen) {
+          console.log('[VideoPlayer] 使用 video.requestFullscreen');
+          await videoElement.requestFullscreen();
+          return;
+        } else if ((videoElement as any).webkitRequestFullscreen) {
+          console.log('[VideoPlayer] 使用 video.webkitRequestFullscreen');
+          await (videoElement as any).webkitRequestFullscreen();
+          return;
+        } else if ((videoElement as any).mozRequestFullScreen) {
+          console.log('[VideoPlayer] 使用 video.mozRequestFullScreen');
+          await (videoElement as any).mozRequestFullScreen();
+          return;
+        } else if ((videoElement as any).msRequestFullscreen) {
+          console.log('[VideoPlayer] 使用 video.msRequestFullscreen');
+          await (videoElement as any).msRequestFullscreen();
+          return;
+        }
       }
 
+      // 备用：容器元素全屏
       if (containerElement) {
+        console.log('[VideoPlayer] 回退到容器元素全屏');
         if (containerElement.requestFullscreen) {
+          console.log('[VideoPlayer] 使用 container.requestFullscreen');
           await containerElement.requestFullscreen();
         } else if ((containerElement as any).webkitRequestFullscreen) {
+          console.log('[VideoPlayer] 使用 container.webkitRequestFullscreen');
           await (containerElement as any).webkitRequestFullscreen();
         } else if ((containerElement as any).mozRequestFullScreen) {
+          console.log('[VideoPlayer] 使用 container.mozRequestFullScreen');
           await (containerElement as any).mozRequestFullScreen();
         } else if ((containerElement as any).msRequestFullscreen) {
+          console.log('[VideoPlayer] 使用 container.msRequestFullscreen');
           await (containerElement as any).msRequestFullscreen();
+        } else {
+          throw new Error('浏览器不支持全屏功能');
         }
+      } else {
+        throw new Error('无法找到可全屏的元素');
       }
     } catch (error: any) {
       console.error(`[VideoPlayer] Error entering fullscreen: ${error.message || error}`);
+      throw error;
     }
   };
 
@@ -150,14 +174,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   // 切换全屏
-  const toggleFullscreen = (e: React.MouseEvent) => {
+  const toggleFullscreen = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    if (isFullscreen) {
-      exitFullscreen();
-    } else {
-      enterFullscreen();
+    console.log('[VideoPlayer] 全屏按钮点击', { isFullscreen, videoRef: videoRef.current, containerRef: containerRef.current });
+    
+    try {
+      if (isFullscreen) {
+        console.log('[VideoPlayer] 尝试退出全屏');
+        await exitFullscreen();
+      } else {
+        console.log('[VideoPlayer] 尝试进入全屏');
+        await enterFullscreen();
+      }
+    } catch (error) {
+      console.error('[VideoPlayer] 全屏切换失败:', error);
+      // 显示错误提示
+      const errorMessage = isFullscreen ? '退出全屏失败' : '进入全屏失败';
+      alert(`${errorMessage}: ${error}`);
     }
   };
 
@@ -243,21 +278,30 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       
       {/* 全屏按钮 */}
       <div 
-        className={`absolute top-4 right-4 transition-opacity duration-300 ${
+        className={`absolute top-4 right-4 transition-opacity duration-300 z-50 ${
           isFullscreen ? (showControls ? 'opacity-100' : 'opacity-0') : 'opacity-100'
         }`}
+        style={{ pointerEvents: 'auto' }}
       >
         <Button
           size="sm"
           variant="secondary"
           onClick={toggleFullscreen}
-          className="bg-black/50 hover:bg-black/70 text-white border-0 backdrop-blur-sm"
+          className="bg-black/70 hover:bg-black/90 text-white border-0 backdrop-blur-sm min-w-[44px] min-h-[44px] p-2 touch-manipulation"
           title={isFullscreen ? '退出全屏' : '进入全屏'}
+          style={{ 
+            WebkitTapHighlightColor: 'transparent',
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+            pointerEvents: 'auto',
+            zIndex: 9999
+          }}
         >
           {isFullscreen ? (
-            <Minimize className="h-4 w-4" />
+            <Minimize className="h-5 w-5" />
           ) : (
-            <Maximize className="h-4 w-4" />
+            <Maximize className="h-5 w-5" />
           )}
         </Button>
       </div>

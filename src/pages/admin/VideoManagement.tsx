@@ -1171,17 +1171,17 @@ const VideoManagement = () => {
 
       {/* 视频播放对话框 */}
       <Dialog open={videoDialog.open} onOpenChange={(open) => setVideoDialog(prev => ({ ...prev, open }))}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>{videoDialog.title}</DialogTitle>
+        <DialogContent className="max-w-4xl p-0 bg-black border-0 overflow-hidden [&>button:has(svg[data-lucide=x])]:hidden">
+          <DialogHeader className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/60 to-transparent p-4">
+            <DialogTitle className="text-white text-lg font-medium">{videoDialog.title}</DialogTitle>
           </DialogHeader>
-          <div className="aspect-video">
+          <div className="aspect-video bg-black">
             <VideoPlayer
               src={videoDialog.url}
               title={videoDialog.title}
               autoPlay={true}
               autoFullscreen={false}
-              className="w-full h-full rounded-lg"
+              className="w-full h-full"
             />
           </div>
         </DialogContent>

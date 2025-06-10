@@ -833,6 +833,54 @@ const CourseStudyPage = () => {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // 获取下一个可播放的章节
+  const getNextPlayableSection = (currentSectionId: string) => {
+    const currentIndex = sections.findIndex(section => section.id === currentSectionId);
+    if (currentIndex === -1 || currentIndex >= sections.length - 1) {
+      return null; // 没有下一个章节
+    }
+    
+    // 查找下一个有视频的章节
+    for (let i = currentIndex + 1; i < sections.length; i++) {
+      const nextSection = sections[i];
+      if (nextSection.video) {
+        return nextSection;
+      }
+    }
+    
+    return null; // 没有找到下一个有视频的章节
+  };
+
+  // 自动播放下一个视频
+  const autoPlayNextVideo = async (currentSectionId: string) => {
+    const nextSection = getNextPlayableSection(currentSectionId);
+    
+    if (nextSection) {
+      // 短暂延迟后自动播放下一个视频
+      setTimeout(async () => {
+        await handlePlayVideo(nextSection);
+        
+        toast({
+          title: "自动播放",
+          description: `正在播放下一章节：${nextSection.title}`,
+          duration: 3000
+        });
+      }, 1500); // 1.5秒延迟，给用户时间看到完成状态
+    } else {
+      // 已经是最后一个章节，显示课程完成提示
+      toast({
+        title: "🎉 恭喜完成课程！",
+        description: "您已经观看完所有视频章节",
+        duration: 5000
+      });
+      
+      // 刷新进度状态
+      setTimeout(() => {
+        refreshVideoProgress();
+      }, 1000);
+    }
+  };
+
   // 获取"上次学习"的章节
   const getLastLearningSection = () => {
     return sections.find(section => getSectionStatus(section, sections) === 'last_learning');
@@ -912,7 +960,7 @@ const CourseStudyPage = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-medium text-blue-900 text-sm truncate">
-                        第{lastLearningSection.order}章：{lastLearningSection.title}
+                        {lastLearningSection.title}
                       </h3>
                       <Badge className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 border-0 flex-shrink-0">
                         上次学习
@@ -997,7 +1045,7 @@ const CourseStudyPage = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className={`font-medium ${config.titleColor} truncate text-sm md:text-base`}>
-                            第{section.order}章：{section.title}
+                            {section.title}
                           </h3>
                           {section.description && (
                             <p className="text-xs text-gray-600 mt-1 truncate md:text-sm">
@@ -1055,17 +1103,17 @@ const CourseStudyPage = () => {
 
       {/* 视频播放对话框 */}
       <Dialog open={videoDialog.open} onOpenChange={handleVideoDialogClose}>
-        <DialogContent className="max-w-5xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>{videoDialog.title}</DialogTitle>
+        <DialogContent className="max-w-5xl max-h-[90vh] p-0 bg-black border-0 overflow-hidden [&>button:has(svg[data-lucide=x])]:hidden">
+          <DialogHeader className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/60 to-transparent p-4">
+            <DialogTitle className="text-white text-lg font-medium">{videoDialog.title}</DialogTitle>
           </DialogHeader>
-          <div className="aspect-video">
+          <div className="aspect-video bg-black">
             <VideoPlayer
               src={videoDialog.url}
               title={videoDialog.title}
               autoPlay={true}
               autoFullscreen={false}
-              className="w-full h-full rounded-lg"
+              className="w-full h-full"
               startTime={videoDialog.startTime}
               onPlay={() => {
                 // 视频开始播放时启动自动保存进度
@@ -1092,6 +1140,9 @@ const CourseStudyPage = () => {
                   clearInterval(progressSaveInterval);
                   setProgressSaveInterval(null);
                 }
+
+                // 自动播放下一个视频
+                autoPlayNextVideo(videoDialog.sectionId);
               }}
             />
           </div>
