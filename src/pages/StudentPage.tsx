@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { 
+  BarChart3,
+  PauseCircle,
+  Trophy
+} from "lucide-react";
 
 type ActiveTab = "learning" | "courses" | "profile";
 
@@ -56,29 +64,186 @@ const StudentPage = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [learningCourses, setLearningCourses] = useState<LearningCourse[]>([]);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(null);
   const [updatingCourseId, setUpdatingCourseId] = useState<string | null>(null);
   const [removingCourseId, setRemovingCourseId] = useState<string | null>(null);
 
+  // 数据缓存和加载状态管理
+  const dataCache = useRef<{
+    courses: Course[] | null;
+    learningCourses: LearningCourse[] | null;
+    lastFetch: number;
+    isInitialLoad: boolean;
+  }>({
+    courses: null,
+    learningCourses: null,
+    lastFetch: 0,
+    isInitialLoad: true
+  });
+
+  // 缓存有效期 (5分钟)
+  const CACHE_DURATION = 5 * 60 * 1000;
+
+  // 检查缓存是否有效
+  const isCacheValid = () => {
+    const now = Date.now();
+    return (now - dataCache.current.lastFetch) < CACHE_DURATION;
+  };
+
+  // 智能数据获取 - 只在必要时获取数据
+  const smartFetchData = async (forceRefresh = false) => {
+    if (!user?.id) return;
+
+    // 如果有有效缓存且不强制刷新，使用缓存数据
+    if (!forceRefresh && isCacheValid() && dataCache.current.courses && dataCache.current.learningCourses) {
+      setCourses(dataCache.current.courses);
+      setLearningCourses(dataCache.current.learningCourses);
+      return;
+    }
+
+    // 只在初始加载时显示loading
+    if (dataCache.current.isInitialLoad) {
+      setIsLoading(true);
+    }
+
+    try {
+      // 并行获取数据
+      const [coursesResult, learningResult] = await Promise.all([
+        fetchCoursesData(),
+        fetchLearningCoursesData()
+      ]);
+
+      // 更新缓存
+      dataCache.current = {
+        courses: coursesResult,
+        learningCourses: learningResult.courses,
+        lastFetch: Date.now(),
+        isInitialLoad: false
+      };
+
+      // 更新状态
+      setCourses(coursesResult);
+      setLearningCourses(learningResult.courses);
+      setEnrolledCourseIds(learningResult.enrolledIds);
+
+    } catch (error) {
+      console.error('智能数据获取失败:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 获取课程数据
+  const fetchCoursesData = async (): Promise<Course[]> => {
+    const { data, error } = await supabase
+      .from('courses')
+      .select('*')
+      .eq('status', 'published')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  };
+
+  // 获取学习中的课程数据  
+  const fetchLearningCoursesData = async (): Promise<{courses: LearningCourse[], enrolledIds: Set<string>}> => {
+    if (!user?.id) return { courses: [], enrolledIds: new Set() };
+    
+    // 获取用户注册的课程及其详细信息
+    const { data: enrollmentsData, error: enrollmentsError } = await supabase
+      .from('course_enrollments')
+      .select(`
+        id,
+        course_id,
+        status,
+        progress,
+        enrolled_at,
+        last_accessed_at,
+        courses!inner(
+          id,
+          title,
+          description,
+          created_at
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('last_accessed_at', { ascending: false });
+
+    if (enrollmentsError) throw enrollmentsError;
+
+    // 获取每个课程的章节统计
+    const coursesWithProgress: LearningCourse[] = [];
+    const enrolledIds = new Set<string>();
+
+    if (enrollmentsData) {
+      for (const enrollment of enrollmentsData) {
+        enrolledIds.add(enrollment.course_id);
+        
+        // 获取课程章节数
+        const { data: sectionsData, error: sectionsError } = await supabase
+          .from('course_sections')
+          .select('id')
+          .eq('course_id', enrollment.course_id);
+
+        if (sectionsError) {
+          console.error('获取章节数失败:', sectionsError);
+          continue;
+        }
+
+        const sectionsCount = sectionsData?.length || 0;
+        const completedSections = Math.floor((enrollment.progress || 0) / 100 * sectionsCount);
+
+        coursesWithProgress.push({
+          id: enrollment.id,
+          course_id: enrollment.course_id,
+          course_title: (enrollment.courses as any).title,
+          course_description: (enrollment.courses as any).description || '',
+          status: enrollment.status as 'not_started' | 'learning' | 'completed' | 'paused',
+          progress: enrollment.progress || 0,
+          enrolled_at: enrollment.enrolled_at || '',
+          last_accessed_at: enrollment.last_accessed_at || enrollment.enrolled_at || '',
+          sections_count: sectionsCount,
+          completed_sections: completedSections
+        });
+      }
+    }
+
+    return { courses: coursesWithProgress, enrolledIds };
+  };
+
+  // 窗口焦点检测
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // 当页面变为可见且缓存过期时，刷新数据
+      if (!document.hidden && !isCacheValid()) {
+        smartFetchData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
+  // 初始数据获取
   useEffect(() => {
     if (user) {
-      fetchCourses();
-      fetchLearningCourses();
+      smartFetchData();
     }
   }, [user]);
 
+  // 保留原有的函数但修改为使用新的数据获取逻辑
   const fetchCourses = async () => {
     try {
-      const { data, error } = await supabase
-        .from('courses')
-        .select('*')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCourses(data || []);
+      const coursesData = await fetchCoursesData();
+      setCourses(coursesData);
+      // 更新缓存中的课程数据
+      if (dataCache.current.courses !== null) {
+        dataCache.current.courses = coursesData;
+        dataCache.current.lastFetch = Date.now();
+      }
     } catch (error) {
       console.error('获取课程失败:', error);
       toast({
@@ -95,68 +260,15 @@ const StudentPage = () => {
     
     try {
       setIsLoading(true);
+      const result = await fetchLearningCoursesData();
+      setLearningCourses(result.courses);
+      setEnrolledCourseIds(result.enrolledIds);
       
-      // 获取用户注册的课程及其详细信息
-      const { data: enrollmentsData, error: enrollmentsError } = await supabase
-        .from('course_enrollments')
-        .select(`
-          id,
-          course_id,
-          status,
-          progress,
-          enrolled_at,
-          last_accessed_at,
-          courses!inner(
-            id,
-            title,
-            description,
-            created_at
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('last_accessed_at', { ascending: false });
-
-      if (enrollmentsError) throw enrollmentsError;
-
-      // 获取每个课程的章节统计
-      const coursesWithProgress: LearningCourse[] = [];
-      const enrolledIds = new Set<string>();
-
-      if (enrollmentsData) {
-        for (const enrollment of enrollmentsData) {
-          enrolledIds.add(enrollment.course_id);
-          
-          // 获取课程章节数
-          const { data: sectionsData, error: sectionsError } = await supabase
-            .from('course_sections')
-            .select('id')
-            .eq('course_id', enrollment.course_id);
-
-          if (sectionsError) {
-            console.error('获取章节数失败:', sectionsError);
-            continue;
-          }
-
-          const sectionsCount = sectionsData?.length || 0;
-          const completedSections = Math.floor((enrollment.progress || 0) / 100 * sectionsCount);
-
-          coursesWithProgress.push({
-            id: enrollment.id,
-            course_id: enrollment.course_id,
-            course_title: (enrollment.courses as any).title,
-            course_description: (enrollment.courses as any).description || '',
-            status: enrollment.status as 'not_started' | 'learning' | 'completed' | 'paused',
-            progress: enrollment.progress || 0,
-            enrolled_at: enrollment.enrolled_at || '',
-            last_accessed_at: enrollment.last_accessed_at || enrollment.enrolled_at || '',
-            sections_count: sectionsCount,
-            completed_sections: completedSections
-          });
-        }
+      // 更新缓存
+      if (dataCache.current.learningCourses !== null) {
+        dataCache.current.learningCourses = result.courses;
+        dataCache.current.lastFetch = Date.now();
       }
-
-      setLearningCourses(coursesWithProgress);
-      setEnrolledCourseIds(enrolledIds);
     } catch (error) {
       console.error('获取学习课程失败:', error);
       toast({

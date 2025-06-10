@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +55,7 @@ interface VideoProgress {
   section_id: string;
   video_id: string;
   last_played_at?: string;
+  completed_at?: string;
 }
 
 const CourseStudyPage = () => {
@@ -66,7 +67,7 @@ const CourseStudyPage = () => {
   const [course, setCourse] = useState<Course | null>(null);
   const [sections, setSections] = useState<CourseSection[]>([]);
   const [enrollment, setEnrollment] = useState<CourseEnrollment | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [videoDialog, setVideoDialog] = useState<{ 
     open: boolean; 
     url: string; 
@@ -85,9 +86,189 @@ const CourseStudyPage = () => {
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const [progressSaveInterval, setProgressSaveInterval] = useState<NodeJS.Timeout | null>(null);
 
+  // 数据缓存和加载状态管理
+  const dataCache = useRef<{
+    course: Course | null;
+    sections: CourseSection[] | null;
+    enrollment: CourseEnrollment | null;
+    lastFetch: number;
+    isInitialLoad: boolean;
+  }>({
+    course: null,
+    sections: null,
+    enrollment: null,
+    lastFetch: 0,
+    isInitialLoad: true
+  });
+
+  // 缓存有效期 (3分钟，课程页面数据更新频率较高)
+  const CACHE_DURATION = 3 * 60 * 1000;
+
+  // 检查缓存是否有效
+  const isCacheValid = () => {
+    const now = Date.now();
+    return (now - dataCache.current.lastFetch) < CACHE_DURATION;
+  };
+
+  // 智能数据获取 - 只在必要时获取数据
+  const smartFetchCourseData = async (forceRefresh = false) => {
+    if (!courseId || !user?.id) return;
+
+    // 如果有有效缓存且不强制刷新，使用缓存数据
+    if (!forceRefresh && isCacheValid() && dataCache.current.course && dataCache.current.sections && dataCache.current.enrollment) {
+      setCourse(dataCache.current.course);
+      setSections(dataCache.current.sections);
+      setEnrollment(dataCache.current.enrollment);
+      return;
+    }
+
+    // 只在初始加载时显示loading
+    if (dataCache.current.isInitialLoad) {
+      setIsLoading(true);
+    }
+
+    try {
+      // 获取课程信息
+      const { data: courseData, error: courseError } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('id', courseId)
+        .eq('status', 'published')
+        .single();
+
+      if (courseError) throw courseError;
+
+      // 获取课程章节和视频信息
+      const { data: sectionsData, error: sectionsError } = await supabase
+        .from('course_sections')
+        .select(`
+          id,
+          title,
+          description,
+          order,
+          course_id,
+          video_id,
+          minio_videos(
+            id,
+            title,
+            video_url,
+            minio_object_name,
+            play_url,
+            play_url_expires_at
+          )
+        `)
+        .eq('course_id', courseId)
+        .order('"order"', { ascending: true });
+
+      if (sectionsError) throw sectionsError;
+
+      // 获取视频播放进度（包含最后播放时间）
+      const { data: progressData, error: progressError } = await supabase
+        .from('video_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('course_id', courseId);
+
+      if (progressError) {
+        console.error('获取播放进度失败:', progressError);
+      }
+
+      // 将进度数据映射到章节
+      const progressMap = new Map<string, VideoProgress>();
+      if (progressData) {
+        progressData.forEach(progress => {
+          if (progress.section_id) {
+            progressMap.set(progress.section_id, {
+              id: progress.id,
+              current_position: progress.current_position || 0,
+              duration: progress.duration || 0,
+              progress_percentage: progress.progress_percentage || 0,
+              is_completed: progress.is_completed || false,
+              section_id: progress.section_id,
+              video_id: progress.video_id || '',
+              last_played_at: progress.last_played_at,
+              completed_at: progress.completed_at
+            });
+          }
+        });
+      }
+      
+      const formattedSections: CourseSection[] = sectionsData?.map(section => ({
+        id: section.id,
+        title: section.title,
+        description: section.description,
+        order: section.order,
+        course_id: section.course_id,
+        video_id: section.video_id,
+        video: section.minio_videos ? {
+          id: (section.minio_videos as any).id,
+          title: (section.minio_videos as any).title,
+          video_url: (section.minio_videos as any).video_url,
+          minio_object_name: (section.minio_videos as any).minio_object_name,
+          play_url: (section.minio_videos as any).play_url,
+          play_url_expires_at: (section.minio_videos as any).play_url_expires_at,
+        } : null,
+        progress: progressMap.get(section.id) || null
+      })) || [];
+
+      // 获取学习进度
+      const { data: enrollmentData, error: enrollmentError } = await supabase
+        .from('course_enrollments')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('course_id', courseId)
+        .single();
+
+      if (enrollmentError && enrollmentError.code !== 'PGRST116') {
+        throw enrollmentError;
+      }
+
+      // 更新缓存
+      dataCache.current = {
+        course: courseData,
+        sections: formattedSections,
+        enrollment: enrollmentData as CourseEnrollment,
+        lastFetch: Date.now(),
+        isInitialLoad: false
+      };
+
+      // 更新状态
+      setCourse(courseData);
+      setSections(formattedSections);
+      setEnrollment(enrollmentData as CourseEnrollment);
+
+    } catch (error: any) {
+      console.error('获取课程数据失败:', error);
+      toast({
+        variant: "destructive",
+        title: "加载失败",
+        description: error.message || "无法加载课程信息"
+      });
+      navigate('/student');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 窗口焦点检测
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // 当页面变为可见且缓存过期时，刷新数据
+      if (!document.hidden && !isCacheValid()) {
+        smartFetchCourseData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [courseId, user]);
+
+  // 初始数据获取
   useEffect(() => {
     if (courseId && user) {
-      fetchCourseData();
+      smartFetchCourseData();
     }
   }, [courseId, user]);
 
@@ -99,6 +280,11 @@ const CourseStudyPage = () => {
       }
     };
   }, [progressSaveInterval]);
+
+  // 保留原有的fetchCourseData函数供其他地方调用
+  const fetchCourseData = async () => {
+    await smartFetchCourseData(true); // 强制刷新
+  };
 
   // 精准刷新视频进度（避免整个页面刷新）
   const refreshVideoProgress = async () => {
@@ -130,7 +316,8 @@ const CourseStudyPage = () => {
               is_completed: progress.is_completed || false,
               section_id: progress.section_id,
               video_id: progress.video_id || '',
-              last_played_at: progress.last_played_at
+              last_played_at: progress.last_played_at,
+              completed_at: progress.completed_at
             });
           }
         });
@@ -202,124 +389,6 @@ const CourseStudyPage = () => {
   // 计算课程整体进度（原函数，使用全局sections状态）
   const calculateCourseProgress = async () => {
     await calculateCourseProgressWithSections(sections);
-  };
-
-  const fetchCourseData = async () => {
-    if (!courseId || !user?.id) return;
-
-    try {
-      setIsLoading(true);
-
-      // 获取课程信息
-      const { data: courseData, error: courseError } = await supabase
-        .from('courses')
-        .select('*')
-        .eq('id', courseId)
-        .eq('status', 'published')
-        .single();
-
-      if (courseError) throw courseError;
-      setCourse(courseData);
-
-      // 获取课程章节和视频信息
-      const { data: sectionsData, error: sectionsError } = await supabase
-        .from('course_sections')
-        .select(`
-          id,
-          title,
-          description,
-          order,
-          course_id,
-          video_id,
-          minio_videos(
-            id,
-            title,
-            video_url,
-            minio_object_name,
-            play_url,
-            play_url_expires_at
-          )
-        `)
-        .eq('course_id', courseId)
-        .order('"order"', { ascending: true });
-
-      if (sectionsError) throw sectionsError;
-
-      // 获取视频播放进度（包含最后播放时间）
-      const { data: progressData, error: progressError } = await supabase
-        .from('video_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('course_id', courseId);
-
-      if (progressError) {
-        console.error('获取播放进度失败:', progressError);
-      }
-
-      // 将进度数据映射到章节
-      const progressMap = new Map<string, VideoProgress>();
-      if (progressData) {
-        progressData.forEach(progress => {
-          if (progress.section_id) {
-            progressMap.set(progress.section_id, {
-              id: progress.id,
-              current_position: progress.current_position || 0,
-              duration: progress.duration || 0,
-              progress_percentage: progress.progress_percentage || 0,
-              is_completed: progress.is_completed || false,
-              section_id: progress.section_id,
-              video_id: progress.video_id || '',
-              last_played_at: progress.last_played_at
-            });
-          }
-        });
-      }
-      
-      const formattedSections: CourseSection[] = sectionsData?.map(section => ({
-        id: section.id,
-        title: section.title,
-        description: section.description,
-        order: section.order,
-        course_id: section.course_id,
-        video_id: section.video_id,
-        video: section.minio_videos ? {
-          id: (section.minio_videos as any).id,
-          title: (section.minio_videos as any).title,
-          video_url: (section.minio_videos as any).video_url,
-          minio_object_name: (section.minio_videos as any).minio_object_name,
-          play_url: (section.minio_videos as any).play_url,
-          play_url_expires_at: (section.minio_videos as any).play_url_expires_at,
-        } : null,
-        progress: progressMap.get(section.id) || null
-      })) || [];
-
-      setSections(formattedSections);
-
-      // 获取学习进度
-      const { data: enrollmentData, error: enrollmentError } = await supabase
-        .from('course_enrollments')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('course_id', courseId)
-        .single();
-
-      if (enrollmentError && enrollmentError.code !== 'PGRST116') {
-        throw enrollmentError;
-      }
-
-      setEnrollment(enrollmentData as CourseEnrollment);
-
-    } catch (error: any) {
-      console.error('获取课程数据失败:', error);
-      toast({
-        variant: "destructive",
-        title: "加载失败",
-        description: error.message || "无法加载课程信息"
-      });
-      navigate('/student');
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   // 播放视频（使用智能缓存）
@@ -503,7 +572,8 @@ const CourseStudyPage = () => {
               is_completed: isCompleted,
               section_id: sectionId,
               video_id: videoId,
-              last_played_at: new Date().toISOString()
+              last_played_at: new Date().toISOString(),
+              completed_at: isCompleted ? new Date().toISOString() : section.progress?.completed_at
             }
           } : section
         )
@@ -514,16 +584,39 @@ const CourseStudyPage = () => {
     }
   };
 
-  // 获取章节状态（三种状态：未学习、已完成、上次学习）
+  // 获取章节状态（四种状态：未学习、学习中、已完成、上次学习）
   const getSectionStatus = (section: CourseSection, allSections: CourseSection[]) => {
-    // 已完成状态
+    // 已完成状态 - 但需要检查是否重新播放
     if (section.progress?.is_completed) {
-      return 'completed';
+      // 如果已完成但有更新的播放记录，说明重新播放了
+      const hasRecentPlay = section.progress.last_played_at && 
+        section.progress.completed_at && 
+        new Date(section.progress.last_played_at) > new Date(section.progress.completed_at);
+      
+      if (!hasRecentPlay) {
+        return 'completed';
+      }
     }
     
-    // 找出所有有进度且未完成的章节
+    // 找出所有有进度且未完成的章节，或已完成但重新播放的章节
     const learningProgresses = allSections
-      .filter(s => s.progress && s.progress.current_position > 0 && !s.progress.is_completed)
+      .filter(s => {
+        if (!s.progress || !s.progress.current_position || s.progress.current_position <= 0) {
+          return false;
+        }
+        
+        // 未完成的章节
+        if (!s.progress.is_completed) {
+          return true;
+        }
+        
+        // 已完成但重新播放的章节
+        const hasRecentPlay = s.progress.last_played_at && 
+          s.progress.completed_at && 
+          new Date(s.progress.last_played_at) > new Date(s.progress.completed_at);
+        
+        return hasRecentPlay;
+      })
       .map(s => ({
         sectionId: s.id,
         lastPlayedAt: s.progress!.last_played_at
@@ -531,12 +624,29 @@ const CourseStudyPage = () => {
       .filter(p => p.lastPlayedAt) // 只保留有播放时间的
       .sort((a, b) => new Date(b.lastPlayedAt!).getTime() - new Date(a.lastPlayedAt!).getTime()); // 按时间倒序排列
     
-    // 如果当前章节是最后播放的且未完成，则为"上次学习"状态
+    // 如果当前章节是最后播放的且未完成（或已完成但重新播放），则为"上次学习"状态
     if (learningProgresses.length > 0 && learningProgresses[0].sectionId === section.id) {
       return 'last_learning';
     }
     
-    // 如果有播放进度但不是最后播放的，或者没有播放时间，则为"未学习"状态
+    // 如果有播放进度但不是最后播放的，则为"学习中"状态
+    if (section.progress && section.progress.current_position > 0) {
+      // 未完成的章节
+      if (!section.progress.is_completed) {
+        return 'learning';
+      }
+      
+      // 已完成但重新播放的章节
+      const hasRecentPlay = section.progress.last_played_at && 
+        section.progress.completed_at && 
+        new Date(section.progress.last_played_at) > new Date(section.progress.completed_at);
+      
+      if (hasRecentPlay) {
+        return 'learning';
+      }
+    }
+    
+    // 没有播放进度，为"未学习"状态
     return 'available';
   };
 
@@ -558,6 +668,14 @@ const CourseStudyPage = () => {
         textColor: 'text-blue-800',
         cardBg: 'bg-blue-50/30',
         cardBorder: 'border-blue-200'
+      },
+      learning: { 
+        icon: PlayCircle, 
+        color: 'text-orange-600', 
+        bgColor: 'bg-orange-100',
+        textColor: 'text-orange-800',
+        cardBg: 'bg-orange-50/30',
+        cardBorder: 'border-orange-200'
       },
       available: { 
         icon: Play, 
@@ -590,6 +708,9 @@ const CourseStudyPage = () => {
       case 'last_learning':
         text = '上次学习';
         break;
+      case 'learning':
+        text = '学习中';
+        break;
       case 'available':
         text = '未学习';
         break;
@@ -620,6 +741,14 @@ const CourseStudyPage = () => {
       return {
         text: '继续播放',
         variant: 'default' as const,
+        disabled: false
+      };
+    }
+    
+    if (status === 'learning') {
+      return {
+        text: '继续播放',
+        variant: 'secondary' as const,
         disabled: false
       };
     }
