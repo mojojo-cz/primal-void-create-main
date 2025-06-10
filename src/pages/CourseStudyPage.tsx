@@ -655,11 +655,12 @@ const CourseStudyPage = () => {
     const configs = {
       completed: { 
         icon: CheckCircle, 
-        color: 'text-emerald-600', 
-        bgColor: 'bg-emerald-100',
-        textColor: 'text-emerald-800',
-        cardBg: 'bg-emerald-50/30',
-        cardBorder: 'border-emerald-200'
+        color: 'text-gray-500', 
+        bgColor: 'bg-gray-100',
+        textColor: 'text-gray-600',
+        cardBg: 'bg-gray-50/30',
+        cardBorder: 'border-gray-200',
+        titleColor: 'text-gray-500'  // 已完成章节标题颜色
       },
       last_learning: { 
         icon: PlayCircle, 
@@ -667,7 +668,8 @@ const CourseStudyPage = () => {
         bgColor: 'bg-blue-100',
         textColor: 'text-blue-800',
         cardBg: 'bg-blue-50/30',
-        cardBorder: 'border-blue-200'
+        cardBorder: 'border-blue-200',
+        titleColor: 'text-gray-900'  // 正常黑色标题
       },
       learning: { 
         icon: PlayCircle, 
@@ -675,7 +677,8 @@ const CourseStudyPage = () => {
         bgColor: 'bg-orange-100',
         textColor: 'text-orange-800',
         cardBg: 'bg-orange-50/30',
-        cardBorder: 'border-orange-200'
+        cardBorder: 'border-orange-200',
+        titleColor: 'text-gray-900'  // 正常黑色标题
       },
       available: { 
         icon: Play, 
@@ -683,7 +686,8 @@ const CourseStudyPage = () => {
         bgColor: 'bg-gray-100',
         textColor: 'text-gray-800',
         cardBg: 'bg-white',
-        cardBorder: 'border-gray-200'
+        cardBorder: 'border-gray-200',
+        titleColor: 'text-gray-900'  // 正常黑色标题
       }
     };
     return configs[status as keyof typeof configs] || configs.available;
@@ -829,6 +833,11 @@ const CourseStudyPage = () => {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // 获取"上次学习"的章节
+  const getLastLearningSection = () => {
+    return sections.find(section => getSectionStatus(section, sections) === 'last_learning');
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -855,11 +864,14 @@ const CourseStudyPage = () => {
     );
   }
 
+  // 获取"上次学习"的章节
+  const lastLearningSection = getLastLearningSection();
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 头部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4">
+        <div className="max-w-6xl mx-auto px-3 py-2 md:px-4 md:py-4">
           <div className="grid grid-cols-3 items-center">
             {/* 左侧返回按钮 */}
             <div className="flex justify-start">
@@ -867,7 +879,7 @@ const CourseStudyPage = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate('/student')}
-                className="flex items-center"
+                className="flex items-center h-8 w-8 p-0 md:h-auto md:w-auto md:p-2"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -875,19 +887,87 @@ const CourseStudyPage = () => {
 
             {/* 中间课程标题 */}
             <div className="flex justify-center">
-              <h1 className="text-xl font-bold text-center truncate px-2">{course.title}</h1>
+              <h1 className="text-base font-bold text-center truncate px-2 md:text-xl">{course.title}</h1>
             </div>
 
             {/* 右侧课程进度 */}
             <div className="flex justify-end">
-              <span className="text-sm font-medium">{enrollment.progress}%</span>
+              <span className="text-xs font-medium md:text-sm">{enrollment.progress}%</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* 主要内容 */}
-      <div className="max-w-6xl mx-auto px-3 py-4 md:px-4 md:py-6">
+      <div className="max-w-6xl mx-auto px-3 py-4 md:px-4 md:py-6 space-y-6">
+        {/* 快速继续学习卡片 */}
+        {lastLearningSection && (
+          <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-blue-100/50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="p-2 bg-blue-600 rounded-lg flex-shrink-0">
+                    <PlayCircle className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-medium text-blue-900 text-sm truncate">
+                        第{lastLearningSection.order}章：{lastLearningSection.title}
+                      </h3>
+                      <Badge className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 border-0 flex-shrink-0">
+                        上次学习
+                      </Badge>
+                    </div>
+                    
+                    {/* 简化的进度信息 */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-600 transition-all" 
+                            style={{ width: `${lastLearningSection.progress?.progress_percentage || 0}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs text-blue-700 font-medium">
+                          {lastLearningSection.progress?.progress_percentage || 0}%
+                        </span>
+                      </div>
+                      
+                      {lastLearningSection.progress?.current_position && lastLearningSection.progress?.duration && (
+                        <span className="text-xs text-blue-600">
+                          {formatTime(lastLearningSection.progress.current_position)} / {formatTime(lastLearningSection.progress.duration)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex-shrink-0 ml-3">
+                  {lastLearningSection.video ? (
+                    <Button
+                      size="sm"
+                      onClick={() => handlePlayVideo(lastLearningSection)}
+                      disabled={playingVideoId === lastLearningSection.video?.id}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-8 text-xs font-medium"
+                    >
+                      {playingVideoId === lastLearningSection.video?.id ? '加载中' : '继续播放'}
+                    </Button>
+                  ) : (
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      disabled
+                      className="px-4 h-8 text-xs"
+                    >
+                      暂无视频
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* 章节列表 */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-4">
@@ -916,8 +996,8 @@ const CourseStudyPage = () => {
                           {getStatusIcon(status)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-gray-900 truncate text-sm md:text-base">
-                            {section.title}
+                          <h3 className={`font-medium ${config.titleColor} truncate text-sm md:text-base`}>
+                            第{section.order}章：{section.title}
                           </h3>
                           {section.description && (
                             <p className="text-xs text-gray-600 mt-1 truncate md:text-sm">
