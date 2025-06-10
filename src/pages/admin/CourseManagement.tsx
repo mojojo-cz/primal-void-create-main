@@ -225,11 +225,11 @@ const CourseManagement = () => {
   const fetchCourses = async () => {
     setLoading(true);
     try {
-      // 查询课程
-      const { data: courseData, error: courseError } = await supabase
-        .from("courses")
-        .select("id, title, description, cover_image, status, created_at, updated_at")
-        .order("created_at", { ascending: false });
+    // 查询课程
+    const { data: courseData, error: courseError } = await supabase
+      .from("courses")
+      .select("id, title, description, cover_image, status, created_at, updated_at")
+      .order("created_at", { ascending: false });
       
       if (courseError) {
         console.error('获取课程失败:', courseError);
@@ -238,10 +238,10 @@ const CourseManagement = () => {
           title: "获取课程失败",
           description: courseError.message || "无法获取课程信息"
         });
-        setCourses([]);
-        setLoading(false);
-        return;
-      }
+      setCourses([]);
+      setLoading(false);
+      return;
+    }
       
       if (!courseData) {
         setCourses([]);
@@ -251,8 +251,8 @@ const CourseManagement = () => {
       
       // 分两步查询：先查章节，再查视频，最后在客户端关联
       // 1. 查询所有章节
-      const { data: sectionData, error: sectionError } = await supabase
-        .from("course_sections")
+    const { data: sectionData, error: sectionError } = await supabase
+      .from("course_sections")
         .select(`id, title, description, "order", course_id, video_id`)
         .order('"order"', { ascending: true });
       
@@ -261,15 +261,15 @@ const CourseManagement = () => {
       if (sectionError) {
         console.error('获取章节失败:', sectionError);
         // 即使章节查询失败，也显示课程，只是没有章节
-        setCourses(courseData.map(c => ({ ...c, sections: [] })));
-        setLoading(false);
+      setCourses(courseData.map(c => ({ ...c, sections: [] })));
+      setLoading(false);
         toast({
           variant: "destructive",
           title: "获取章节失败",
           description: sectionError.message || "无法获取章节信息，但课程信息已加载"
         });
-        return;
-      }
+      return;
+    }
 
       // 2. 获取所有相关的视频ID
       const videoIds = [...new Set(sectionData?.filter(s => s.video_id).map(s => s.video_id) || [])];
@@ -294,20 +294,20 @@ const CourseManagement = () => {
       }
       
       // 按课程分组章节，同时关联视频信息
-      const courseMap: Record<string, SectionWithVideo[]> = {};
+    const courseMap: Record<string, SectionWithVideo[]> = {};
       (sectionData || []).forEach((s: any) => {
-        if (!s.course_id) return;
-        if (!courseMap[s.course_id]) courseMap[s.course_id] = [];
+      if (!s.course_id) return;
+      if (!courseMap[s.course_id]) courseMap[s.course_id] = [];
         
         // 从视频映射中获取视频信息
         const video = s.video_id && videoMap[s.video_id] ? videoMap[s.video_id] : null;
         
-        courseMap[s.course_id].push({
-          id: s.id,
-          title: s.title,
-          description: s.description,
-          order: s.order,
-          video_id: s.video_id,
+      courseMap[s.course_id].push({
+        id: s.id,
+        title: s.title,
+        description: s.description,
+        order: s.order,
+        video_id: s.video_id,
           video: video ? {
             id: video.id,
             title: video.title,
@@ -315,16 +315,16 @@ const CourseManagement = () => {
             minio_object_name: video.minio_object_name,
             play_url: video.play_url,
             play_url_expires_at: video.play_url_expires_at,
-          } : null,
-        });
+        } : null,
       });
+    });
       
 
       
-      // 合并到课程
+    // 合并到课程
       const coursesWithSections = courseData.map(c => ({ ...c, sections: courseMap[c.id] || [] }));
       setCourses(coursesWithSections);
-      setLoading(false);
+    setLoading(false);
     } catch (error: any) {
       console.error('获取课程和章节异常:', error);
       toast({
@@ -371,10 +371,10 @@ const CourseManagement = () => {
   const fetchSections = async (courseId: string) => {
     try {
       // 1. 查询指定课程的章节
-      const { data: sectionData, error: sectionError } = await supabase
-        .from("course_sections")
+    const { data: sectionData, error: sectionError } = await supabase
+      .from("course_sections")
         .select(`id, title, description, "order", course_id, video_id`)
-        .eq("course_id", courseId)
+      .eq("course_id", courseId)
         .order('"order"', { ascending: true });
       
 
@@ -753,17 +753,17 @@ const CourseManagement = () => {
           .eq('id', videoUploadDialog.sectionId);
         
         await fetchCourses(); // 刷新课程数据
-        
-        toast({
+      
+      toast({
           title: "上传并关联成功",
           description: "视频已成功上传并关联到章节"
-        });
-      } catch (error: any) {
-        toast({
-          variant: "destructive",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
           title: "关联失败",
           description: error.message || "视频上传成功但关联失败"
-        });
+      });
       }
     } else {
       toast({
@@ -930,7 +930,7 @@ const CourseManagement = () => {
         const negativeOrder = -(index + 1); // 使用负数：-1, -2, -3, ...
         console.log(`Setting ${section.title} to temporary negative order: ${negativeOrder}`);
         return supabase
-          .from('course_sections')
+        .from('course_sections')
           .update({ "order": negativeOrder })
           .eq('id', section.id);
       });
@@ -1161,7 +1161,7 @@ const CourseManagement = () => {
       }
       
       console.log('✅ Step 1 completed: Affected sections set to negative values');
-      
+    
       // 第二步：设置最终的order值
       console.log('📝 Step 2: Setting final order values');
       const updatePromises = newSections.map((section, index) => {
@@ -1205,7 +1205,7 @@ const CourseManagement = () => {
       });
     }
   };
-
+  
   // 向下移动章节
   const moveSectionDown = async (courseId: string, sectionIndex: number) => {
     const course = courses.find(c => c.id === courseId);
@@ -1251,7 +1251,7 @@ const CourseManagement = () => {
       }
       
       console.log('✅ Step 1 completed: Affected sections set to negative values');
-      
+    
       // 第二步：设置最终的order值
       console.log('📝 Step 2: Setting final order values');
       const updatePromises = newSections.map((section, index) => {
@@ -1290,7 +1290,7 @@ const CourseManagement = () => {
       setCourses(restoredCourses);
       
       toast({
-        variant: "destructive",
+        variant: "destructive", 
         title: "移动保存失败",
         description: error.message || "向下移动保存失败，已恢复原始顺序"
       });
@@ -1550,7 +1550,7 @@ const CourseManagement = () => {
                                                     className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-100"
                                                     title="拖拽排序"
                                                   >
-                                                    <GripVertical className="w-4 h-4 text-gray-400" />
+                                                  <GripVertical className="w-4 h-4 text-gray-400" />
                                                   </div>
                                                   <div className="flex flex-col">
                                                     <Button 
@@ -1802,7 +1802,7 @@ const CourseManagement = () => {
                                 <div className="flex-1">
                                   <p className="font-medium text-blue-900 text-sm truncate">{section.video.title}</p>
                                   <p className="text-xs text-blue-700">已选择视频</p>
-                                </div>
+                      </div>
                                 <Button 
                                   type="button" 
                                   size="sm" 
@@ -1812,7 +1812,7 @@ const CourseManagement = () => {
                                 >
                                   清除
                                 </Button>
-                              </div>
+                    </div>
                             </div>
                           ) : (
                             <div className="space-y-2">
@@ -1957,7 +1957,7 @@ const CourseManagement = () => {
                   folders={folders}
                   onUploadComplete={handleMinIOUploadComplete}
                   onCancel={closeVideoDialog}
-                />
+                  />
               </div>
             )}
             
@@ -2070,16 +2070,16 @@ const CourseManagement = () => {
           
           {/* 只在"选择现有视频"Tab时显示DialogFooter */}
           {activeTab === 'select' && (
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeVideoDialog}>取消</Button>
-              <Button 
-                type="button" 
-                onClick={applyVideoToSection} 
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeVideoDialog}>取消</Button>
+            <Button 
+              type="button" 
+              onClick={applyVideoToSection} 
                 disabled={!selectedVideoId}
-              >
-                应用所选视频
-              </Button>
-            </DialogFooter>
+            >
+              应用所选视频
+            </Button>
+          </DialogFooter>
           )}
         </DialogContent>
       </Dialog>
