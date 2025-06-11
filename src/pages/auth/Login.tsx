@@ -133,7 +133,29 @@ const Login = () => {
       loginSuccessToast();
     } catch (error: any) {
       console.error("登录错误:", error);
-      errorToast("账号或密码不正确，请重试。");
+      
+      // 检查错误信息，提供更精确的错误提示
+      const errorMessage = error.message || '';
+      
+      if (errorMessage.includes('账号已过期')) {
+        // 如果是账号过期错误，显示过期信息
+        errorToast(errorMessage);
+      } else if (errorMessage.includes('Invalid login credentials')) {
+        // Supabase 的标准错误：账号或密码错误
+        errorToast("账号或密码不正确，请重试。");
+      } else if (errorMessage.includes('Email not confirmed')) {
+        // 邮箱未确认错误
+        errorToast("账号未激活，请联系管理员。");
+      } else if (errorMessage.includes('Too many requests')) {
+        // 请求过于频繁
+        errorToast("登录尝试过于频繁，请稍后重试。");
+      } else if (errorMessage.includes('网络') || errorMessage.includes('Network')) {
+        // 网络错误
+        errorToast("网络连接异常，请检查网络后重试。");
+      } else {
+        // 其他未知错误，保持原有提示
+        errorToast("账号或密码不正确，请重试。");
+      }
     } finally {
       setIsLoading(false);
     }

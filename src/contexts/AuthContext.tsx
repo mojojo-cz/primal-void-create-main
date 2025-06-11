@@ -48,6 +48,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     navigate(path, { replace: true });
   };
 
+  // 检查账号是否过期
+  const isAccountExpired = (profile: any): boolean => {
+    if (!profile?.access_expires_at) {
+      return false; // 没有设置过期时间则认为未过期
+    }
+    
+    const expiresAt = new Date(profile.access_expires_at);
+    const now = new Date();
+    return now > expiresAt;
+  };
+
+  // 处理过期账号
+  const handleExpiredAccount = async (profile: any) => {
+    console.log("[AUTH] 账号已过期，强制登出");
+    
+    // 强制登出
+    await supabase.auth.signOut();
+    
+    // 清理本地状态
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    
+    // 清理 Supabase 本地缓存
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('sb-')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // 显示过期提示并跳转到登录页
+    setTimeout(() => {
+      // 使用原生alert确保用户看到提示
+      alert(`账号已过期！\n\n您的账号有效期至：${new Date(profile.access_expires_at).toLocaleDateString('zh-CN')}\n请联系管理员续费或重新开通权限。`);
+      window.location.replace("/auth/login");
+    }, 100);
+  };
+
   // 初始化系统设置
   const initializeSystemSettings = async () => {
     try {
@@ -90,6 +128,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       console.log("[AUTH] 获取到用户资料:", data);
+      
+      // 检查账号是否过期
+      if (data && isAccountExpired(data)) {
+        await handleExpiredAccount(data);
+        return;
+      }
+      
       setProfile(data);
       
       // 如果在认证页面，执行重定向
@@ -104,6 +149,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("[AUTH] 获取资料出错:", error);
     }
   };
+
+  // 定时检查已登录用户账号是否过期
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    
+    if (profile && session) {
+      console.log("[AUTH] 启动账号过期检查定时器");
+      // 每5分钟检查一次账号是否过期
+      intervalId = setInterval(() => {
+        console.log("[AUTH] 执行定时账号过期检查");
+        if (profile && isAccountExpired(profile)) {
+          console.log("[AUTH] 定时检查发现账号已过期");
+          handleExpiredAccount(profile);
+        }
+      }, 5 * 60 * 1000); // 5分钟
+    }
+    
+    return () => {
+      if (intervalId) {
+        console.log("[AUTH] 清除账号过期检查定时器");
+        clearInterval(intervalId);
+      }
+    };
+  }, [profile, session]);
 
   useEffect(() => {
     // 设置身份验证状态监听器
@@ -210,6 +279,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (profileError) throw profileError;
           
           console.log("[AUTH] 获取到用户资料:", profileData);
+          
+          // 检查账号是否过期
+          if (profileData && isAccountExpired(profileData)) {
+            console.log("[AUTH] 登录时发现账号已过期");
+            // 强制登出过期账号
+            await supabase.auth.signOut();
+            throw new Error(`账号已过期！有效期至：${new Date(profileData.access_expires_at).toLocaleDateString('zh-CN')}，请联系管理员续费。`);
+          }
+          
           setProfile(profileData);
           
           // 立即执行重定向
@@ -218,6 +296,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } catch (profileError) {
           console.error("[AUTH] 获取资料出错:", profileError);
+          // 如果是过期错误，重新抛出，否则正常处理
+          throw profileError;
         }
       }
       

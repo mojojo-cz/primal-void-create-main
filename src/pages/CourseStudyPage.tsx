@@ -493,6 +493,144 @@ const CourseStudyPage = () => {
     }
   };
 
+  // 重置并播放视频（用于已完成的视频重新播放）
+  const handleResetAndPlayVideo = async (section: CourseSection) => {
+    if (!section.video || !user?.id || !courseId) {
+      toast({
+        variant: "destructive",
+        title: "重新播放失败",
+        description: "该章节暂无视频或用户信息缺失"
+      });
+      return;
+    }
+
+    try {
+      setPlayingVideoId(section.video.id);
+
+      // 首先重置该章节的播放进度
+      const { error: resetError } = await supabase
+        .from('video_progress')
+        .upsert({
+          user_id: user.id,
+          course_id: courseId,
+          section_id: section.id,
+          video_id: section.video.id,
+          current_position: 0,
+          duration: section.progress?.duration || 0,
+          progress_percentage: 0,
+          is_completed: false,
+          last_played_at: new Date().toISOString(),
+          completed_at: null // 清除完成时间
+        }, {
+          onConflict: 'user_id,section_id'
+        });
+
+      if (resetError) {
+        console.error('重置播放进度失败:', resetError);
+        throw new Error('重置播放进度失败');
+      }
+
+      // 更新本地状态，重置进度
+      setSections(prevSections => 
+        prevSections.map(s => 
+          s.id === section.id ? {
+            ...s,
+            progress: section.progress ? {
+              ...section.progress,
+              current_position: 0,
+              progress_percentage: 0,
+              is_completed: false,
+              last_played_at: new Date().toISOString(),
+              completed_at: null
+            } : null
+          } : s
+        )
+      );
+
+      // 获取播放URL并开始播放（从头开始）
+      let playUrl = section.video.play_url;
+      
+      // 检查是否有存储的播放URL且未过期
+      if (section.video.play_url && section.video.play_url_expires_at) {
+        const expiresAt = new Date(section.video.play_url_expires_at);
+        const now = new Date();
+        const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+        
+        // 如果URL将在10小时内过期，则重新生成（适应长视频播放）
+        if (timeUntilExpiry > 10 * 60 * 60 * 1000) {
+          // URL仍然有效，直接使用，从头开始播放
+          setVideoDialog({ 
+            open: true, 
+            url: section.video.play_url, 
+            title: `${course?.title} - ${section.title}`,
+            sectionId: section.id,
+            videoId: section.video.id,
+            startTime: 0 // 从头开始播放
+          });
+          
+          toast({
+            title: "开始重新播放",
+            description: `正在从头播放：${section.title}`,
+            duration: 3000
+          });
+          return;
+        }
+      }
+      
+      // 如果没有播放URL或将在10小时内过期，调用Edge Function生成新的播放URL
+      const { data, error } = await supabase.functions.invoke('minio-presigned-upload', {
+        body: { 
+          action: 'generatePlayUrl',
+          objectName: section.video.minio_object_name 
+        }
+      });
+      
+      if (error) throw error;
+
+      if (data?.playUrl) {
+        // 更新本地缓存URL
+        setSections(prevSections => 
+          prevSections.map(s => 
+            s.id === section.id && s.video ? {
+              ...s,
+              video: {
+                ...s.video,
+                play_url: data.playUrl,
+                play_url_expires_at: data.expiresAt
+              }
+            } : s
+          )
+        );
+        
+        setVideoDialog({ 
+          open: true, 
+          url: data.playUrl, 
+          title: `${course?.title} - ${section.title}`,
+          sectionId: section.id,
+          videoId: section.video.id,
+          startTime: 0 // 从头开始播放
+        });
+        
+        toast({
+          title: "开始重新播放",
+          description: `正在从头播放：${section.title}`,
+          duration: 3000
+        });
+      } else {
+        throw new Error('未能获取视频播放URL');
+      }
+    } catch (error: any) {
+      console.error('重新播放失败:', error);
+      toast({
+        variant: "destructive",
+        title: "重新播放失败",
+        description: error.message || "无法重新播放视频"
+      });
+    } finally {
+      setPlayingVideoId(null);
+    }
+  };
+
   // 更新课程整体进度
   const updateCourseProgress = async (newProgress: number) => {
     if (!enrollment || !user?.id) return;
@@ -800,7 +938,7 @@ const CourseStudyPage = () => {
   // 处理视频对话框关闭
   const handleVideoDialogClose = async (open: boolean) => {
     if (!open) {
-      // 清理倒计时定时器
+      // 清理倒计时器
       if (countdownTimer) {
         clearInterval(countdownTimer);
         setCountdownTimer(null);
@@ -1135,7 +1273,15 @@ const CourseStudyPage = () => {
                   {lastLearningSection.video ? (
                     <Button
                       size="sm"
-                      onClick={() => handlePlayVideo(lastLearningSection)}
+                      onClick={() => {
+                        const status = getSectionStatus(lastLearningSection, sections);
+                        // 如果是已完成状态，使用重置播放函数
+                        if (status === 'completed') {
+                          handleResetAndPlayVideo(lastLearningSection);
+                        } else {
+                          handlePlayVideo(lastLearningSection);
+                        }
+                      }}
                       disabled={playingVideoId === lastLearningSection.video?.id}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-8 text-xs font-medium"
                     >
@@ -1208,7 +1354,14 @@ const CourseStudyPage = () => {
                           <Button
                             size="sm"
                             variant={buttonConfig.variant}
-                            onClick={() => handlePlayVideo(section)}
+                            onClick={() => {
+                              // 如果是已完成状态，使用重置播放函数
+                              if (status === 'completed') {
+                                handleResetAndPlayVideo(section);
+                              } else {
+                                handlePlayVideo(section);
+                              }
+                            }}
                             disabled={buttonConfig.disabled}
                             className="min-w-[72px] h-9 text-xs md:min-w-[80px] md:text-sm"
                           >

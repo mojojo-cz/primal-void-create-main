@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, GraduationCap, User, PlayCircle, Clock, CheckCircle, X, Menu, RotateCcw, Trash2 } from "lucide-react";
+import { BookOpen, GraduationCap, User, PlayCircle, Clock, CheckCircle, X, Menu, RotateCcw, Trash2, LogOut } from "lucide-react";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,7 +56,7 @@ interface LearningCourse {
 }
 
 const StudentPage = () => {
-  const { profile, user } = useAuth();
+  const { profile, user, signOut } = useAuth();
   const navigate = useNavigate();
   const systemSettings = getGlobalSettings();
   const [activeTab, setActiveTab] = useState<ActiveTab>("learning");
@@ -614,6 +614,32 @@ const StudentPage = () => {
     }
   };
 
+  // 退出登录处理函数
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      // 清理 Supabase 本地缓存
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
+      // 显示成功提示
+      toast({
+        title: "退出成功",
+        description: "您已安全退出系统",
+      });
+      // 强制刷新页面并跳转到登录页，彻底重置所有状态
+      window.location.replace("/auth/login");
+    } catch (error) {
+      toast({
+        title: "退出失败",
+        description: "退出登录时发生错误，请重试",
+        variant: "destructive"
+      });
+    }
+  };
+
   const navItems = [
     { id: "learning", label: "学习中", icon: <PlayCircle className="h-5 w-5" /> },
     { id: "courses", label: "我的课程", icon: <BookOpen className="h-5 w-5" /> },
@@ -623,13 +649,8 @@ const StudentPage = () => {
   const renderContent = () => {
     switch (activeTab) {
       case "learning":
-  return (
+        return (
           <div className="space-y-4 md:space-y-6">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold mb-2">学习中</h2>
-              <p className="text-sm md:text-base text-muted-foreground">继续学习您已添加的课程</p>
-            </div>
-            
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -782,7 +803,7 @@ const StudentPage = () => {
             <div>
               <h2 className="text-xl md:text-2xl font-bold mb-2">我的课程</h2>
               <p className="text-sm md:text-base text-muted-foreground">浏览所有可学习的课程内容</p>
-        </div>
+            </div>
 
             {courses.length > 0 ? (
               <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -792,8 +813,8 @@ const StudentPage = () => {
                       <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                         <BookOpen className="h-4 w-4 md:h-5 md:w-5 text-primary flex-shrink-0" />
                         <span className="line-clamp-2">{course.title}</span>
-              </CardTitle>
-            </CardHeader>
+                      </CardTitle>
+                    </CardHeader>
                     <CardContent className="pt-0">
                       <p className="text-sm md:text-base text-muted-foreground mb-4 line-clamp-3">
                         {course.description || '暂无课程描述'}
@@ -870,8 +891,8 @@ const StudentPage = () => {
                   <BookOpen className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-base md:text-lg font-medium mb-2">暂无课程</h3>
                   <p className="text-sm md:text-base text-muted-foreground">目前还没有可学习的课程</p>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
             )}
           </div>
         );
@@ -884,31 +905,31 @@ const StudentPage = () => {
               <p className="text-sm md:text-base text-muted-foreground">查看和管理您的个人资料</p>
             </div>
             
-          <Card>
+            <Card>
               <CardHeader className="pb-3 md:pb-6">
                 <CardTitle className="text-base md:text-lg">基本信息</CardTitle>
-            </CardHeader>
-            <CardContent>
+              </CardHeader>
+              <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 md:gap-6">
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">学号</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-2">用户名</h4>
                     <p className="text-base md:text-lg">{profile?.username}</p>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">姓名</h4>
                     <p className="text-base md:text-lg">{profile?.full_name || '未设置'}</p>
                   </div>
-                <div>
+                  <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">手机号</h4>
                     <p className="text-base md:text-lg">{profile?.phone_number || '未设置'}</p>
-                </div>
-                <div>
+                  </div>
+                  <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">账户类型</h4>
                     <p className="text-base md:text-lg">学员</p>
-                </div>
-                {profile?.school && (
-                  <>
-                    <div>
+                  </div>
+                  {profile?.school && (
+                    <>
+                      <div>
                         <h4 className="text-sm font-medium text-muted-foreground mb-2">学校</h4>
                         <p className="text-base md:text-lg">{profile.school}</p>
                       </div>
@@ -938,7 +959,7 @@ const StudentPage = () => {
                       <h4 className="text-sm font-medium text-muted-foreground mb-2">有效期至</h4>
                       <p className="text-base md:text-lg">{new Date(profile.access_expires_at).toLocaleDateString()}</p>
                     </div>
-                )}
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1001,7 +1022,7 @@ const StudentPage = () => {
 
         {/* 导航菜单 */}
         <nav className="flex-1 p-4 space-y-6">
-                <div>
+          <div>
             <h3 className="nav-group-title text-xs uppercase tracking-wider mb-3">
               学习功能
             </h3>
@@ -1021,6 +1042,29 @@ const StudentPage = () => {
                   <span className="font-medium">{item.label}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* 分隔线 */}
+          <div className="sidebar-divider"></div>
+
+          {/* 系统功能分组 */}
+          <div>
+            <h3 className="nav-group-title text-xs uppercase tracking-wider mb-3">
+              系统功能
+            </h3>
+            <div className="space-y-1">
+              {/* 退出登录按钮 */}
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setIsMobileSidebarOpen(false);
+                }}
+                className="sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg w-full text-left hover:bg-red-50 hover:text-red-600 transition-colors"
+              >
+                <LogOut className="h-5 w-5" />
+                <span className="font-medium">退出登录</span>
+              </button>
             </div>
           </div>
         </nav>
