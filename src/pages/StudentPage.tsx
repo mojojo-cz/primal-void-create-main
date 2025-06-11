@@ -295,8 +295,10 @@ const StudentPage = () => {
     if (enrolledCourseIds.has(courseId)) {
       toast({
         title: "课程已添加",
-        description: "该课程已在您的学习列表中"
+        description: "该课程已在您的学习列表中，正在跳转到学习中页面"
       });
+      // 如果课程已在学习列表中，直接跳转到学习中页面
+      setActiveTab("learning");
       return;
     }
 
@@ -320,11 +322,14 @@ const StudentPage = () => {
 
       toast({
         title: "课程已添加",
-        description: "课程已添加到学习列表中，请开始学习"
+        description: "课程已添加到学习列表中，正在跳转到学习中页面"
       });
 
       // 刷新数据
       await fetchLearningCourses();
+      
+      // 自动跳转到"学习中"页面
+      setActiveTab("learning");
       
     } catch (error: any) {
       console.error('添加课程到学习中失败:', error);
@@ -333,8 +338,10 @@ const StudentPage = () => {
       if (error.code === '23505') {
         toast({
           title: "课程已添加",
-          description: "该课程已在您的学习列表中"
+          description: "该课程已在您的学习列表中，正在跳转到学习中页面"
         });
+        // 即使课程已存在，也跳转到学习中页面
+        setActiveTab("learning");
       } else {
         toast({
           variant: "destructive",

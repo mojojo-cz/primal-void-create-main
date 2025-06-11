@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,6 +85,18 @@ const CourseStudyPage = () => {
   });
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const [progressSaveInterval, setProgressSaveInterval] = useState<NodeJS.Timeout | null>(null);
+  const [nextVideoDialog, setNextVideoDialog] = useState<{ 
+    open: boolean; 
+    currentSectionId: string;
+    nextSection: CourseSection | null;
+    countdown: number;
+  }>({ 
+    open: false, 
+    currentSectionId: '',
+    nextSection: null,
+    countdown: 10
+  });
+  const [countdownTimer, setCountdownTimer] = useState<NodeJS.Timeout | null>(null);
 
   // 数据缓存和加载状态管理
   const dataCache = useRef<{
@@ -788,6 +800,15 @@ const CourseStudyPage = () => {
   // 处理视频对话框关闭
   const handleVideoDialogClose = async (open: boolean) => {
     if (!open) {
+      // 清理倒计时定时器
+      if (countdownTimer) {
+        clearInterval(countdownTimer);
+        setCountdownTimer(null);
+      }
+      
+      // 关闭选择对话框
+      setNextVideoDialog({ open: false, currentSectionId: '', nextSection: null, countdown: 10 });
+      
       // 关闭对话框前保存当前播放进度
       getCurrentVideoProgressAndSave();
       
@@ -851,21 +872,42 @@ const CourseStudyPage = () => {
     return null; // 没有找到下一个有视频的章节
   };
 
-  // 自动播放下一个视频
-  const autoPlayNextVideo = async (currentSectionId: string) => {
+  // 显示下一个视频选择对话框
+  const showNextVideoChoice = async (currentSectionId: string) => {
     const nextSection = getNextPlayableSection(currentSectionId);
     
     if (nextSection) {
-      // 短暂延迟后自动播放下一个视频
-      setTimeout(async () => {
-        await handlePlayVideo(nextSection);
-        
-        toast({
-          title: "自动播放",
-          description: `正在播放下一章节：${nextSection.title}`,
-          duration: 3000
-        });
-      }, 1500); // 1.5秒延迟，给用户时间看到完成状态
+      // 显示选择对话框
+      setNextVideoDialog({
+        open: true,
+        currentSectionId,
+        nextSection,
+        countdown: 10
+      });
+      
+      // 启动倒计时
+      let timeLeft = 10;
+      const timer = setInterval(async () => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          setCountdownTimer(null);
+          // 自动播放下一个视频 - 先关闭对话框，再播放视频
+          setNextVideoDialog({ open: false, currentSectionId: '', nextSection: null, countdown: 10 });
+          setTimeout(async () => {
+            await handlePlayVideo(nextSection);
+            toast({
+              title: "自动播放",
+              description: `正在播放下一章节：${nextSection.title}`,
+              duration: 3000
+            });
+          }, 100);
+        } else {
+          setNextVideoDialog(prev => ({ ...prev, countdown: timeLeft }));
+        }
+      }, 1000);
+      
+      setCountdownTimer(timer);
     } else {
       // 已经是最后一个章节，显示课程完成提示
       toast({
@@ -881,10 +923,109 @@ const CourseStudyPage = () => {
     }
   };
 
+  // 播放下一个视频
+  const playNextVideo = async () => {
+    console.log('playNextVideo 被调用');
+    console.log('nextVideoDialog:', nextVideoDialog);
+    
+    const { nextSection } = nextVideoDialog;
+    console.log('nextSection:', nextSection);
+    
+    if (nextSection) {
+      console.log('准备播放下一个视频:', nextSection.title);
+      
+      // 清除倒计时
+      if (countdownTimer) {
+        console.log('清除倒计时');
+        clearInterval(countdownTimer);
+        setCountdownTimer(null);
+      }
+      
+      // 先关闭选择对话框
+      console.log('关闭选择对话框');
+      setNextVideoDialog({ open: false, currentSectionId: '', nextSection: null, countdown: 10 });
+      
+      // 稍微延迟后播放视频，确保状态更新完成
+      setTimeout(async () => {
+        try {
+          console.log('开始调用 handlePlayVideo');
+          await handlePlayVideo(nextSection);
+          console.log('handlePlayVideo 调用成功');
+          
+          toast({
+            title: "继续播放",
+            description: `正在播放下一章节：${nextSection.title}`,
+            duration: 3000
+          });
+        } catch (error) {
+          console.error('播放下一个视频失败:', error);
+          toast({
+            title: "播放失败",
+            description: "播放下一章节时出现错误，请重试",
+            duration: 3000
+          });
+        }
+      }, 100);
+    } else {
+      console.log('nextSection 为空，无法播放');
+    }
+  };
+
+  // 退出播放，关闭视频对话框
+  const exitVideoPlayback = () => {
+    // 清除倒计时
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+      setCountdownTimer(null);
+    }
+    
+    setNextVideoDialog({ open: false, currentSectionId: '', nextSection: null, countdown: 10 });
+    setVideoDialog(prev => ({ ...prev, open: false }));
+  };
+
   // 获取"上次学习"的章节
   const getLastLearningSection = () => {
     return sections.find(section => getSectionStatus(section, sections) === 'last_learning');
   };
+
+  // 键盘快捷键支持
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (nextVideoDialog.open) {
+        switch (event.key) {
+          case ' ':
+          case 'Enter':
+            event.preventDefault();
+            console.log('键盘事件触发 - 空格/回车');
+            if (nextVideoDialog.nextSection) {
+              console.log('键盘事件调用 playNextVideo');
+              playNextVideo();
+            } else {
+              console.log('键盘事件 - nextSection 为空');
+            }
+            break;
+          case 'Escape':
+            event.preventDefault();
+            exitVideoPlayback();
+            break;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [nextVideoDialog.open, nextVideoDialog.nextSection]);
+
+  // 清理倒计时器
+  useEffect(() => {
+    return () => {
+      if (countdownTimer) {
+        clearInterval(countdownTimer);
+      }
+    };
+  }, [countdownTimer]);
 
   if (isLoading) {
     return (
@@ -1107,6 +1248,7 @@ const CourseStudyPage = () => {
           <DialogHeader className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/60 to-transparent p-4">
             <DialogTitle className="text-white text-lg font-medium">{videoDialog.title}</DialogTitle>
           </DialogHeader>
+          
           <div className="aspect-video bg-black">
             <VideoPlayer
               src={videoDialog.url}
@@ -1141,13 +1283,126 @@ const CourseStudyPage = () => {
                   setProgressSaveInterval(null);
                 }
 
-                // 自动播放下一个视频
-                autoPlayNextVideo(videoDialog.sectionId);
+                // 显示下一个视频选择对话框
+                showNextVideoChoice(videoDialog.sectionId);
               }}
             />
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 下一个视频选择界面 - 独立的全屏覆盖层 */}
+      {nextVideoDialog.open && (
+        <div 
+          className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4"
+          style={{ zIndex: 99999 }}
+          onClick={(e) => {
+            console.log('背景被点击');
+            e.stopPropagation();
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg p-3 sm:p-4 md:p-6 w-full max-w-xs sm:max-w-sm md:max-w-md text-center shadow-2xl max-h-[90vh] overflow-y-auto relative"
+            style={{ zIndex: 100000 }}
+            onClick={(e) => {
+              console.log('对话框内部被点击');
+              e.stopPropagation();
+            }}
+          >
+            <div className="mb-3 sm:mb-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-3 md:mb-4">
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-green-600" />
+              </div>
+              <h3 className="text-base sm:text-lg md:text-xl font-semibold mb-1 sm:mb-2">视频播放完成</h3>
+            </div>
+            
+            {nextVideoDialog.nextSection ? (
+              <>
+                <p className="text-gray-600 mb-1 sm:mb-2 text-xs sm:text-sm md:text-base">下一章节：</p>
+                <p className="font-medium text-gray-900 mb-3 sm:mb-4 md:mb-6 text-xs sm:text-sm md:text-base leading-relaxed">{nextVideoDialog.nextSection.title}</p>
+                
+                <div className="bg-blue-50 rounded-lg p-2 sm:p-3 md:p-4 mb-3 sm:mb-4 md:mb-6">
+                  <p className="text-xs sm:text-xs md:text-sm text-blue-700 mb-2">
+                    {nextVideoDialog.countdown}秒后自动播放下一章节
+                  </p>
+                  <div className="w-full bg-blue-200 rounded-full h-1.5 sm:h-2">
+                    <div 
+                      className="bg-blue-600 h-1.5 sm:h-2 rounded-full transition-all duration-1000" 
+                      style={{ width: `${((10 - nextVideoDialog.countdown) / 10) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-2 sm:gap-2 md:flex-row md:gap-3 md:justify-center relative">
+                  <Button 
+                    onClick={(e) => {
+                      console.log('立即播放按钮被点击 - 原生事件');
+                      e.preventDefault();
+                      e.stopPropagation();
+                      playNextVideo();
+                    }}
+                    onMouseDown={(e) => {
+                      console.log('立即播放按钮 mousedown');
+                      e.stopPropagation();
+                    }}
+                    onTouchStart={(e) => {
+                      console.log('立即播放按钮 touchstart');
+                      e.stopPropagation();
+                    }}
+                    className="w-full md:w-auto px-3 sm:px-4 md:px-6 py-2 bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 relative z-10 cursor-pointer"
+                    style={{ 
+                      zIndex: 100001,
+                      pointerEvents: 'auto',
+                      touchAction: 'manipulation'
+                    }}
+                  >
+                    立即播放
+                    <span className="hidden md:inline ml-2 text-xs opacity-75">(空格)</span>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={(e) => {
+                      console.log('退出播放按钮被点击');
+                      e.preventDefault();
+                      e.stopPropagation();
+                      exitVideoPlayback();
+                    }}
+                    className="w-full md:w-auto px-3 sm:px-4 md:px-6 py-2 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 relative z-10 cursor-pointer"
+                    style={{ 
+                      zIndex: 100001,
+                      pointerEvents: 'auto',
+                      touchAction: 'manipulation'
+                    }}
+                  >
+                    退出播放
+                    <span className="hidden md:inline ml-2 text-xs opacity-75">(ESC)</span>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-600 mb-4 sm:mb-6 text-xs sm:text-sm md:text-base">已完成所有视频</p>
+                <Button 
+                  onClick={(e) => {
+                    console.log('关闭按钮被点击');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    exitVideoPlayback();
+                  }}
+                  className="w-full md:w-auto px-3 sm:px-4 md:px-6 py-2 text-xs sm:text-sm md:text-base h-8 sm:h-9 md:h-10 relative z-10 cursor-pointer"
+                  style={{ 
+                    zIndex: 100001,
+                    pointerEvents: 'auto',
+                    touchAction: 'manipulation'
+                  }}
+                >
+                  关闭
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
