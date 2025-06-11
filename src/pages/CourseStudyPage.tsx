@@ -1282,58 +1282,50 @@ const CourseStudyPage = () => {
       <div className="max-w-6xl mx-auto px-3 py-4 md:px-4 md:py-6 space-y-6">
         {/* 快速继续学习卡片 */}
         {lastLearningSection && (
-          <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-blue-100/50">
+          <Card className="border border-blue-200 shadow-lg bg-gradient-to-r from-blue-50 to-blue-100/50">
             <CardContent className="p-4">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-blue-600 rounded-lg flex-shrink-0">
-                    <PlayCircle className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-3">
-                    <h3 className="font-medium text-blue-900 text-sm leading-snug">
-                      {lastLearningSection.title}
-                    </h3>
-                    
-                    {/* 状态标签和进度信息同一行 */}
-                    <div className="flex items-center justify-between">
-                      <Badge className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 border-0">
-                        上次学习
-                      </Badge>
-                      <span className="text-xs text-blue-600 font-medium">
-                        已学习 {lastLearningSection.progress?.progress_percentage || 0}%
-                      </span>
-                    </div>
-                  </div>
+              <div className="space-y-3">
+                {/* 章节标题 */}
+                <h3 className="font-medium text-blue-900 text-sm leading-snug md:text-base">
+                  {lastLearningSection.title}
+                </h3>
+                
+                {/* 状态标签和进度信息同一行 */}
+                <div className="flex items-center justify-between">
+                  <Badge className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 border-0">
+                    上次学习
+                  </Badge>
+                  <span className="text-xs text-blue-600 font-medium">
+                    已学习 {lastLearningSection.progress?.progress_percentage || 0}%
+                  </span>
                 </div>
                 
-                {/* 底部按钮铺满宽度 */}
-                <div className="w-full">
-                  {lastLearningSection.video ? (
-                    <Button
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-sm font-medium"
-                      onClick={() => {
-                        const status = getSectionStatus(lastLearningSection, sections);
-                        // 如果是已完成状态，使用重置播放函数
-                        if (status === 'completed') {
-                          handleResetAndPlayVideo(lastLearningSection);
-                        } else {
-                          handlePlayVideo(lastLearningSection);
-                        }
-                      }}
-                      disabled={playingVideoId === lastLearningSection.video?.id}
-                    >
-                      {playingVideoId === lastLearningSection.video?.id ? '加载中' : '继续播放'}
-                    </Button>
-                  ) : (
-                    <Button 
-                      className="w-full h-9 text-sm"
-                      variant="ghost" 
-                      disabled
-                    >
-                      暂无视频
-                    </Button>
-                  )}
-                </div>
+                {/* 继续播放按钮 */}
+                {lastLearningSection.video ? (
+                  <Button
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm font-medium"
+                    onClick={() => {
+                      const status = getSectionStatus(lastLearningSection, sections);
+                      // 如果是已完成状态，使用重置播放函数
+                      if (status === 'completed') {
+                        handleResetAndPlayVideo(lastLearningSection);
+                      } else {
+                        handlePlayVideo(lastLearningSection);
+                      }
+                    }}
+                    disabled={playingVideoId === lastLearningSection.video?.id}
+                  >
+                    {playingVideoId === lastLearningSection.video?.id ? '加载中' : '继续播放'}
+                  </Button>
+                ) : (
+                  <Button 
+                    className="w-full h-10 text-sm"
+                    variant="ghost" 
+                    disabled
+                  >
+                    暂无视频
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

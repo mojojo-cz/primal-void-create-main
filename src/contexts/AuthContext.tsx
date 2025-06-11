@@ -156,14 +156,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     if (profile && session) {
       console.log("[AUTH] 启动账号过期检查定时器");
-      // 每5分钟检查一次账号是否过期
+      // 每15分钟检查一次账号是否过期（优化：降低检查频率）
       intervalId = setInterval(() => {
         console.log("[AUTH] 执行定时账号过期检查");
         if (profile && isAccountExpired(profile)) {
           console.log("[AUTH] 定时检查发现账号已过期");
           handleExpiredAccount(profile);
         }
-      }, 5 * 60 * 1000); // 5分钟
+      }, 15 * 60 * 1000); // 15分钟
     }
     
     return () => {
