@@ -122,6 +122,31 @@ const CourseStudyPage = () => {
     return (now - dataCache.current.lastFetch) < CACHE_DURATION;
   };
 
+  // 更新课程最后访问时间
+  const updateLastAccessedTime = async () => {
+    if (!user?.id || !courseId || !enrollment) return;
+
+    try {
+      const { error } = await supabase
+        .from('course_enrollments')
+        .update({
+          last_accessed_at: new Date().toISOString()
+        })
+        .eq('id', enrollment.id);
+
+      if (error) throw error;
+
+      // 更新本地状态
+      setEnrollment(prev => prev ? {
+        ...prev,
+        last_accessed_at: new Date().toISOString()
+      } : null);
+
+    } catch (error: any) {
+      console.error('更新最后访问时间失败:', error);
+    }
+  };
+
   // 智能数据获取 - 只在必要时获取数据
   const smartFetchCourseData = async (forceRefresh = false) => {
     if (!courseId || !user?.id) return;
@@ -131,6 +156,12 @@ const CourseStudyPage = () => {
       setCourse(dataCache.current.course);
       setSections(dataCache.current.sections);
       setEnrollment(dataCache.current.enrollment);
+      
+      // 即使使用缓存数据，也要更新最后访问时间
+      setTimeout(() => {
+        updateLastAccessedTime();
+      }, 100);
+      
       return;
     }
 
@@ -249,14 +280,20 @@ const CourseStudyPage = () => {
       setSections(formattedSections);
       setEnrollment(enrollmentData as CourseEnrollment);
 
+      // 数据加载完成后，更新最后访问时间
+      if (enrollmentData) {
+        setTimeout(() => {
+          updateLastAccessedTime();
+        }, 100);
+      }
+
     } catch (error: any) {
       console.error('获取课程数据失败:', error);
       toast({
         variant: "destructive",
-        title: "加载失败",
-        description: error.message || "无法加载课程信息"
+        title: "获取课程失败",
+        description: error.message || "无法加载课程信息，请稍后重试"
       });
-      navigate('/student');
     } finally {
       setIsLoading(false);
     }
@@ -703,6 +740,22 @@ const CourseStudyPage = () => {
         .single();
 
       if (error) throw error;
+
+      // 更新课程的最后访问时间（学习活动）
+      if (enrollment) {
+        await supabase
+          .from('course_enrollments')
+          .update({
+            last_accessed_at: new Date().toISOString()
+          })
+          .eq('id', enrollment.id);
+
+        // 更新本地状态
+        setEnrollment(prev => prev ? {
+          ...prev,
+          last_accessed_at: new Date().toISOString()
+        } : null);
+      }
 
       // 如果章节完成，计算课程整体进度
       if (isCompleted) {
@@ -1231,48 +1284,33 @@ const CourseStudyPage = () => {
         {lastLearningSection && (
           <Card className="border-0 shadow-sm bg-gradient-to-r from-blue-50 to-blue-100/50">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start gap-3">
                   <div className="p-2 bg-blue-600 rounded-lg flex-shrink-0">
                     <PlayCircle className="h-4 w-4 text-white" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-blue-900 text-sm truncate">
-                        {lastLearningSection.title}
-                      </h3>
-                      <Badge className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 border-0 flex-shrink-0">
+                  <div className="flex-1 min-w-0 space-y-3">
+                    <h3 className="font-medium text-blue-900 text-sm leading-snug">
+                      {lastLearningSection.title}
+                    </h3>
+                    
+                    {/* 状态标签和进度信息同一行 */}
+                    <div className="flex items-center justify-between">
+                      <Badge className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 border-0">
                         上次学习
                       </Badge>
-                    </div>
-                    
-                    {/* 简化的进度信息 */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 h-1.5 bg-blue-200 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-blue-600 transition-all" 
-                            style={{ width: `${lastLearningSection.progress?.progress_percentage || 0}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-xs text-blue-700 font-medium">
-                          {lastLearningSection.progress?.progress_percentage || 0}%
-                        </span>
-                      </div>
-                      
-                      {lastLearningSection.progress?.current_position && lastLearningSection.progress?.duration && (
-                        <span className="text-xs text-blue-600">
-                          {formatTime(lastLearningSection.progress.current_position)} / {formatTime(lastLearningSection.progress.duration)}
-                        </span>
-                      )}
+                      <span className="text-xs text-blue-600 font-medium">
+                        已学习 {lastLearningSection.progress?.progress_percentage || 0}%
+                      </span>
                     </div>
                   </div>
                 </div>
                 
-                <div className="flex-shrink-0 ml-3">
+                {/* 底部按钮铺满宽度 */}
+                <div className="w-full">
                   {lastLearningSection.video ? (
                     <Button
-                      size="sm"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-sm font-medium"
                       onClick={() => {
                         const status = getSectionStatus(lastLearningSection, sections);
                         // 如果是已完成状态，使用重置播放函数
@@ -1283,16 +1321,14 @@ const CourseStudyPage = () => {
                         }
                       }}
                       disabled={playingVideoId === lastLearningSection.video?.id}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 h-8 text-xs font-medium"
                     >
                       {playingVideoId === lastLearningSection.video?.id ? '加载中' : '继续播放'}
                     </Button>
                   ) : (
                     <Button 
-                      size="sm" 
+                      className="w-full h-9 text-sm"
                       variant="ghost" 
                       disabled
-                      className="px-4 h-8 text-xs"
                     >
                       暂无视频
                     </Button>
@@ -1313,70 +1349,50 @@ const CourseStudyPage = () => {
               {sections.map((section, index) => {
                 const status = getSectionStatus(section, sections);
                 const config = getStatusConfig(status);
-                const buttonConfig = getPlayButtonConfig(section, status);
                 
                 return (
                   <div
                     key={section.id}
                     className={`
-                      border rounded-xl p-4 transition-all duration-200
+                      border rounded-xl p-3 transition-all duration-200 cursor-pointer
                       ${config.cardBg} ${config.cardBorder}
-                      active:scale-[0.98] hover:shadow-sm
+                      active:scale-[0.98] hover:shadow-md
                       md:p-4
+                      ${!section.video ? 'cursor-not-allowed opacity-60' : ''}
                     `}
+                    onClick={() => {
+                      if (section.video) {
+                        if (status === 'completed') {
+                          handleResetAndPlayVideo(section);
+                        } else {
+                          handlePlayVideo(section);
+                        }
+                      }
+                    }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <div className="flex-shrink-0">
-                          {getStatusIcon(status)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className={`font-medium ${config.titleColor} truncate text-sm md:text-base`}>
-                            {section.title}
-                          </h3>
-                          {section.description && (
-                            <p className="text-xs text-gray-600 mt-1 truncate md:text-sm">
-                              {section.description}
-                            </p>
-                          )}
-                          {/* 简化的播放进度信息 */}
-                          {section.progress && section.progress.progress_percentage > 0 && (
-                            <p className="text-xs text-blue-600 mt-1">
-                              已学习 {section.progress.progress_percentage}%
-                            </p>
-                          )}
-                        </div>
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 pt-1">
+                        {getStatusIcon(status)}
                       </div>
-                      
-                      <div className="flex items-center space-x-2 flex-shrink-0">
-                        {getStatusBadge(status, section.progress)}
-                        {section.video ? (
-                          <Button
-                            size="sm"
-                            variant={buttonConfig.variant}
-                            onClick={() => {
-                              // 如果是已完成状态，使用重置播放函数
-                              if (status === 'completed') {
-                                handleResetAndPlayVideo(section);
-                              } else {
-                                handlePlayVideo(section);
-                              }
-                            }}
-                            disabled={buttonConfig.disabled}
-                            className="min-w-[72px] h-9 text-xs md:min-w-[80px] md:text-sm"
-                          >
-                            {buttonConfig.text}
-                          </Button>
-                        ) : (
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            disabled
-                            className="min-w-[72px] h-9 text-xs md:min-w-[80px] md:text-sm"
-                          >
-                            暂无视频
-                          </Button>
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <h3 className={`font-medium ${config.titleColor} text-sm leading-snug md:text-base`}>
+                          {section.title}
+                        </h3>
+                        {section.description && (
+                          <p className="text-xs text-gray-600 md:text-sm">
+                            {section.description}
+                          </p>
                         )}
+                        
+                        {/* 状态标签和进度信息同一行 */}
+                        <div className="flex items-center justify-between">
+                          {getStatusBadge(status, section.progress)}
+                          {section.progress && section.progress.progress_percentage > 0 && (
+                            <span className="text-xs text-gray-500">
+                              已学习 {section.progress.progress_percentage}%
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
