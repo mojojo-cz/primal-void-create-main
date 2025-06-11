@@ -66,10 +66,14 @@ const UserAvatarDropdown: React.FC<UserAvatarDropdownProps> = ({
     switch (profile?.user_type) {
       case 'admin':
         return '管理员';
-      case 'teacher':
-        return '教师';
+      case 'head_teacher':
+        return '班主任';
+      case 'business_teacher':
+        return '业务老师';
       case 'student':
         return '学员';
+      case 'trial_user':
+        return '体验用户';
       default:
         return '用户';
     }

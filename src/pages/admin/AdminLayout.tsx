@@ -26,16 +26,18 @@ const AdminLayout = () => {
   
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
-  const isTeacher = profile?.user_type === "teacher";
+  const isHeadTeacher = profile?.user_type === "head_teacher";
+  const isBusinessTeacher = profile?.user_type === "business_teacher";
+  const isTeacherRole = isHeadTeacher || isBusinessTeacher; // 班主任或业务老师
   const systemSettings = getGlobalSettings();
 
-  // 教师尝试访问限制页面时的处理函数
+  // 班主任尝试访问限制页面时的处理函数
   const handleRestrictedAccess = (e) => {
-    if (isTeacher) {
+    if (isHeadTeacher) {
       e.preventDefault();
       toast({
         title: "访问受限",
-        description: "教师账号无法访问此功能",
+        description: "班主任账号无法访问此功能",
         variant: "destructive"
       });
     }
@@ -75,35 +77,35 @@ const AdminLayout = () => {
         title: '课程管理', 
         breadcrumb: '课程管理',
         showDashboardLink: false,
-        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 课程管理`
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 课程管理`
       };
     } else if (path.includes('/videos')) {
       return { 
         title: '视频管理', 
         breadcrumb: '视频管理',
         showDashboardLink: false,
-        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 视频管理`
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 视频管理`
       };
     } else if (path.includes('/accounts')) {
       return { 
         title: '账号管理', 
         breadcrumb: '账号管理',
         showDashboardLink: false,
-        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 账号管理`
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 账号管理`
       };
     } else if (path.includes('/settings')) {
       return { 
         title: '系统设置', 
         breadcrumb: '设置',
         showDashboardLink: false,
-        breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'} / 系统设置`
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 系统设置`
       };
     }
     return { 
       title: '管理控制台', 
       breadcrumb: '控制台',
       showDashboardLink: false,
-      breadcrumbPath: `${isTeacher ? '教师控制台' : '管理控制台'}`
+      breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'}`
     };
   };
 
@@ -114,31 +116,44 @@ const AdminLayout = () => {
       to: "/admin/courses", 
       label: "课程管理", 
       icon: <BookOpen className="h-5 w-5" />,
-      restricted: isTeacher
+      allowedForTeachers: false // 班主任和业务老师不可访问
     },
     { 
       to: "/admin/videos", 
       label: "视频管理", 
       icon: <Video className="h-5 w-5" />,
-      restricted: isTeacher
+      allowedForTeachers: false // 班主任和业务老师不可访问
     },
     { 
       to: "/admin/accounts", 
       label: "账号管理", 
       icon: <Users className="h-5 w-5" />,
-      restricted: false
+      allowedForTeachers: true // 班主任和业务老师可以访问
     },
-  ];
+  ].filter(item => {
+    // 如果是班主任或业务老师，只显示允许访问的功能
+    if (isTeacherRole) {
+      return item.allowedForTeachers;
+    }
+    // 管理员显示所有功能
+    return true;
+  });
 
   const personalItems = [
     {
       to: "/admin/settings",
       label: "系统设置",
       icon: <Settings className="h-5 w-5" />,
-      restricted: isTeacher,
-      disabled: false
+      allowedForTeachers: false // 班主任和业务老师不可访问
     }
-  ];
+  ].filter(item => {
+    // 如果是班主任或业务老师，只显示允许访问的功能
+    if (isTeacherRole) {
+      return item.allowedForTeachers;
+    }
+    // 管理员显示所有功能
+    return true;
+  });
 
   // 退出登录按钮配置（单独处理，不在personalItems中）
   const logoutItem = {
@@ -179,7 +194,7 @@ const AdminLayout = () => {
               </div>
               <div>
                 <h1 className="text-lg font-bold leading-tight">
-                  {isTeacher ? "教师控制台" : "管理员控制台"}
+                  {isTeacherRole ? "教师控制台" : "管理员控制台"}
                 </h1>
               </div>
             </div>
@@ -195,7 +210,7 @@ const AdminLayout = () => {
             </Button>
           </div>
           <p className="text-sm">
-            {systemSettings.site_name || (isTeacher ? "教师管理系统" : "系统管理控制台")}
+            {systemSettings.site_name || (isTeacherRole ? "教师管理系统" : "系统管理控制台")}
           </p>
         </div>
 
@@ -207,51 +222,21 @@ const AdminLayout = () => {
               管理功能
             </h3>
             <div className="space-y-1">
-            {navItems.map((item) => {
-              if (item.restricted) {
-                return (
-                  <TooltipProvider key={item.to}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className="sidebar-restricted-item flex items-center gap-3 px-4 py-3 rounded-lg cursor-not-allowed"
-                          onClick={(e) => {
-                            handleRestrictedAccess(e);
-                            setIsMobileSidebarOpen(false);
-                          }}
-                        >
-                          {item.icon}
-                          <span className="font-medium">{item.label}</span>
-                          <AlertCircle className="h-4 w-4 ml-auto text-amber-500" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">
-                        <div className="flex items-center">
-                          <AlertCircle className="h-4 w-4 mr-1 text-amber-500" />
-                          <span>教师账号无法访问此功能</span>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                );
-              }
-              
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) => 
-                    `sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg hover:no-underline ${
-                      isActive ? 'active' : ''
-                    }`
-                  }
-                  onClick={() => setIsMobileSidebarOpen(false)}
-                >
-                  {item.icon}
-                  <span className="font-medium">{item.label}</span>
-                </NavLink>
-              );
-            })}
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => 
+                  `sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg hover:no-underline ${
+                    isActive ? 'active' : ''
+                  }`
+                }
+                onClick={() => setIsMobileSidebarOpen(false)}
+              >
+                {item.icon}
+                <span className="font-medium">{item.label}</span>
+              </NavLink>
+            ))}
             </div>
           </div>
 
@@ -264,50 +249,21 @@ const AdminLayout = () => {
               系统设置
             </h3>
             <div className="space-y-1">
-            {personalItems.map((item) => {
-              if (item.restricted) {
-                return (
-                  <TooltipProvider key={item.to}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className="sidebar-restricted-item flex items-center gap-3 px-4 py-3 rounded-lg cursor-not-allowed"
-                          onClick={(e) => {
-                            handleRestrictedAccess(e);
-                            setIsMobileSidebarOpen(false);
-                          }}
-                        >
-                          {item.icon}
-                          <span className="font-medium">{item.label}</span>
-                          <AlertCircle className="h-4 w-4 ml-auto text-amber-500" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">
-                        <div className="flex items-center">
-                          <AlertCircle className="h-4 w-4 mr-1 text-amber-500" />
-                          <span>教师账号无法访问此功能</span>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                );
-              }
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) => 
-                    `sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg hover:no-underline ${
-                      isActive ? 'active' : ''
-                    }`
-                  }
-                  onClick={() => setIsMobileSidebarOpen(false)}
-                >
-                  {item.icon}
-                  <span className="font-medium">{item.label}</span>
-                </NavLink>
-              );
-            })}
+            {personalItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => 
+                  `sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg hover:no-underline ${
+                    isActive ? 'active' : ''
+                  }`
+                }
+                onClick={() => setIsMobileSidebarOpen(false)}
+              >
+                {item.icon}
+                <span className="font-medium">{item.label}</span>
+              </NavLink>
+            ))}
             
             {/* 退出登录按钮 */}
             <button

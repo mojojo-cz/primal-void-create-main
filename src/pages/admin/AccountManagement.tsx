@@ -49,7 +49,9 @@ interface Profile {
 const userTypeMap: Record<string, string> = {
   registered: "注册用户",
   student: "学员",
-  teacher: "教师",
+  head_teacher: "班主任",
+  business_teacher: "业务老师",
+  trial_user: "体验用户",
   admin: "管理员"
 };
 
@@ -65,10 +67,20 @@ const userTypeColors: Record<string, { bg: string; text: string; border?: string
     text: "text-blue-700",
     border: "border-blue-200"
   },
-  teacher: {
+  head_teacher: {
     bg: "bg-green-100",
     text: "text-green-700",
     border: "border-green-200"
+  },
+  business_teacher: {
+    bg: "bg-purple-100",
+    text: "text-purple-700",
+    border: "border-purple-200"
+  },
+  trial_user: {
+    bg: "bg-yellow-100",
+    text: "text-yellow-700",
+    border: "border-yellow-200"
   },
   admin: {
     bg: "bg-red-100",
@@ -128,8 +140,12 @@ const AccountManagement = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetPasswordSubmitting, setResetPasswordSubmitting] = useState(false);
 
-  // 判断当前用户是否为教师
-  const isTeacher = profile?.user_type === "teacher";
+  // 判断当前用户是否为班主任
+  const isHeadTeacher = profile?.user_type === "head_teacher";
+  // 判断当前用户是否为业务老师
+  const isBusinessTeacher = profile?.user_type === "business_teacher";
+  // 判断当前用户是否为教师角色（班主任或业务老师）
+  const isTeacherRole = isHeadTeacher || isBusinessTeacher;
   // 判断当前用户是否为管理员
   const isAdmin = profile?.user_type === "admin";
 
@@ -154,9 +170,9 @@ const AccountManagement = () => {
       // 准备查询
       let query = supabase.from("profiles").select("*");
       
-      // 如果是教师账号，在数据库查询级别进行过滤
-      if (profile.user_type === "teacher") {
-        log("教师账号查询: 添加用户类型过滤条件");
+      // 如果是班主任或业务老师账号，在数据库查询级别进行过滤
+      if (profile.user_type === "head_teacher" || profile.user_type === "business_teacher") {
+        log("班主任/业务老师账号查询: 添加用户类型过滤条件");
         query = query.in("user_type", ["registered", "student"]);
       }
       
@@ -521,17 +537,33 @@ const AccountManagement = () => {
         let expiresAt = null;
         
         if (value === "student") {
-          // 学员设置为一年后过期
-          expiresAt = new Date(now.setFullYear(now.getFullYear() + 1));
-        } else if (value === "teacher") {
-          // 教师设置为20年后过期
-          expiresAt = new Date(now.setFullYear(now.getFullYear() + 20));
+          // 班主任和管理员设置学员为3年后过期
+          if (isHeadTeacher || isAdmin) {
+            expiresAt = new Date(now.setFullYear(now.getFullYear() + 3));
+          }
+        } else if (value === "registered") {
+          // 班主任和业务老师设置注册用户为1个月后过期
+          if (isHeadTeacher || isBusinessTeacher) {
+            expiresAt = new Date(now.setMonth(now.getMonth() + 1));
+          }
+          // 管理员设置注册用户不自动设置过期时间
+        } else if (value === "trial_user") {
+          // 业务老师设置体验用户为1个月后过期
+          if (isBusinessTeacher) {
+            expiresAt = new Date(now.setMonth(now.getMonth() + 1));
+          }
+          // 管理员设置体验用户不自动设置过期时间
+        } else if (value === "head_teacher" || value === "business_teacher") {
+          // 管理员设置班主任和业务老师为20年后过期
+          if (isAdmin) {
+            expiresAt = new Date(now.setFullYear(now.getFullYear() + 20));
+          }
         }
         
         return {
           ...prev,
           [name]: value,
-          // 如果选择了学员或教师，则更新过期时间
+          // 如果有设置过期时间，则更新过期时间
           ...(expiresAt ? { access_expires_at: expiresAt.toISOString() } : {})
         };
       }
@@ -597,7 +629,7 @@ const AccountManagement = () => {
     return <div className="container mx-auto p-4 md:p-8 text-center">加载用户信息中...</div>;
   }
 
-  if (!user || !profile || (profile.user_type !== 'admin' && profile.user_type !== 'teacher')) {
+  if (!user || !profile || (profile.user_type !== 'admin' && profile.user_type !== 'head_teacher' && profile.user_type !== 'business_teacher')) {
     return (
       <div className="container mx-auto p-4 md:p-8">
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
@@ -612,7 +644,7 @@ const AccountManagement = () => {
               <div className="text-sm text-yellow-700 mt-1">
                 {!user 
                   ? "您需要登录才能访问此页面" 
-                  : "只有管理员和教师才能管理用户账号"}
+                  : "只有管理员、班主任和业务老师才能管理用户账号"}
               </div>
             </div>
           </div>
@@ -699,6 +731,7 @@ const AccountManagement = () => {
                   <thead>
                     <tr className="border-b bg-gray-50">
                       <th className="py-3 px-4 text-left">用户名</th>
+                      <th className="py-3 px-4 text-left">姓名</th>
                       <th className="py-3 px-4 text-left">手机号</th>
                       <th className="py-3 px-4 text-left">用户类型</th>
                       <th className="py-3 px-4 text-left">学校</th>
@@ -710,6 +743,7 @@ const AccountManagement = () => {
                     {paginatedProfiles.map(profile => (
                     <tr key={profile.id} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4">{profile.username}</td>
+                      <td className="py-3 px-4">{profile.full_name || "-"}</td>
                       <td className="py-3 px-4">{profile.phone_number}</td>
                       <td className="py-3 px-4">
                         {getUserTypeTag(profile.user_type)}
@@ -747,7 +781,7 @@ const AccountManagement = () => {
                             </Button>
                           )}
                           
-                          {isTeacher ? (
+                          {isTeacherRole ? (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -870,11 +904,20 @@ const AccountManagement = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="registered">注册用户</SelectItem>
-                  <SelectItem value="student">学员</SelectItem>
-                  {/* 教师只能将用户类型设为注册用户或学员 */}
-                  {!isTeacher && (
+                  {/* 班主任可以设置学员，业务老师可以设置体验用户 */}
+                  {isHeadTeacher && (
+                    <SelectItem value="student">学员</SelectItem>
+                  )}
+                  {isBusinessTeacher && (
+                    <SelectItem value="trial_user">体验用户</SelectItem>
+                  )}
+                  {/* 管理员可以设置所有用户类型 */}
+                  {isAdmin && (
                     <>
-                      <SelectItem value="teacher">教师</SelectItem>
+                      <SelectItem value="student">学员</SelectItem>
+                      <SelectItem value="head_teacher">班主任</SelectItem>
+                      <SelectItem value="business_teacher">业务老师</SelectItem>
+                      <SelectItem value="trial_user">体验用户</SelectItem>
                       <SelectItem value="admin">管理员</SelectItem>
                     </>
                   )}
@@ -925,8 +968,19 @@ const AccountManagement = () => {
                   type="datetime-local"
                   value={formatDateForInput(editForm.access_expires_at)}
                   onChange={handleChange}
-                  className={`flex-1 ${editForm.user_type === "student" || editForm.user_type === "teacher" ? "border-blue-300 bg-blue-50" : ""}`}
+                  disabled={isTeacherRole} // 班主任和业务老师无法编辑过期时间
+                  className={`flex-1 ${editForm.user_type === "student" || editForm.user_type === "head_teacher" || editForm.user_type === "business_teacher" ? "border-blue-300 bg-blue-50" : ""} ${isTeacherRole ? "bg-gray-100 cursor-not-allowed" : ""}`}
                 />
+                {isHeadTeacher && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    学员:3年，注册用户:1个月
+                  </span>
+                )}
+                {isBusinessTeacher && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    注册用户、体验用户:1个月
+                  </span>
+                )}
               </div>
             </div>
           </div>

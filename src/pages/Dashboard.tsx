@@ -20,7 +20,8 @@ const Dashboard = () => {
         case 'admin':
           navigate('/admin/courses', { replace: true });
           break;
-        case 'teacher':
+        case 'head_teacher':
+        case 'business_teacher':
           navigate('/admin/accounts', { replace: true });
           break;
         case 'student':

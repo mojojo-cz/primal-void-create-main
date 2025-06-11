@@ -49,11 +49,11 @@ const App = () => (
               } 
             />
             
-            {/* 教师路由 */}
+            {/* 班主任路由 */}
             <Route 
               path="/teacher" 
               element={
-                <ProtectedRoute allowedUserTypes={["teacher"]}>
+                <ProtectedRoute allowedUserTypes={["head_teacher", "business_teacher"]}>
                   <Dashboard />
                 </ProtectedRoute>
               } 
@@ -63,7 +63,7 @@ const App = () => (
             <Route 
               path="/student" 
               element={
-                <ProtectedRoute allowedUserTypes={["student"]}>
+                <ProtectedRoute allowedUserTypes={["student", "trial_user"]}>
                   <StudentPage />
                 </ProtectedRoute>
               } 
@@ -73,7 +73,7 @@ const App = () => (
             <Route 
               path="/student/course/:courseId" 
               element={
-                <ProtectedRoute allowedUserTypes={["student"]}>
+                <ProtectedRoute allowedUserTypes={["student", "trial_user"]}>
                   <CourseStudyPage />
                 </ProtectedRoute>
               } 
@@ -83,7 +83,7 @@ const App = () => (
             <Route 
               path="/admin" 
               element={
-                <ProtectedRoute allowedUserTypes={["admin", "teacher"]}>
+                <ProtectedRoute allowedUserTypes={["admin", "head_teacher", "business_teacher"]}>
                   <AdminLayout />
                 </ProtectedRoute>
               } 

@@ -31,10 +31,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     switch (userType) {
       case "admin":
         return "/admin/courses";
-      case "teacher":
+      case "head_teacher":
+      case "business_teacher":
         return "/admin/accounts";
       case "student":
         return "/student";
+      case "trial_user":
+        return "/student"; // 体验用户也进入学习页面
       case "registered":
       default:
         return "/dashboard";
