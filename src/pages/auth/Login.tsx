@@ -220,7 +220,7 @@ const Login = () => {
                             {getAccountIcon(field.value)}
                           </div>
                           <Input 
-                            placeholder="用户名 / 手机号 / 邮箱" 
+                            placeholder="用户名/手机号" 
                             className="pl-10 h-11 border-muted-foreground/20 focus:border-primary transition-colors"
                             {...field} 
                           />

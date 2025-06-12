@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -226,6 +227,9 @@ const StudentPage = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user]);
+
+  // 确保页面加载时滚动到顶部
+  useScrollToTop([user?.id]);
 
   // 初始数据获取
   useEffect(() => {
@@ -646,6 +650,26 @@ const StudentPage = () => {
     { id: "profile", label: "个人信息", icon: <User className="h-5 w-5" /> },
   ];
 
+  // 用户类型映射
+  const getUserTypeLabel = (userType: string) => {
+    switch (userType) {
+      case 'student':
+        return '学员';
+      case 'trial_user':
+        return '体验用户';
+      case 'registered':
+        return '注册用户';
+      case 'admin':
+        return '管理员';
+      case 'head_teacher':
+        return '班主任';
+      case 'business_teacher':
+        return '业务老师';
+      default:
+        return '未知类型';
+    }
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case "learning":
@@ -782,15 +806,8 @@ const StudentPage = () => {
               <Card>
                 <CardContent className="text-center py-8 md:py-12">
                   <PlayCircle className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-base md:text-lg font-medium mb-2">暂无学习记录</h3>
-                  <p className="text-sm md:text-base text-muted-foreground mb-4">从"我的课程"中选择课程开始学习</p>
-                  <Button 
-                    onClick={() => setActiveTab("courses")}
-                    variant="outline"
-                    size="sm"
-                  >
-                    浏览课程
-                  </Button>
+                  <h3 className="text-base md:text-lg font-medium mb-2">课程加载中</h3>
+                  <p className="text-sm md:text-base text-muted-foreground mb-4">正在为您准备课程内容...</p>
                 </CardContent>
               </Card>
             )}
@@ -925,7 +942,7 @@ const StudentPage = () => {
                   </div>
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">账户类型</h4>
-                    <p className="text-base md:text-lg">学员</p>
+                    <p className="text-base md:text-lg">{getUserTypeLabel(profile?.user_type || '')}</p>
                   </div>
                   {profile?.school && (
                     <>

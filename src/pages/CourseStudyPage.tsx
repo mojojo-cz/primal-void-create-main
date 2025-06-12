@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { useScrollToTop } from "@/hooks/useScrollToTop";
 
 interface CourseSection {
   id: string;
@@ -313,6 +314,9 @@ const CourseStudyPage = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [courseId, user]);
+
+  // 确保页面加载时滚动到顶部
+  useScrollToTop([courseId, user?.id]);
 
   // 初始数据获取
   useEffect(() => {

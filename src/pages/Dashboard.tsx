@@ -19,18 +19,35 @@ const Dashboard = () => {
       switch (profile.user_type) {
         case 'admin':
           navigate('/admin/courses', { replace: true });
+          // 确保页面滚动到顶部
+          setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 100);
           break;
         case 'head_teacher':
         case 'business_teacher':
           navigate('/admin/accounts', { replace: true });
+          // 确保页面滚动到顶部
+          setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 100);
           break;
         case 'student':
+        case 'trial_user':
           navigate('/student', { replace: true });
+          // 确保页面滚动到顶部
+          setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 100);
           break;
         case 'registered':
         default:
           // 注册用户显示欢迎页面
           setIsRedirecting(false);
+          // 确保页面滚动到顶部
+          setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 100);
           break;
       }
     }

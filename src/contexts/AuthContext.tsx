@@ -13,6 +13,7 @@ interface AuthContextProps {
   signUp: (email: string, password: string, userData: any) => Promise<any>;
   signIn: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -49,6 +50,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const path = getRedirectPath(userType);
     console.log(`[AUTH] 重定向用户(${userType})到:`, path);
     navigate(path, { replace: true });
+    
+    // 确保页面滚动到顶部
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   // 检查账号是否过期
@@ -153,29 +159,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 定时检查已登录用户账号是否过期
+  // 定时检查已登录用户账号是否过期，并检查profile更新
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     
-    if (profile && session) {
-      console.log("[AUTH] 启动账号过期检查定时器");
-      // 每15分钟检查一次账号是否过期（优化：降低检查频率）
-      intervalId = setInterval(() => {
-        console.log("[AUTH] 执行定时账号过期检查");
+    if (profile && session && user?.id) {
+      console.log("[AUTH] 启动账号过期检查和profile更新检查定时器");
+      // 每2分钟检查一次账号是否过期和profile是否有更新
+      intervalId = setInterval(async () => {
+        console.log("[AUTH] 执行定时检查");
+        
+        // 检查账号是否过期
         if (profile && isAccountExpired(profile)) {
           console.log("[AUTH] 定时检查发现账号已过期");
           handleExpiredAccount(profile);
+          return;
         }
-      }, 15 * 60 * 1000); // 15分钟
+        
+        // 检查profile是否有更新
+        try {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("updated_at, user_type")
+            .eq("id", user.id)
+            .maybeSingle();
+            
+          if (!error && data) {
+            const currentUpdatedAt = profile?.updated_at;
+            const latestUpdatedAt = data.updated_at;
+            
+            // 如果数据库中的更新时间晚于当前profile的更新时间，说明有更新
+            if (currentUpdatedAt && latestUpdatedAt && 
+                new Date(latestUpdatedAt) > new Date(currentUpdatedAt)) {
+              console.log("[AUTH] 检测到profile数据更新，刷新profile");
+              await fetchProfile(user.id);
+            }
+          }
+        } catch (error) {
+          console.error("[AUTH] 检查profile更新失败:", error);
+        }
+      }, 2 * 60 * 1000); // 2分钟
     }
     
     return () => {
       if (intervalId) {
-        console.log("[AUTH] 清除账号过期检查定时器");
+        console.log("[AUTH] 清除定时检查器");
         clearInterval(intervalId);
       }
     };
-  }, [profile, session]);
+  }, [profile, session, user?.id]);
 
   useEffect(() => {
     // 设置身份验证状态监听器
@@ -322,6 +354,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // 手动刷新用户资料
+  const refreshProfile = async () => {
+    if (user?.id) {
+      console.log("[AUTH] 手动刷新用户资料");
+      await fetchProfile(user.id);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -332,6 +372,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUp,
         signIn,
         signOut,
+        refreshProfile,
       }}
     >
       {children}
