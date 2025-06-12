@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { loadSystemSettingsFromDB, checkDatabaseAccess } from "@/services/systemSettingsService";
 import { setGlobalSettings, loadSystemSettings, applySystemSettings } from "@/utils/systemSettings";
+import { scrollToTopOnRouteChange } from "@/utils/scrollToTop";
 
 interface AuthContextProps {
   session: Session | null;
@@ -51,10 +52,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log(`[AUTH] 重定向用户(${userType})到:`, path);
     navigate(path, { replace: true });
     
-    // 确保页面滚动到顶部
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 100);
+    // 使用优化的滚动到顶部函数
+    scrollToTopOnRouteChange();
   };
 
   // 检查账号是否过期

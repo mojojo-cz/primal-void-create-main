@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
+import { scrollToTopAfterLoad } from "@/utils/scrollToTop";
 
 const AdminLayout = () => {
   const { profile, signOut } = useAuth();
@@ -30,6 +31,11 @@ const AdminLayout = () => {
   const isBusinessTeacher = profile?.user_type === "business_teacher";
   const isTeacherRole = isHeadTeacher || isBusinessTeacher; // 班主任或业务老师
   const systemSettings = getGlobalSettings();
+
+  // 确保页面加载时滚动到顶部
+  useEffect(() => {
+    scrollToTopAfterLoad();
+  }, [location.pathname]);
 
   // 班主任尝试访问限制页面时的处理函数
   const handleRestrictedAccess = (e) => {

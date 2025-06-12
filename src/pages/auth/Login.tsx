@@ -8,6 +8,7 @@ import { loginSuccessToast, errorToast } from "@/utils/toast";
 import { applySystemSettings, getGlobalSettings } from "@/utils/systemSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { GraduationCap, Eye, EyeOff, Smartphone, Mail, User, ChevronRight } from "lucide-react";
+import { forceScrollToTop } from "@/utils/scrollToTop";
 
 import {
   Form,
@@ -129,6 +130,13 @@ const Login = () => {
       
       // 使用最终确定的邮箱进行登录
       await signIn(loginEmail, values.password);
+      
+      // 立即强制滚动到顶部
+      forceScrollToTop({
+        behavior: 'auto',
+        retries: 3,
+        delay: 100
+      });
       
       loginSuccessToast();
     } catch (error: any) {

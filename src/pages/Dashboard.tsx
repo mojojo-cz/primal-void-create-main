@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { User, Shield, AlertCircle, Phone, Mail, MessageCircle } from "lucide-react";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
+import { scrollToTopOnRouteChange } from "@/utils/scrollToTop";
 
 const Dashboard = () => {
   const { profile } = useAuth();
@@ -19,35 +20,27 @@ const Dashboard = () => {
       switch (profile.user_type) {
         case 'admin':
           navigate('/admin/courses', { replace: true });
-          // 确保页面滚动到顶部
-          setTimeout(() => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }, 100);
+          // 使用优化的滚动到顶部函数
+          scrollToTopOnRouteChange();
           break;
         case 'head_teacher':
         case 'business_teacher':
           navigate('/admin/accounts', { replace: true });
-          // 确保页面滚动到顶部
-          setTimeout(() => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }, 100);
+          // 使用优化的滚动到顶部函数
+          scrollToTopOnRouteChange();
           break;
         case 'student':
         case 'trial_user':
           navigate('/student', { replace: true });
-          // 确保页面滚动到顶部
-          setTimeout(() => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }, 100);
+          // 使用优化的滚动到顶部函数
+          scrollToTopOnRouteChange();
           break;
         case 'registered':
         default:
           // 注册用户显示欢迎页面
           setIsRedirecting(false);
-          // 确保页面滚动到顶部
-          setTimeout(() => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }, 100);
+          // 使用优化的滚动到顶部函数
+          scrollToTopOnRouteChange();
           break;
       }
     }
