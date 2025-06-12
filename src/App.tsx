@@ -59,7 +59,7 @@ const App = () => (
               } 
             />
             
-            {/* 学员路由 */}
+            {/* 正式学员路由 */}
             <Route 
               path="/student" 
               element={

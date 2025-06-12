@@ -90,7 +90,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <h1 className="text-lg md:text-xl font-bold leading-tight">
-                  学员控制台
+                  正式学员控制台
                 </h1>
                 <p className="text-xs md:text-sm text-muted-foreground">
                   {systemSettings.site_name || "显然考研·学员平台"}
@@ -134,10 +134,10 @@ const Dashboard = () => {
             <CardContent className="space-y-4">
               <div className="bg-white/60 rounded-lg p-4">
                 <h3 className="font-semibold text-amber-900 mb-2">
-                  学员请联系班主任或管理员开通权限
+                  正式学员请联系班主任或管理员开通权限
                 </h3>
                 <p className="text-sm text-amber-800 leading-relaxed">
-                  您的账户已成功注册，但需要班主任或管理员将账户授权为学员账户后，才能访问课程内容和学习资料。请联系相关人员开通权限
+                  您的账户已成功注册，但需要班主任或管理员将账户授权为正式学员账户后，才能访问课程内容和学习资料。请联系相关人员开通权限
               </p>
               </div>
             </CardContent>
@@ -156,7 +156,7 @@ const Dashboard = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between py-2 border-b border-border/40">
                     <span className="text-sm text-muted-foreground">账户类型</span>
-                    <span className="text-sm font-medium">注册学员</span>
+                    <span className="text-sm font-medium">注册用户</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-border/40">
                     <span className="text-sm text-muted-foreground">用户名</span>

@@ -654,7 +654,7 @@ const StudentPage = () => {
   const getUserTypeLabel = (userType: string) => {
     switch (userType) {
       case 'student':
-        return '学员';
+        return '正式学员';
       case 'trial_user':
         return '体验用户';
       case 'registered':

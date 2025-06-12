@@ -71,7 +71,7 @@ const UserAvatarDropdown: React.FC<UserAvatarDropdownProps> = ({
       case 'business_teacher':
         return '业务老师';
       case 'student':
-        return '学员';
+        return '正式学员';
       case 'trial_user':
         return '体验用户';
       default:

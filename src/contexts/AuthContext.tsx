@@ -10,7 +10,7 @@ interface AuthContextProps {
   user: User | null;
   profile: any | null;
   loading: boolean;
-  signUp: (email: string, password: string, userData: any) => Promise<any>;
+  signUp: (email: string, password: string, userData: any, autoSignOut?: boolean) => Promise<any>;
   signIn: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -125,34 +125,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = async (userId: string) => {
     try {
       console.log("[AUTH] 获取用户资料:", userId);
+      
+      // 使用专门的函数获取用户资料，避免RLS策略问题
       const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .maybeSingle();
+        .rpc('get_user_profile_for_login' as any, { user_id: userId });
 
       if (error) {
         console.error("[AUTH] 获取用户资料失败:", error);
         throw error;
       }
       
-      console.log("[AUTH] 获取到用户资料:", data);
+      // 因为RPC返回的是数组，取第一个元素
+      const profile = data && Array.isArray(data) && data.length > 0 ? data[0] : null;
+      
+      console.log("[AUTH] 获取到用户资料:", profile);
       
       // 检查账号是否过期
-      if (data && isAccountExpired(data)) {
-        await handleExpiredAccount(data);
+      if (profile && isAccountExpired(profile)) {
+        await handleExpiredAccount(profile);
         return;
       }
       
-      setProfile(data);
+      setProfile(profile);
       
       // 如果在认证页面，执行重定向
       const isAuthPage = location.pathname.startsWith("/auth/");
       const isHomePage = location.pathname === "/";
       
-      if (data && (isAuthPage || isHomePage)) {
+      if (profile && (isAuthPage || isHomePage)) {
         console.log("[AUTH] 位于登录页或首页，准备重定向");
-        performRedirect(data.user_type);
+        performRedirect(profile.user_type);
       }
     } catch (error) {
       console.error("[AUTH] 获取资料出错:", error);
@@ -251,7 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, [navigate, location.pathname]);
 
-  const signUp = async (email: string, password: string, userData: any) => {
+  const signUp = async (email: string, password: string, userData: any, autoSignOut = true) => {
     try {
       console.log("[AUTH] 注册新用户，邮箱(虚拟):", email, "附加数据:", userData);
       
@@ -280,7 +282,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // 立即登出防止自动登录状态导致页面跳转
       console.log("[AUTH] 注册成功，立即登出防止自动跳转");
-      await supabase.auth.signOut();
+      if (autoSignOut) {
+        await supabase.auth.signOut();
+      }
       
       return data;
     } catch (error: any) {
@@ -305,29 +309,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.user) {
         try {
           console.log("[AUTH] 获取登录用户资料:", data.user.id);
+          
+          // 使用专门的函数获取用户资料，避免RLS策略问题
           const { data: profileData, error: profileError } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", data.user.id)
-            .maybeSingle();
+            .rpc('get_user_profile_for_login' as any, { user_id: data.user.id });
             
           if (profileError) throw profileError;
           
-          console.log("[AUTH] 获取到用户资料:", profileData);
+          // 因为RPC返回的是数组，取第一个元素
+          const profile = profileData && Array.isArray(profileData) && profileData.length > 0 ? profileData[0] : null;
+          
+          console.log("[AUTH] 获取到用户资料:", profile);
           
           // 检查账号是否过期
-          if (profileData && isAccountExpired(profileData)) {
+          if (profile && isAccountExpired(profile)) {
             console.log("[AUTH] 登录时发现账号已过期");
             // 强制登出过期账号
             await supabase.auth.signOut();
-            throw new Error(`账号已过期！有效期至：${new Date(profileData.access_expires_at).toLocaleDateString('zh-CN')}，请联系管理员续费。`);
+            throw new Error(`账号已过期！有效期至：${new Date(profile.access_expires_at).toLocaleDateString('zh-CN')}，请联系管理员续费。`);
           }
           
-          setProfile(profileData);
+          setProfile(profile);
           
           // 立即执行重定向
-          if (profileData) {
-            performRedirect(profileData.user_type);
+          if (profile) {
+            performRedirect(profile.user_type);
           }
         } catch (profileError) {
           console.error("[AUTH] 获取资料出错:", profileError);

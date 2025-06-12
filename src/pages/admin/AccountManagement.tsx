@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Edit, Trash2, Search, X, User, Plus, FileEdit, Info, AlertCircle, ChevronLeft, ChevronRight, Key } from "lucide-react";
+import { Edit, Trash2, Search, X, User, Plus, FileEdit, Info, AlertCircle, ChevronLeft, ChevronRight, Key, ArrowUp, UserCheck, CheckCircle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
@@ -48,61 +48,25 @@ interface Profile {
 
 const userTypeMap: Record<string, string> = {
   registered: "注册用户",
-  student: "学员",
+  student: "正式学员",
   head_teacher: "班主任",
   business_teacher: "业务老师",
   trial_user: "体验用户",
   admin: "管理员"
 };
 
-// 用户类型颜色配置
-const userTypeColors: Record<string, { bg: string; text: string; border?: string }> = {
-  registered: {
-    bg: "bg-gray-100",
-    text: "text-gray-700",
-    border: "border-gray-200"
-  },
-  student: {
-    bg: "bg-blue-100",
-    text: "text-blue-700",
-    border: "border-blue-200"
-  },
-  head_teacher: {
-    bg: "bg-green-100",
-    text: "text-green-700",
-    border: "border-green-200"
-  },
-  business_teacher: {
-    bg: "bg-purple-100",
-    text: "text-purple-700",
-    border: "border-purple-200"
-  },
-  trial_user: {
-    bg: "bg-yellow-100",
-    text: "text-yellow-700",
-    border: "border-yellow-200"
-  },
-  admin: {
-    bg: "bg-red-100",
-    text: "text-red-700",
-    border: "border-red-200"
-  }
+// 用户类型颜色配置 - 简洁版本，仅使用文字颜色
+const userTypeColors: Record<string, string> = {
+  registered: "text-gray-600",      // 注册用户 - 灰色
+  student: "text-blue-600",         // 正式学员 - 蓝色
+  head_teacher: "text-green-600",   // 班主任 - 绿色
+  business_teacher: "text-purple-600", // 业务老师 - 紫色
+  trial_user: "text-orange-600",    // 体验用户 - 橙色
+  admin: "text-red-600"             // 管理员 - 红色
 };
 
 // 特殊调试信息
 const DEBUG_MODE = true;
-
-// 生成用户类型标签
-const getUserTypeTag = (userType: string) => {
-  const colors = userTypeColors[userType] || userTypeColors.registered;
-  const label = userTypeMap[userType] || userType;
-  
-  return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border || ''}`}>
-      {label}
-    </span>
-  );
-};
 
 const AccountManagement = () => {
   // 获取认证信息
@@ -170,11 +134,15 @@ const AccountManagement = () => {
       // 准备查询
       let query = supabase.from("profiles").select("*");
       
-      // 如果是班主任或业务老师账号，在数据库查询级别进行过滤
-      if (profile.user_type === "head_teacher" || profile.user_type === "business_teacher") {
-        log("班主任/业务老师账号查询: 添加用户类型过滤条件");
-        query = query.in("user_type", ["registered", "student"]);
+      // 根据用户角色控制查看权限
+      if (profile.user_type === "head_teacher") {
+        log("班主任账号查询: 只能查看注册用户、体验用户和正式学员");
+        query = query.in("user_type", ["registered", "trial_user", "student"]);
+      } else if (profile.user_type === "business_teacher") {
+        log("业务老师账号查询: 只能查看注册用户和体验用户");
+        query = query.in("user_type", ["registered", "trial_user"]);
       }
+      // 管理员可以查看所有用户类型，不需要额外过滤
       
       // 添加排序并执行查询
       const { data, error } = await query.order("created_at", { ascending: false });
@@ -230,7 +198,6 @@ const AccountManagement = () => {
     setEditForm({
       ...profile,
       full_name: profile.full_name || "",
-      school: profile.school || "",
       department: profile.department || "",
       major: profile.major || "",
       grade: profile.grade || ""
@@ -324,7 +291,6 @@ const AccountManagement = () => {
       };
       
       // 仅当有值时才添加可选字段，避免写入undefined
-      if (editForm.school) updateData.school = editForm.school.trim();
       if (editForm.department) updateData.department = editForm.department.trim();
       if (editForm.major) updateData.major = editForm.major.trim();
       if (editForm.grade) updateData.grade = editForm.grade.trim();
@@ -537,7 +503,7 @@ const AccountManagement = () => {
         let expiresAt = null;
         
         if (value === "student") {
-          // 班主任和管理员设置学员为3年后过期
+          // 班主任和管理员设置正式学员为3年后过期
           if (isHeadTeacher || isAdmin) {
             expiresAt = new Date(now.setFullYear(now.getFullYear() + 3));
           }
@@ -548,8 +514,8 @@ const AccountManagement = () => {
           }
           // 管理员设置注册用户不自动设置过期时间
         } else if (value === "trial_user") {
-          // 业务老师设置体验用户为1个月后过期
-          if (isBusinessTeacher) {
+          // 班主任和业务老师设置体验用户为1个月后过期
+          if (isHeadTeacher || isBusinessTeacher) {
             expiresAt = new Date(now.setMonth(now.getMonth() + 1));
           }
           // 管理员设置体验用户不自动设置过期时间
@@ -602,7 +568,6 @@ const AccountManagement = () => {
   const filteredProfiles = profiles.filter(profile =>
     profile.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
     profile.phone_number.includes(searchTerm) ||
-    (profile.school && profile.school.toLowerCase().includes(searchTerm.toLowerCase())) ||
     userTypeMap[profile.user_type]?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -615,14 +580,186 @@ const AccountManagement = () => {
     setCurrentPage(page);
   };
 
-  // 处理教师尝试删除账号的情况
-  const handleTeacherDeleteAttempt = (e) => {
-    e.preventDefault();
-    toast({
-      title: "操作受限",
-      description: "教师账号无权删除用户",
-      variant: "destructive"
-    });
+
+
+  // 检查是否可以修改用户类型
+  const canModifyUserType = (targetProfile: Profile) => {
+    // 管理员可以修改所有用户类型
+    if (isAdmin) return true;
+    
+    // 班主任可以修改注册用户、体验用户和正式学员
+    if (isHeadTeacher && (targetProfile.user_type === "registered" || targetProfile.user_type === "trial_user" || targetProfile.user_type === "student")) {
+      return true;
+    }
+    
+    // 业务老师可以修改注册用户和体验用户
+    if (isBusinessTeacher && (targetProfile.user_type === "registered" || targetProfile.user_type === "trial_user")) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // 获取特定用户可选的用户类型选项
+  const getAvailableUserTypesForProfile = (targetProfile: Profile) => {
+    const options = [
+      { value: "registered", label: "注册用户" }
+    ];
+    
+    // 班主任可以设置正式学员和体验用户
+    if (isHeadTeacher) {
+      options.push(
+        { value: "student", label: "正式学员" },
+        { value: "trial_user", label: "体验用户" }
+      );
+    }
+    
+    // 业务老师可以设置体验用户
+    if (isBusinessTeacher) {
+      options.push({ value: "trial_user", label: "体验用户" });
+    }
+    
+    // 管理员可以设置所有用户类型
+    if (isAdmin) {
+      options.push(
+        { value: "student", label: "正式学员" },
+        { value: "head_teacher", label: "班主任" },
+        { value: "business_teacher", label: "业务老师" },
+        { value: "trial_user", label: "体验用户" },
+        { value: "admin", label: "管理员" }
+      );
+    }
+    
+    return options;
+  };
+
+  // 处理业务老师升级用户为体验用户
+  const handleUpgradeToTrialUser = async (profileId: string, username: string) => {
+    try {
+      log(`业务老师升级用户为体验用户: ${profileId} -> trial_user`);
+      
+      const now = new Date();
+      const updateData = {
+        user_type: "trial_user",
+        access_expires_at: new Date(now.setMonth(now.getMonth() + 1)).toISOString()
+      };
+      
+      const { error } = await supabase
+        .from("profiles")
+        .update(updateData)
+        .eq("id", profileId);
+
+      if (error) throw error;
+
+      await fetchProfiles();
+      
+      toast({
+        title: "升级成功",
+        description: `用户 ${username} 已升级为体验用户`
+      });
+      
+    } catch (error: any) {
+      log("升级体验用户失败", error);
+      toast({
+        variant: "destructive",
+        title: "升级失败",
+        description: error.message || "无法升级用户类型"
+      });
+    }
+  };
+
+  // 处理班主任升级用户为正式学员
+  const handleUpgradeToStudent = async (profileId: string, username: string) => {
+    try {
+      log(`班主任升级用户为正式学员: ${profileId} -> student`);
+      
+      const now = new Date();
+      const updateData = {
+        user_type: "student",
+        access_expires_at: new Date(now.setFullYear(now.getFullYear() + 3)).toISOString()
+      };
+      
+      const { error } = await supabase
+        .from("profiles")
+        .update(updateData)
+        .eq("id", profileId);
+
+      if (error) throw error;
+
+      await fetchProfiles();
+      
+      toast({
+        title: "升级成功",
+        description: `用户 ${username} 已升级为正式学员`
+      });
+      
+    } catch (error: any) {
+      log("升级正式学员失败", error);
+      toast({
+        variant: "destructive",
+        title: "升级失败",
+        description: error.message || "无法升级用户类型"
+      });
+    }
+  };
+
+  // 处理快速修改用户类型
+  const handleQuickUserTypeChange = async (profileId: string, newUserType: string, currentProfile: Profile) => {
+    try {
+      log(`快速修改用户类型: ${profileId} -> ${newUserType}`);
+      
+      // 构建更新数据
+      const now = new Date();
+      let updateData: Record<string, any> = {
+        user_type: newUserType
+      };
+      
+      // 根据新用户类型设置过期时间
+      if (newUserType === "student") {
+        // 班主任和管理员设置正式学员为3年后过期
+        if (isHeadTeacher || isAdmin) {
+          updateData.access_expires_at = new Date(now.setFullYear(now.getFullYear() + 3)).toISOString();
+        }
+      } else if (newUserType === "registered") {
+        // 班主任和业务老师设置注册用户为1个月后过期
+        if (isHeadTeacher || isBusinessTeacher) {
+          updateData.access_expires_at = new Date(now.setMonth(now.getMonth() + 1)).toISOString();
+        }
+      } else if (newUserType === "trial_user") {
+        // 班主任和业务老师设置体验用户为1个月后过期
+        if (isHeadTeacher || isBusinessTeacher) {
+          updateData.access_expires_at = new Date(now.setMonth(now.getMonth() + 1)).toISOString();
+        }
+      } else if (newUserType === "head_teacher" || newUserType === "business_teacher") {
+        // 管理员设置班主任和业务老师为20年后过期
+        if (isAdmin) {
+          updateData.access_expires_at = new Date(now.setFullYear(now.getFullYear() + 20)).toISOString();
+        }
+      }
+      
+      const { error } = await supabase
+        .from("profiles")
+        .update(updateData)
+        .eq("id", profileId);
+
+      if (error) throw error;
+
+      // 刷新用户列表
+      await fetchProfiles();
+      
+      toast({
+        title: "修改成功",
+        description: `用户类型已修改为 ${userTypeMap[newUserType] || newUserType}`
+      });
+      
+    } catch (error: any) {
+      log("快速修改用户类型失败", error);
+      toast({
+        variant: "destructive",
+        title: "修改失败",
+        description: error.message || "无法修改用户类型"
+      });
+    }
   };
 
   if (authLoading) {
@@ -666,7 +803,7 @@ const AccountManagement = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
-            placeholder="搜索用户名、手机号、学校或用户类型..."
+            placeholder="搜索用户名、手机号或用户类型..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -734,7 +871,6 @@ const AccountManagement = () => {
                       <th className="py-3 px-4 text-left">姓名</th>
                       <th className="py-3 px-4 text-left">手机号</th>
                       <th className="py-3 px-4 text-left">用户类型</th>
-                      <th className="py-3 px-4 text-left">学校</th>
                       <th className="py-3 px-4 text-left">过期时间</th>
                       <th className="py-3 px-4 text-right">操作</th>
                     </tr>
@@ -746,9 +882,34 @@ const AccountManagement = () => {
                       <td className="py-3 px-4">{profile.full_name || "-"}</td>
                       <td className="py-3 px-4">{profile.phone_number}</td>
                       <td className="py-3 px-4">
-                        {getUserTypeTag(profile.user_type)}
+                        {canModifyUserType(profile) ? (
+                          <Select
+                            value={profile.user_type}
+                            onValueChange={(value) => handleQuickUserTypeChange(profile.id, value, profile)}
+                          >
+                            <SelectTrigger className="h-7 w-auto min-w-20 border-none shadow-none hover:bg-gray-50 p-0 text-sm">
+                              <SelectValue>
+                                <span className={`text-sm font-medium ${userTypeColors[profile.user_type] || userTypeColors.registered}`}>
+                                  {userTypeMap[profile.user_type] || profile.user_type}
+                                </span>
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getAvailableUserTypesForProfile(profile).map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  <span className={`${userTypeColors[option.value] || userTypeColors.registered}`}>
+                                    {option.label}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className={`text-sm font-medium ${userTypeColors[profile.user_type] || userTypeColors.registered}`}>
+                            {userTypeMap[profile.user_type] || profile.user_type}
+                          </span>
+                        )}
                       </td>
-                      <td className="py-3 px-4">{profile.school || "-"}</td>
                       <td className="py-3 px-4">
                         {profile.access_expires_at ? 
                           new Date(profile.access_expires_at).toLocaleDateString('zh-CN') : 
@@ -756,88 +917,121 @@ const AccountManagement = () => {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-8 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors"
-                            onClick={() => handleEdit(profile)}
-                          >
-                            <FileEdit className="h-4 w-4 mr-1" />
-                            编辑
-                          </Button>
-                          
-                          {/* 重置密码按钮 - 只有管理员可以看到 */}
+                          {/* 管理员显示编辑、重置密码、删除按钮 */}
                           {isAdmin && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-8 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"
-                              onClick={() => handleResetPassword(profile)}
-                            >
-                              <Key className="h-4 w-4 mr-1" />
-                              重置密码
-                            </Button>
-                          )}
-                          
-                          {isTeacherRole ? (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors"
+                                onClick={() => handleEdit(profile)}
+                              >
+                                <FileEdit className="h-4 w-4 mr-1" />
+                                编辑
+                              </Button>
+                              
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors"
+                                onClick={() => handleResetPassword(profile)}
+                              >
+                                <Key className="h-4 w-4 mr-1" />
+                                重置密码
+                              </Button>
+                              
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
                                   <Button
                                     type="button"
                                     size="sm"
                                     variant="destructive"
-                                    className="h-8 opacity-50 cursor-not-allowed"
-                                    onClick={handleTeacherDeleteAttempt}
+                                    className="h-8 transition-colors"
                                   >
                                     <Trash2 className="h-4 w-4 mr-1" />
                                     删除
                                   </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <div className="flex items-center">
-                                    <AlertCircle className="h-4 w-4 mr-1 text-amber-500" />
-                                    <span>教师账号无权删除用户</span>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="destructive"
-                                  className="h-8 transition-colors"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-1" />
-                                  删除
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>确认删除</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    确定要删除用户"{profile.username}"吗？此操作不可撤销。
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>取消</AlertDialogCancel>
-                                  <AlertDialogAction 
-                                    onClick={() => setDeleteDialog({
-                                      open: true, 
-                                      profileId: profile.id, 
-                                      username: profile.username
-                                    })}
-                                  >
-                                    确认删除
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      确定要删除用户"{profile.username}"吗？此操作不可撤销。
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>取消</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={() => setDeleteDialog({
+                                        open: true, 
+                                        profileId: profile.id, 
+                                        username: profile.username
+                                      })}
+                                    >
+                                      确认删除
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          )}
+                          
+                          {/* 业务老师显示升级体验用户按钮 */}
+                          {isBusinessTeacher && profile.user_type === "registered" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400 transition-colors"
+                              onClick={() => handleUpgradeToTrialUser(profile.id, profile.username)}
+                            >
+                              <ArrowUp className="h-4 w-4 mr-1" />
+                              升级体验用户
+                            </Button>
+                          )}
+                          
+                          {/* 班主任显示升级正式学员按钮 */}
+                          {isHeadTeacher && (profile.user_type === "registered" || profile.user_type === "trial_user") && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors"
+                              onClick={() => handleUpgradeToStudent(profile.id, profile.username)}
+                            >
+                              <UserCheck className="h-4 w-4 mr-1" />
+                              升级正式学员
+                            </Button>
+                          )}
+                          
+                          {/* 业务老师：对于已升级的用户显示状态按钮 */}
+                          {isBusinessTeacher && profile.user_type === "trial_user" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled
+                              className="h-8 text-green-600 cursor-default"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              已升级体验用户
+                            </Button>
+                          )}
+                          
+                          {/* 班主任：对于已升级的用户显示状态按钮 */}
+                          {isHeadTeacher && profile.user_type === "student" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled
+                              className="h-8 text-green-600 cursor-default"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              已升级正式学员
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -904,17 +1098,21 @@ const AccountManagement = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="registered">注册用户</SelectItem>
-                  {/* 班主任可以设置学员，业务老师可以设置体验用户 */}
+                  {/* 班主任可以设置正式学员和体验用户 */}
                   {isHeadTeacher && (
-                    <SelectItem value="student">学员</SelectItem>
+                    <>
+                      <SelectItem value="student">正式学员</SelectItem>
+                      <SelectItem value="trial_user">体验用户</SelectItem>
+                    </>
                   )}
+                  {/* 业务老师可以设置体验用户 */}
                   {isBusinessTeacher && (
                     <SelectItem value="trial_user">体验用户</SelectItem>
                   )}
                   {/* 管理员可以设置所有用户类型 */}
                   {isAdmin && (
                     <>
-                      <SelectItem value="student">学员</SelectItem>
+                      <SelectItem value="student">正式学员</SelectItem>
                       <SelectItem value="head_teacher">班主任</SelectItem>
                       <SelectItem value="business_teacher">业务老师</SelectItem>
                       <SelectItem value="trial_user">体验用户</SelectItem>
@@ -923,15 +1121,6 @@ const AccountManagement = () => {
                   )}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <label className="block mb-1 font-medium">学校</label>
-              <Input
-                name="school"
-                value={editForm.school || ""}
-                onChange={handleChange}
-                placeholder="请输入学校名称"
-              />
             </div>
             <div>
               <label className="block mb-1 font-medium">院系</label>
@@ -973,7 +1162,7 @@ const AccountManagement = () => {
                 />
                 {isHeadTeacher && (
                   <span className="text-xs text-gray-500 ml-2">
-                    学员:3年，注册用户:1个月
+                    正式学员:3年，注册用户、体验用户:1个月
                   </span>
                 )}
                 {isBusinessTeacher && (
