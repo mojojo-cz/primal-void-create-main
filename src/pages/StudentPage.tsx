@@ -30,6 +30,13 @@ import {
   PauseCircle,
   Trophy
 } from "lucide-react";
+import { 
+  CACHE_CONFIG, 
+  globalVisibilityDetector, 
+  PerformanceMonitor,
+  debounce,
+  OPTIMIZATION_CONFIG
+} from '@/utils/performance';
 
 type ActiveTab = "learning" | "courses" | "profile";
 
@@ -78,15 +85,17 @@ const StudentPage = () => {
     learningCourses: LearningCourse[] | null;
     lastFetch: number;
     isInitialLoad: boolean;
+    backgroundRefreshing: boolean; // 新增：后台刷新状态
   }>({
     courses: null,
     learningCourses: null,
     lastFetch: 0,
-    isInitialLoad: true
+    isInitialLoad: true,
+    backgroundRefreshing: false
   });
 
-  // 缓存有效期 (5分钟)
-  const CACHE_DURATION = 5 * 60 * 1000;
+  // 使用统一的缓存配置
+  const CACHE_DURATION = CACHE_CONFIG.STUDENT_PAGE;
 
   // 检查缓存是否有效
   const isCacheValid = () => {
@@ -95,34 +104,44 @@ const StudentPage = () => {
   };
 
   // 智能数据获取 - 只在必要时获取数据
-  const smartFetchData = async (forceRefresh = false) => {
+  const smartFetchData = async (forceRefresh = false, isBackgroundRefresh = false) => {
     if (!user?.id) return;
 
     // 如果有有效缓存且不强制刷新，使用缓存数据
     if (!forceRefresh && isCacheValid() && dataCache.current.courses && dataCache.current.learningCourses) {
       setCourses(dataCache.current.courses);
       setLearningCourses(dataCache.current.learningCourses);
+      setEnrolledCourseIds(new Set(dataCache.current.learningCourses.map(c => c.course_id)));
       return;
     }
 
-    // 只在初始加载时显示loading
-    if (dataCache.current.isInitialLoad) {
-      setIsLoading(true);
+    // 如果是后台刷新，设置后台刷新状态
+    if (isBackgroundRefresh) {
+      dataCache.current.backgroundRefreshing = true;
+    } else {
+      // 只在初始加载时显示loading
+      if (dataCache.current.isInitialLoad) {
+        setIsLoading(true);
+      }
     }
 
     try {
-      // 并行获取数据
-      const [coursesResult, learningResult] = await Promise.all([
-        fetchCoursesData(),
-        fetchLearningCoursesData()
-      ]);
+      // 使用性能监控测量数据获取时间
+      const [coursesResult, learningResult] = await PerformanceMonitor.measure(
+        'student-data-fetch',
+        () => Promise.all([
+          fetchCoursesData(),
+          fetchLearningCoursesData()
+        ])
+      );
 
       // 更新缓存
       dataCache.current = {
         courses: coursesResult,
         learningCourses: learningResult.courses,
         lastFetch: Date.now(),
-        isInitialLoad: false
+        isInitialLoad: false,
+        backgroundRefreshing: false
       };
 
       // 更新状态
@@ -132,6 +151,7 @@ const StudentPage = () => {
 
     } catch (error) {
       console.error('智能数据获取失败:', error);
+      dataCache.current.backgroundRefreshing = false;
     } finally {
       setIsLoading(false);
     }
@@ -256,19 +276,21 @@ const StudentPage = () => {
     return { courses: coursesWithProgress, enrolledIds };
   };
 
-  // 窗口焦点检测
+  // 窗口焦点检测 - 使用全局优化工具
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      // 当页面变为可见且缓存过期时，刷新数据
-      if (!document.hidden && !isCacheValid()) {
-        smartFetchData();
-      }
-    };
+    if (!user?.id) return;
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    const debouncedRefresh = debounce((isVisible: boolean) => {
+      if (isVisible && !isCacheValid() && !dataCache.current.backgroundRefreshing) {
+        PerformanceMonitor.measure('background-refresh', () => {
+          return smartFetchData(false, true); // 后台刷新，不显示loading
+        });
+      }
+    }, OPTIMIZATION_CONFIG.DEBOUNCE_DELAY);
+
+    const removeListener = globalVisibilityDetector.addListener(debouncedRefresh);
+    
+    return removeListener;
   }, [user]);
 
   // 确保页面加载时滚动到顶部
@@ -728,16 +750,20 @@ const StudentPage = () => {
   };
 
   const renderContent = () => {
+    // 只在真正的初始加载时显示骨架屏
     if (isLoading && dataCache.current.isInitialLoad) {
       return (
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 p-4 bg-white rounded-xl border">
-              <div className="w-24 h-24 bg-gray-200 rounded-lg animate-pulse flex-shrink-0"></div>
+            <div key={i} className="flex items-center gap-4 p-4 bg-white rounded-xl border animate-pulse">
+              <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0"></div>
               <div className="flex-1 space-y-3">
-                <div className="h-5 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+                <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                <div className="flex items-center justify-between">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-8 bg-gray-200 rounded w-20"></div>
+                </div>
               </div>
             </div>
           ))}
@@ -750,61 +776,80 @@ const StudentPage = () => {
       if (learningCourses.length > 0) {
         return (
           <div className="space-y-4">
-            {learningCourses.map((course) => (
-              <Card 
-                key={course.id} 
-                className="overflow-hidden transition-shadow hover:shadow-md border"
-                onClick={() => navigate(`/student/course/${course.course_id}`)}
-              >
-                <CardContent className="p-0">
-                  <div className="flex gap-4">
-                    {/* Left: Cover Image */}
-                    <div className="w-24 h-full flex-shrink-0 sm:w-28">
-                      <img 
-                        src={course.cover_image || `https://placehold.co/400x400/e2e8f0/e2e8f0/png?text=Cover`} 
-                        alt={course.course_title}
-                        className="object-cover w-full h-full"
-                      />
-                    </div>
-                    
-                    {/* Right: Course Info */}
-                    <div className="flex-1 py-3 pr-3 flex flex-col justify-between min-w-0">
-                      <div>
-                        {/* Line 1: Title */}
-                        <h3 className="font-semibold text-base leading-snug truncate mb-1.5">
-                          {course.course_title}
-                        </h3>
-                        
-                        {/* Line 2: Description or Continue Learning */}
-                        <div className="text-sm text-gray-500 min-h-[20px] mb-2">
-                          {course.status === 'learning' && course.last_learning_section_title && (
-                            <p className="text-blue-600 truncate">
-                              继续学习: {course.last_learning_section_title}
-                            </p>
-                          )}
-                          {course.status === 'not_started' && (
-                            <p className="truncate">{course.course_description}</p>
-                          )}
-                          {/* 'completed' state has this line empty */}
-                        </div>
+            {/* 后台刷新指示器 */}
+            {dataCache.current.backgroundRefreshing && (
+              <div className="flex items-center justify-center py-2">
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">
+                  <div className="w-3 h-3 border border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+                  正在更新数据...
+                </div>
+              </div>
+            )}
+            
+            {learningCourses.map((course) => {
+              const buttonConfig = getLearningButton(course);
+              
+              return (
+                <Card 
+                  key={course.id} 
+                  className="overflow-hidden transition-all duration-200 border hover:shadow-md cursor-pointer group"
+                  onClick={() => {
+                    // 如果不是正在处理中的课程，允许点击跳转
+                    if (updatingCourseId !== course.id && removingCourseId !== course.id) {
+                      navigate(`/student/course/${course.course_id}`);
+                    }
+                  }}
+                >
+                  <CardContent className="p-0">
+                    <div className="flex gap-4">
+                      {/* Left: Cover Image */}
+                      <div className="w-24 h-full flex-shrink-0 sm:w-28">
+                        <img 
+                          src={course.cover_image || `https://placehold.co/400x400/e2e8f0/e2e8f0/png?text=Cover`} 
+                          alt={course.course_title}
+                          className="object-cover w-full h-full"
+                        />
                       </div>
                       
-                      {/* Line 3: Meta and Play Button */}
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-gray-500">
-                          <span>共 {course.sections_count} 讲</span>
-                          <span className="mx-1.5">|</span>
-                          <span>{getCourseStatusText(course.status, course.progress)}</span>
+                      {/* Right: Course Info */}
+                      <div className="flex-1 py-3 pr-3 flex flex-col justify-between min-w-0">
+                        <div>
+                          {/* Line 1: Title */}
+                          <h3 className="font-semibold text-base leading-snug truncate mb-1.5">
+                            {course.course_title}
+                          </h3>
+                          
+                          {/* Line 2: Description or Continue Learning */}
+                          <div className="text-sm text-gray-500 min-h-[20px] mb-2">
+                            {course.status === 'learning' && course.last_learning_section_title && (
+                              <p className="text-blue-600 truncate">
+                                继续学习: {course.last_learning_section_title}
+                              </p>
+                            )}
+                            {course.status === 'not_started' && (
+                              <p className="truncate">{course.course_description}</p>
+                            )}
+                            {/* 'completed' state has this line empty */}
+                          </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-gray-500">
-                          <ChevronRight className="h-5 w-5" />
-                        </Button>
+                        
+                        {/* Line 3: Meta and Play Button */}
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-500">
+                            <span>共 {course.sections_count} 讲</span>
+                            <span className="mx-1.5">|</span>
+                            <span>{getCourseStatusText(course.status, course.progress)}</span>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-gray-500">
+                            <ChevronRight className="h-5 w-5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         );
       } else {

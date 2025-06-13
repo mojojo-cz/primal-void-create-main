@@ -12,6 +12,13 @@ import VideoPlayer from "@/components/VideoPlayer";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { useScrollToTop } from "@/hooks/useScrollToTop";
+import { 
+  CACHE_CONFIG, 
+  globalVisibilityDetector, 
+  PerformanceMonitor,
+  debounce,
+  OPTIMIZATION_CONFIG
+} from '@/utils/performance';
 
 interface CourseSection {
   id: string;
@@ -106,16 +113,18 @@ const CourseStudyPage = () => {
     enrollment: CourseEnrollment | null;
     lastFetch: number;
     isInitialLoad: boolean;
+    backgroundRefreshing: boolean; // 新增：后台刷新状态
   }>({
     course: null,
     sections: null,
     enrollment: null,
     lastFetch: 0,
-    isInitialLoad: true
+    isInitialLoad: true,
+    backgroundRefreshing: false
   });
 
-  // 缓存有效期 (3分钟，课程页面数据更新频率较高)
-  const CACHE_DURATION = 3 * 60 * 1000;
+  // 使用统一的缓存配置
+  const CACHE_DURATION = CACHE_CONFIG.COURSE_STUDY;
 
   // 检查缓存是否有效
   const isCacheValid = () => {
@@ -149,7 +158,7 @@ const CourseStudyPage = () => {
   };
 
   // 智能数据获取 - 只在必要时获取数据
-  const smartFetchCourseData = async (forceRefresh = false) => {
+  const smartFetchCourseData = async (forceRefresh = false, isBackgroundRefresh = false) => {
     if (!courseId || !user?.id) return;
 
     // 如果有有效缓存且不强制刷新，使用缓存数据
@@ -158,7 +167,7 @@ const CourseStudyPage = () => {
       setSections(dataCache.current.sections);
       setEnrollment(dataCache.current.enrollment);
       
-      // 即使使用缓存数据，也要更新最后访问时间
+      // 即使使用缓存数据，也要更新最后访问时间（后台进行）
       setTimeout(() => {
         updateLastAccessedTime();
       }, 100);
@@ -166,9 +175,14 @@ const CourseStudyPage = () => {
       return;
     }
 
-    // 只在初始加载时显示loading
-    if (dataCache.current.isInitialLoad) {
-      setIsLoading(true);
+    // 如果是后台刷新，设置后台刷新状态
+    if (isBackgroundRefresh) {
+      dataCache.current.backgroundRefreshing = true;
+    } else {
+      // 只在初始加载时显示loading
+      if (dataCache.current.isInitialLoad) {
+        setIsLoading(true);
+      }
     }
 
     try {
@@ -273,7 +287,8 @@ const CourseStudyPage = () => {
         sections: formattedSections,
         enrollment: enrollmentData as CourseEnrollment,
         lastFetch: Date.now(),
-        isInitialLoad: false
+        isInitialLoad: false,
+        backgroundRefreshing: false
       };
 
       // 更新状态
@@ -290,6 +305,7 @@ const CourseStudyPage = () => {
 
     } catch (error: any) {
       console.error('获取课程数据失败:', error);
+      dataCache.current.backgroundRefreshing = false;
       toast({
         variant: "destructive",
         title: "获取课程失败",
@@ -300,19 +316,21 @@ const CourseStudyPage = () => {
     }
   };
 
-  // 窗口焦点检测
+  // 窗口焦点检测 - 使用全局优化工具
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      // 当页面变为可见且缓存过期时，刷新数据
-      if (!document.hidden && !isCacheValid()) {
-        smartFetchCourseData();
-      }
-    };
+    if (!courseId || !user?.id) return;
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    const debouncedRefresh = debounce((isVisible: boolean) => {
+      if (isVisible && !isCacheValid() && !dataCache.current.backgroundRefreshing) {
+        PerformanceMonitor.measure('course-background-refresh', () => {
+          return smartFetchCourseData(false, true); // 后台刷新，不显示loading
+        });
+      }
+    }, OPTIMIZATION_CONFIG.DEBOUNCE_DELAY);
+
+    const removeListener = globalVisibilityDetector.addListener(debouncedRefresh);
+    
+    return removeListener;
   }, [courseId, user]);
 
   // 确保页面加载时滚动到顶部
@@ -1222,12 +1240,64 @@ const CourseStudyPage = () => {
     };
   }, [countdownTimer]);
 
-  if (isLoading) {
+  if (isLoading && dataCache.current.isInitialLoad) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">加载课程中...</p>
+      <div className="min-h-screen bg-gray-50">
+        {/* 头部导航骨架屏 */}
+        <div className="bg-white border-b sticky top-0 z-10">
+          <div className="max-w-6xl mx-auto px-3 py-2 md:px-4 md:py-4">
+            <div className="grid grid-cols-3 items-center">
+              <div className="flex justify-start">
+                <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="flex justify-center">
+                <div className="h-6 bg-gray-200 rounded w-32 animate-pulse"></div>
+              </div>
+              <div className="flex justify-end">
+                <div className="h-4 bg-gray-200 rounded w-8 animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 主要内容骨架屏 */}
+        <div className="max-w-6xl mx-auto px-3 py-4 md:px-4 md:py-6 space-y-6">
+          {/* 快速继续学习卡片骨架屏 */}
+          <div className="border border-gray-200 rounded-xl p-4 bg-white animate-pulse">
+            <div className="space-y-3">
+              <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+              <div className="flex items-center justify-between">
+                <div className="h-4 bg-gray-200 rounded w-16"></div>
+                <div className="h-4 bg-gray-200 rounded w-20"></div>
+              </div>
+              <div className="h-10 bg-gray-200 rounded w-full"></div>
+            </div>
+          </div>
+
+          {/* 章节列表骨架屏 */}
+          <div className="border-0 shadow-sm bg-white rounded-xl">
+            <div className="p-6 pb-4">
+              <div className="h-6 bg-gray-200 rounded w-24 animate-pulse"></div>
+            </div>
+            <div className="px-3 md:px-6 space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="border border-gray-200 rounded-xl p-3 md:p-4 animate-pulse">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-5 h-5 bg-gray-200 rounded flex-shrink-0 mt-1"></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="h-5 bg-gray-200 rounded w-4/5"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/5"></div>
+                      <div className="flex items-center justify-between">
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
+                        <div className="h-4 bg-gray-200 rounded w-20"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-6"></div>
+          </div>
         </div>
       </div>
     );
@@ -1284,6 +1354,16 @@ const CourseStudyPage = () => {
 
       {/* 主要内容 */}
       <div className="max-w-6xl mx-auto px-3 py-4 md:px-4 md:py-6 space-y-6">
+        {/* 后台刷新指示器 */}
+        {dataCache.current.backgroundRefreshing && (
+          <div className="flex items-center justify-center py-2">
+            <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">
+              <div className="w-3 h-3 border border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+              正在更新数据...
+            </div>
+          </div>
+        )}
+
         {/* 快速继续学习卡片 */}
         {lastLearningSection && (
           <Card className="border border-blue-200 shadow-lg bg-gradient-to-r from-blue-50 to-blue-100/50">
