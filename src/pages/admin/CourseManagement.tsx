@@ -54,6 +54,7 @@ import { Badge } from "@/components/ui/badge";
 import EnhancedPagination from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
 import VideoUploadToMinIO from "@/components/VideoUploadToMinIO";
+import ImageUpload from "@/components/ui/image-upload";
 
 // 文件夹类型
 interface VideoFolder {
@@ -203,7 +204,6 @@ const CourseManagement = () => {
   const [activeTab, setActiveTab] = useState<string>('upload');
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; courseId: string; title: string }>({ open: false, courseId: '', title: '' });
   const [deleteSectionDialog, setDeleteSectionDialog] = useState<{ open: boolean; sectionId: string; title: string }>({ open: false, sectionId: '', title: '' });
-  const [previewCoverImage, setPreviewCoverImage] = useState(false);
   const [activeCourseId, setActiveCourseId] = useState<string | undefined>(undefined);
   
   // 文件夹管理
@@ -520,7 +520,6 @@ const CourseManagement = () => {
       
       setOpen(false);
       setForm({...defaultForm, sections: []});
-      setPreviewCoverImage(false);
       fetchCourses();
       toast({
         title: "添加成功",
@@ -1385,7 +1384,6 @@ const CourseManagement = () => {
       setEditMode('add');
       setEditingCourseId(null);
       setForm({ ...defaultForm, sections: [] });
-      setPreviewCoverImage(false);
       fetchCourses();
       toast({
         title: '保存成功',
@@ -1679,7 +1677,7 @@ const CourseManagement = () => {
         </CardContent>
       </Card>
       {/* 新增课程弹窗 */}
-      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditMode('add'); setEditingCourseId(null); setForm({ ...defaultForm, sections: [] }); setPreviewCoverImage(false); } }}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditMode('add'); setEditingCourseId(null); setForm({ ...defaultForm, sections: [] }); } }}>
         <DialogContent className="sm:max-w-2xl w-full max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editMode === 'edit' ? '编辑课程' : '新增课程'}</DialogTitle>
@@ -1694,50 +1692,15 @@ const CourseManagement = () => {
               <Textarea name="description" value={form.description || ''} onChange={handleChange} maxLength={500} placeholder="请输入课程描述" />
             </div>
             <div>
-              <label className="block mb-1 font-medium">封面图片URL</label>
-              <div className="flex gap-2">
-                <Input 
-                  name="cover_image" 
-                  value={form.cover_image || ''} 
-                  onChange={handleChange} 
-                  placeholder="请输入图片链接（可选）" 
-                  className="flex-1"
-                />
-                {form.cover_image && (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setPreviewCoverImage(true)}
-                  >
-                    预览
-                  </Button>
-                )}
-              </div>
-              {form.cover_image && previewCoverImage && (
-                <div className="mt-2 relative">
-                  <img 
-                    src={form.cover_image} 
-                    alt="封面预览" 
-                    className="max-h-[200px] rounded border object-cover"
-                    onError={() => {
-                      toast({
-                        variant: "destructive",
-                        title: "图片加载失败",
-                        description: "无法加载图片，请检查URL是否正确"
-                      });
-                    }}
-                  />
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="sm" 
-                    className="absolute top-1 right-1 h-6 w-6 p-0 rounded-full bg-background/80"
-                    onClick={() => setPreviewCoverImage(false)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
+              <label className="block mb-2 font-medium">封面图片</label>
+              <ImageUpload
+                value={form.cover_image || ''}
+                onChange={(url) => setForm(prev => ({ ...prev, cover_image: url }))}
+                bucket="image"
+                maxSize={5}
+                placeholder="请输入图片链接或上传封面图片"
+                showUrlInput={true}
+              />
             </div>
             <div>
               <label className="block mb-1 font-medium">状态</label>

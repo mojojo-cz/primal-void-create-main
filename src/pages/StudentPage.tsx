@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, GraduationCap, User, PlayCircle, Clock, CheckCircle, X, Menu, RotateCcw, Trash2, LogOut } from "lucide-react";
+import { BookOpen, GraduationCap, User, PlayCircle, Clock, CheckCircle, X, Menu, RotateCcw, Trash2, LogOut, ChevronRight, Shield } from "lucide-react";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,12 +48,14 @@ interface LearningCourse {
   course_id: string;
   course_title: string;
   course_description: string;
+  cover_image: string | null;
   status: 'not_started' | 'learning' | 'completed' | 'paused';
   progress: number;
   enrolled_at: string;
   last_accessed_at: string;
   sections_count: number;
   completed_sections: number;
+  last_learning_section_title?: string;
 }
 
 const StudentPage = () => {
@@ -147,11 +149,11 @@ const StudentPage = () => {
     return data || [];
   };
 
-  // 获取学习中的课程数据  
+  // 获取学习中的课程数据（重构版，解决N+1问题）  
   const fetchLearningCoursesData = async (): Promise<{courses: LearningCourse[], enrolledIds: Set<string>}> => {
     if (!user?.id) return { courses: [], enrolledIds: new Set() };
     
-    // 获取用户注册的课程及其详细信息
+    // 1. 获取用户所有注册的课程（包含课程详情）
     const { data: enrollmentsData, error: enrollmentsError } = await supabase
       .from('course_enrollments')
       .select(`
@@ -165,50 +167,91 @@ const StudentPage = () => {
           id,
           title,
           description,
-          created_at
+          created_at,
+          cover_image
         )
       `)
       .eq('user_id', user.id)
       .order('last_accessed_at', { ascending: false });
 
     if (enrollmentsError) throw enrollmentsError;
+    if (!enrollmentsData || enrollmentsData.length === 0) return { courses: [], enrolledIds: new Set() };
 
-    // 获取每个课程的章节统计
-    const coursesWithProgress: LearningCourse[] = [];
-    const enrolledIds = new Set<string>();
+    const enrolledIds = new Set(enrollmentsData.map(e => e.course_id));
+    const courseIds = Array.from(enrolledIds);
 
-    if (enrollmentsData) {
-      for (const enrollment of enrollmentsData) {
-        enrolledIds.add(enrollment.course_id);
-        
-        // 获取课程章节数
-        const { data: sectionsData, error: sectionsError } = await supabase
-          .from('course_sections')
-          .select('id')
-          .eq('course_id', enrollment.course_id);
+    // 2. 一次性获取所有相关课程的章节信息
+    const { data: sectionsData, error: sectionsError } = await supabase
+      .from('course_sections')
+      .select('id, title, course_id')
+      .in('course_id', courseIds);
 
-        if (sectionsError) {
-          console.error('获取章节数失败:', sectionsError);
-          continue;
-        }
+    if (sectionsError) throw sectionsError;
 
-        const sectionsCount = sectionsData?.length || 0;
-        const completedSections = Math.floor((enrollment.progress || 0) / 100 * sectionsCount);
+    // 3. 一次性获取所有相关课程的学习进度
+    const { data: progressData, error: progressError } = await supabase
+      .from('video_progress')
+      .select('course_id, section_id, is_completed, last_played_at')
+      .eq('user_id', user.id)
+      .in('course_id', courseIds);
 
-        coursesWithProgress.push({
-          id: enrollment.id,
-          course_id: enrollment.course_id,
-          course_title: (enrollment.courses as any).title,
-          course_description: (enrollment.courses as any).description || '',
-          status: enrollment.status as 'not_started' | 'learning' | 'completed' | 'paused',
-          progress: enrollment.progress || 0,
-          enrolled_at: enrollment.enrolled_at || '',
-          last_accessed_at: enrollment.last_accessed_at || enrollment.enrolled_at || '',
-          sections_count: sectionsCount,
-          completed_sections: completedSections
-        });
+    if (progressError) throw progressError;
+
+    // 4. 在客户端处理数据，构建映射表
+    const sectionTitleMap = new Map<string, string>();
+    const courseSectionsMap = new Map<string, string[]>();
+    sectionsData?.forEach(section => {
+      sectionTitleMap.set(section.id, section.title);
+      if (!courseSectionsMap.has(section.course_id)) {
+        courseSectionsMap.set(section.course_id, []);
       }
-    }
+      courseSectionsMap.get(section.course_id)!.push(section.id);
+    });
+
+    const courseProgressMap = new Map<string, { section_id: string; last_played_at: string; is_completed: boolean }[]>();
+    progressData?.forEach(progress => {
+      if (!courseProgressMap.has(progress.course_id)) {
+        courseProgressMap.set(progress.course_id, []);
+      }
+      courseProgressMap.get(progress.course_id)!.push(progress as any);
+    });
+
+    // 5. 组装最终数据
+    const coursesWithProgress: LearningCourse[] = enrollmentsData.map(enrollment => {
+      const courseId = enrollment.course_id;
+      const sections = courseSectionsMap.get(courseId) || [];
+      const progresses = courseProgressMap.get(courseId) || [];
+
+      const sectionsCount = sections.length;
+      const completedSections = progresses.filter(p => p.is_completed).length;
+
+      // 找出上次学习的章节
+      let lastLearningSectionTitle: string | undefined = undefined;
+      const learningProgresses = progresses
+        .filter(p => !p.is_completed && p.last_played_at)
+        .sort((a, b) => new Date(b.last_played_at).getTime() - new Date(a.last_played_at).getTime());
+      
+      if (learningProgresses.length > 0) {
+        lastLearningSectionTitle = sectionTitleMap.get(learningProgresses[0].section_id);
+      }
+
+      const courseDetails = enrollment.courses as any;
+
+      return {
+        id: enrollment.id,
+        course_id: courseId,
+        course_title: courseDetails.title,
+        course_description: courseDetails.description || '',
+        cover_image: courseDetails.cover_image,
+        status: enrollment.status as 'not_started' | 'learning' | 'completed' | 'paused',
+        progress: enrollment.progress || 0,
+        enrolled_at: enrollment.enrolled_at || '',
+        last_accessed_at: enrollment.last_accessed_at || enrollment.enrolled_at || '',
+        sections_count: sectionsCount,
+        completed_sections: completedSections,
+        last_learning_section_title: lastLearningSectionTitle,
+      };
+    });
 
     return { courses: coursesWithProgress, enrolledIds };
   };
@@ -330,7 +373,7 @@ const StudentPage = () => {
       });
 
       // 刷新数据
-      await fetchLearningCourses();
+      await smartFetchData(true); // 强制刷新数据
       
       // 自动跳转到"学习中"页面
       setActiveTab("learning");
@@ -403,7 +446,7 @@ const StudentPage = () => {
       });
 
       // 刷新数据
-      await fetchLearningCourses();
+      await smartFetchData(true); // 强制刷新数据
       
     } catch (error: any) {
       console.error('更新学习状态失败:', error);
@@ -464,7 +507,7 @@ const StudentPage = () => {
       });
 
       // 刷新数据
-      await fetchLearningCourses();
+      await smartFetchData(true); // 强制刷新数据
       
     } catch (error: any) {
       console.error('重置课程进度失败:', error);
@@ -521,7 +564,7 @@ const StudentPage = () => {
       });
 
       // 刷新数据
-      await fetchLearningCourses();
+      await smartFetchData(true); // 强制刷新数据
       
     } catch (error: any) {
       console.error('移除课程失败:', error);
@@ -670,322 +713,456 @@ const StudentPage = () => {
     }
   };
 
+  const getCourseStatusText = (status: LearningCourse['status'], progress: number) => {
+    switch (status) {
+      case 'not_started':
+        return '未学习';
+      case 'completed':
+        return '已学完';
+      case 'learning':
+      case 'paused':
+        return `已学 ${progress}%`;
+      default:
+        return '';
+    }
+  };
+
   const renderContent = () => {
-    switch (activeTab) {
-      case "learning":
-        return (
-          <div className="space-y-4 md:space-y-6">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    if (isLoading && dataCache.current.isInitialLoad) {
+      return (
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4 p-4 bg-white rounded-xl border">
+              <div className="w-24 h-24 bg-gray-200 rounded-lg animate-pulse flex-shrink-0"></div>
+              <div className="flex-1 space-y-3">
+                <div className="h-5 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/3 animate-pulse"></div>
               </div>
-            ) : learningCourses.length > 0 ? (
-              <div className="grid gap-3 md:gap-4">
-                {learningCourses.map((course) => (
-                  <Card key={course.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4 md:p-6">
-                      {/* 移动端垂直布局，桌面端水平布局 */}
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1">
-                          <div className="flex items-center justify-center w-10 h-10 md:w-12 md:h-12 bg-primary/10 rounded-lg flex-shrink-0">
-                            {getStatusIcon(course.status)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-base md:text-lg mb-1 line-clamp-2">{course.course_title}</h3>
-                            <p className="text-sm md:text-base text-muted-foreground mb-2 line-clamp-2">{course.course_description || '暂无课程描述'}</p>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                              {getStatusBadge(course.status, course.progress)}
-                              {course.status !== 'not_started' && (
-                                <div className="flex items-center gap-2">
-                                  <div className="w-24 sm:w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div 
-                                      className="h-full bg-primary transition-all" 
-                                      style={{ width: `${course.progress}%` }}
-                                    ></div>
-                                  </div>
-                                  <span className="text-sm text-muted-foreground">{course.progress}%</span>
-                                </div>
-                              )}
-                              {course.sections_count > 0 && (
-                                <span className="text-sm text-muted-foreground">
-                                  {course.status === 'not_started' ? 
-                                    `共${course.sections_count}章节` : 
-                                    `${course.completed_sections}/${course.sections_count} 章节`
-                                  }
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              开始学习：{new Date(course.enrolled_at).toLocaleDateString()}
-                              {course.last_accessed_at && course.last_accessed_at !== course.enrolled_at && (
-                                <span> • 上次学习：{new Date(course.last_accessed_at).toLocaleDateString()}</span>
-                              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // 学习中页面
+    if (activeTab === 'learning') {
+      if (learningCourses.length > 0) {
+        return (
+          <div className="space-y-4">
+            {learningCourses.map((course) => (
+              <Card 
+                key={course.id} 
+                className="overflow-hidden transition-shadow hover:shadow-md border"
+                onClick={() => navigate(`/student/course/${course.course_id}`)}
+              >
+                <CardContent className="p-0">
+                  <div className="flex gap-4">
+                    {/* Left: Cover Image */}
+                    <div className="w-24 h-full flex-shrink-0 sm:w-28">
+                      <img 
+                        src={course.cover_image || `https://placehold.co/400x400/e2e8f0/e2e8f0/png?text=Cover`} 
+                        alt={course.course_title}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    
+                    {/* Right: Course Info */}
+                    <div className="flex-1 py-3 pr-3 flex flex-col justify-between min-w-0">
+                      <div>
+                        {/* Line 1: Title */}
+                        <h3 className="font-semibold text-base leading-snug truncate mb-1.5">
+                          {course.course_title}
+                        </h3>
+                        
+                        {/* Line 2: Description or Continue Learning */}
+                        <div className="text-sm text-gray-500 min-h-[20px] mb-2">
+                          {course.status === 'learning' && course.last_learning_section_title && (
+                            <p className="text-blue-600 truncate">
+                              继续学习: {course.last_learning_section_title}
                             </p>
-                          </div>
+                          )}
+                          {course.status === 'not_started' && (
+                            <p className="truncate">{course.course_description}</p>
+                          )}
+                          {/* 'completed' state has this line empty */}
                         </div>
-                        {course.status === 'completed' ? (
-                          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:ml-4">
-                            {/* 重新学习按钮 - 调换到左侧 */}
+                      </div>
+                      
+                      {/* Line 3: Meta and Play Button */}
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs text-gray-500">
+                          <span>共 {course.sections_count} 讲</span>
+                          <span className="mx-1.5">|</span>
+                          <span>{getCourseStatusText(course.status, course.progress)}</span>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-gray-500">
+                          <ChevronRight className="h-5 w-5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      } else {
+        return (
+          <div className="text-center py-16">
+            <PlayCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium">暂无学习中的课程</h3>
+            <p className="text-gray-500 mt-1">请前往"我的课程"页面选择课程开始学习</p>
+          </div>
+        );
+      }
+    }
+    
+    // 我的课程页面 - 显示所有已发布的课程
+    if (activeTab === 'courses') {
+      if (courses.length > 0) {
+        return (
+          <div className="space-y-4">
+            {courses.map((course) => {
+              const isEnrolled = enrolledCourseIds.has(course.id);
+              
+              return (
+                <Card 
+                  key={course.id} 
+                  className={`overflow-hidden transition-shadow border ${
+                    removingCourseId === course.id 
+                      ? 'cursor-not-allowed opacity-60' 
+                      : isEnrolled 
+                        ? 'hover:shadow-md cursor-pointer' 
+                        : 'hover:shadow-md'
+                  }`}
+                  onClick={() => {
+                    // 如果正在移除课程，不允许点击跳转
+                    if (removingCourseId === course.id) {
+                      return;
+                    }
+                    // 只有已注册且未在处理中的课程才允许点击跳转
+                    if (isEnrolled) {
+                      navigate(`/student/course/${course.id}`);
+                    }
+                  }}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex gap-4">
+                      {/* Left: Cover Image */}
+                      <div className="w-24 h-24 flex-shrink-0">
+                        <img 
+                          src={course.cover_image || `https://placehold.co/400x400/e2e8f0/e2e8f0/png?text=Cover`} 
+                          alt={course.title}
+                          className="object-cover w-full h-full rounded-lg"
+                        />
+                      </div>
+                      
+                      {/* Right: Course Info */}
+                      <div className="flex-1 flex flex-col justify-between min-w-0">
+                        <div>
+                          {/* Course Title */}
+                          <h3 className="font-semibold text-base leading-snug truncate mb-2">
+                            {course.title}
+                          </h3>
+                          
+                          {/* Course Description */}
+                          <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                            {course.description}
+                          </p>
+                        </div>
+                        
+                        {/* Action Button */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">
+                            已发布课程
+                          </span>
+                          
+                          {isEnrolled ? (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button 
-                                  className="flex-1 sm:flex-none"
+                                  variant="destructive" 
                                   size="sm"
-                                  variant="outline"
-                                  disabled={updatingCourseId === course.id}
+                                  disabled={removingCourseId === course.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                  }}
+                                  className="gap-1"
                                 >
-                                  {updatingCourseId === course.id ? (
+                                  {removingCourseId === course.id ? (
                                     <>
-                                      <RotateCcw className="h-4 w-4 mr-2 animate-spin" />
-                                      重置中...
+                                      <div className="animate-pulse">🗑️</div>
+                                      <span>移除中...</span>
                                     </>
                                   ) : (
                                     <>
-                                      <RotateCcw className="h-4 w-4 mr-2" />
-                                      重新学习
+                                      <Trash2 className="h-4 w-4" />
+                                      <span>移除课程</span>
                                     </>
                                   )}
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>确认重新学习</AlertDialogTitle>
+                                  <AlertDialogTitle>确认移除课程</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    您确定要重新学习课程《{course.course_title}》吗？
+                                    您确定要从学习列表中移除课程《{course.title}》吗？
                                     <br /><br />
-                                    <strong>注意：</strong>此操作将会：
-                                    <br />• 清除所有视频播放记录
-                                    <br />• 重置课程进度为0%
-                                    <br />• 将状态改为"未开始"
+                                    <strong>注意：此操作将会：</strong>
+                                    <br />• 删除该课程的学习记录
+                                    <br />• 清除所有视频播放进度
+                                    <br />• 移除该课程的注册信息
                                     <br /><br />
-                                    重置后您可以从头开始学习这门课程。
-                                    <br /><br />
-                                    <strong>提示：</strong>如果只是想回顾课程内容，可以选择"继续学习"。
+                                    <span className="text-red-600">此操作不可撤销！</span>
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>取消</AlertDialogCancel>
                                   <AlertDialogAction 
-                                    onClick={() => resetCourseProgress(course)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveCourse(course.id, course.title);
+                                    }}
+                                    className="bg-red-600 hover:bg-red-700"
                                   >
-                                    确认重置
+                                    确认移除
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
-                            
-                            {/* 继续学习按钮 - 调换到右侧，样式改为secondary */}
+                          ) : (
                             <Button 
-                              className="flex-1 sm:flex-none"
+                              variant="outline" 
                               size="sm"
-                              variant="secondary"
-                              onClick={() => navigate(`/student/course/${course.course_id}`)}
-                              disabled={updatingCourseId === course.id}
+                              disabled={enrollingCourseId === course.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartLearning(course.id);
+                              }}
+                              className="gap-1"
                             >
-                              继续学习
+                              {enrollingCourseId === course.id ? (
+                                <>
+                                  <div className="animate-spin">⟳</div>
+                                  <span>加入中...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <PlayCircle className="h-4 w-4" />
+                                  <span>加入学习</span>
+                                </>
+                              )}
                             </Button>
-                          </div>
-                        ) : (
-                          <Button 
-                            className="w-full md:w-auto md:ml-4"
-                            size="sm"
-                            variant={getLearningButton(course).variant}
-                            disabled={getLearningButton(course).disabled || updatingCourseId === course.id}
-                            onClick={getLearningButton(course).action}
-                          >
-                            {updatingCourseId === course.id ? "处理中..." : getLearningButton(course).text}
-                          </Button>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="text-center py-8 md:py-12">
-                  <PlayCircle className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-base md:text-lg font-medium mb-2">课程加载中</h3>
-                  <p className="text-sm md:text-base text-muted-foreground mb-4">正在为您准备课程内容...</p>
-                </CardContent>
-              </Card>
-            )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         );
-
-      case "courses":
+      } else {
         return (
-          <div className="space-y-4 md:space-y-6">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold mb-2">我的课程</h2>
-              <p className="text-sm md:text-base text-muted-foreground">浏览所有可学习的课程内容</p>
-            </div>
-
-            {courses.length > 0 ? (
-              <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {courses.map((course) => (
-                  <Card key={course.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-3 md:pb-6">
-                      <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                        <BookOpen className="h-4 w-4 md:h-5 md:w-5 text-primary flex-shrink-0" />
-                        <span className="line-clamp-2">{course.title}</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <p className="text-sm md:text-base text-muted-foreground mb-4 line-clamp-3">
-                        {course.description || '暂无课程描述'}
-                      </p>
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <span className="text-xs text-muted-foreground">
-                          创建时间：{new Date(course.created_at).toLocaleDateString()}
-                        </span>
-                        {enrolledCourseIds.has(course.id) ? (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button 
-                                size="sm" 
-                                variant="destructive" 
-                                className="w-full sm:w-auto"
-                                disabled={removingCourseId === course.id}
-                              >
-                                {removingCourseId === course.id ? (
-                                  <>
-                                    <Trash2 className="h-4 w-4 mr-2 animate-pulse" />
-                                    移除中...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    移除课程
-                                  </>
-                                )}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>确认移除课程</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  您确定要从学习列表中移除课程《{course.title}》吗？
-                                  <br /><br />
-                                  <strong>注意：</strong>此操作将会：
-                                  <br />• 删除该课程的学习记录
-                                  <br />• 清除所有视频播放进度
-                                  <br />• 移除该课程的注册信息
-                                  <br /><br />
-                                  移除后，如需重新学习此课程，需要再次添加到学习列表。
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>取消</AlertDialogCancel>
-                                <AlertDialogAction 
-                                  onClick={() => handleRemoveCourse(course.id, course.title)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  确认移除
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        ) : (
-                          <Button 
-                            size="sm" 
-                            className="w-full sm:w-auto"
-                            onClick={() => handleStartLearning(course.id)}
-                            disabled={enrollingCourseId === course.id}
-                          >
-                            {enrollingCourseId === course.id ? "添加中..." : "开始学习"}
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="text-center py-8 md:py-12">
-                  <BookOpen className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-base md:text-lg font-medium mb-2">暂无课程</h3>
-                  <p className="text-sm md:text-base text-muted-foreground">目前还没有可学习的课程</p>
-                </CardContent>
-              </Card>
-            )}
+          <div className="text-center py-16">
+            <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium">暂无课程</h3>
+            <p className="text-gray-500 mt-1">这里还没有任何已发布的课程</p>
           </div>
         );
-
-      case "profile":
-        return (
-          <div className="space-y-4 md:space-y-6">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold mb-2">个人信息</h2>
-              <p className="text-sm md:text-base text-muted-foreground">查看和管理您的个人资料</p>
-            </div>
-            
+      }
+    }
+    
+        // 个人信息页面
+    if (activeTab === 'profile') {
+      return (
+        <div className="w-full space-y-6">
+          {/* 上半部分：基本信息和账户状态 */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* 基本信息卡片 */}
             <Card>
-              <CardHeader className="pb-3 md:pb-6">
-                <CardTitle className="text-base md:text-lg">基本信息</CardTitle>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  基本信息
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2 md:gap-6">
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">用户名</h4>
-                    <p className="text-base md:text-lg">{profile?.username}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">姓名</h4>
-                    <p className="text-base md:text-lg">{profile?.full_name || '未设置'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">手机号</h4>
-                    <p className="text-base md:text-lg">{profile?.phone_number || '未设置'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">账户类型</h4>
-                    <p className="text-base md:text-lg">{getUserTypeLabel(profile?.user_type || '')}</p>
-                  </div>
-                  {profile?.school && (
-                    <>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-2">学校</h4>
-                        <p className="text-base md:text-lg">{profile.school}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-2">专业</h4>
-                        <p className="text-base md:text-lg">{profile.major || '未设置'}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-2">学院</h4>
-                        <p className="text-base md:text-lg">{profile.department || '未设置'}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-2">年级</h4>
-                        <p className="text-base md:text-lg">{profile.grade || '未设置'}</p>
-                      </div>
-                    </>
-                  )}
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">账户状态</h4>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-base md:text-lg text-green-600">正常</span>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">用户名</span>
+                      <span className="text-sm font-medium">{profile?.username || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">姓名</span>
+                      <span className="text-sm font-medium">{profile?.full_name || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">手机号</span>
+                      <span className="text-sm font-medium">{profile?.phone_number || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">用户类型</span>
+                      <span className="text-sm font-medium text-blue-600">
+                        {getUserTypeLabel(profile?.user_type || '')}
+                      </span>
                     </div>
                   </div>
-                  {profile?.access_expires_at && (
-                    <div>
-                      <h4 className="text-sm font-medium text-muted-foreground mb-2">有效期至</h4>
-                      <p className="text-base md:text-lg">{new Date(profile.access_expires_at).toLocaleDateString()}</p>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">学校</span>
+                      <span className="text-sm font-medium">{profile?.school || '-'}</span>
                     </div>
-                  )}
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">院系</span>
+                      <span className="text-sm font-medium">{profile?.department || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">专业</span>
+                      <span className="text-sm font-medium">{profile?.major || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">年级</span>
+                      <span className="text-sm font-medium">{profile?.grade || '-'}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 账户状态卡片 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  账户状态
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">注册时间</span>
+                      <span className="text-sm font-medium">
+                        {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('zh-CN') : '-'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">权限过期时间</span>
+                      <span className="text-sm font-medium">
+                        {profile?.access_expires_at ? new Date(profile.access_expires_at).toLocaleDateString('zh-CN') : '-'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">账户状态</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-green-600">正常</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">邮箱</span>
+                      <span className="text-sm font-medium">{user?.email || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border/40">
+                      <span className="text-sm text-muted-foreground">最后更新</span>
+                      <span className="text-sm font-medium">
+                        {profile?.updated_at ? new Date(profile.updated_at).toLocaleDateString('zh-CN') : '-'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">登录状态</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-blue-600">已登录</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
-        );
 
-      default:
-        return null;
+          {/* 下半部分：学习统计 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                学习统计
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600 mb-1">
+                    {learningCourses.length}
+                  </div>
+                  <div className="text-sm text-blue-600">学习中课程</div>
+                </div>
+                
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600 mb-1">
+                    {learningCourses.filter(course => course.status === 'completed').length}
+                  </div>
+                  <div className="text-sm text-green-600">已完成课程</div>
+                </div>
+                
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-600 mb-1">
+                    {courses.length}
+                  </div>
+                  <div className="text-sm text-purple-600">可学习课程</div>
+                </div>
+              </div>
+              
+              {learningCourses.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium text-muted-foreground mb-3">最近学习</h4>
+                  <div className="space-y-2">
+                    {learningCourses
+                      .filter(course => course.last_accessed_at)
+                      .sort((a, b) => new Date(b.last_accessed_at).getTime() - new Date(a.last_accessed_at).getTime())
+                      .slice(0, 3)
+                      .map(course => (
+                        <div key={course.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                          <img 
+                            src={course.cover_image || `https://placehold.co/400x400/e2e8f0/e2e8f0/png?text=Cover`} 
+                            alt={course.course_title}
+                            className="w-8 h-8 rounded object-cover"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{course.course_title}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(course.last_accessed_at).toLocaleDateString('zh-CN')} • 
+                              {getCourseStatusText(course.status, course.progress)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      );
     }
+    
+    // 其他页面的fallback
+    return (
+      <div className="text-center py-16">
+        <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium">暂无内容</h3>
+        <p className="text-gray-500 mt-1">选择左侧菜单查看相应内容</p>
+      </div>
+    );
   };
 
   return (
