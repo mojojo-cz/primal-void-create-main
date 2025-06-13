@@ -384,7 +384,29 @@ const NewCourseManagement = () => {
   // 章节表单处理
   const handleChapterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setChapterForm((prev) => ({ ...prev, [name]: value }));
+    setChapterForm((prev) => ({ 
+      ...prev, 
+      [name]: name === 'order' ? parseInt(value) || 1 : value 
+    }));
+  };
+
+  // 检查章节排序值是否重复
+  const isChapterOrderDuplicate = (order: number, courseId: string, excludeChapterId?: string): boolean => {
+    for (const course of courses) {
+      if (course.id === courseId) {
+        for (const chapter of course.chapters) {
+          // 如果是编辑模式，排除当前编辑的章节
+          if (excludeChapterId && chapter.id === excludeChapterId) {
+            continue;
+          }
+          if (chapter.order === order) {
+            return true;
+          }
+        }
+        break;
+      }
+    }
+    return false;
   };
 
   // 提交章节 - 优化版本，避免整体刷新
@@ -395,6 +417,17 @@ const NewCourseManagement = () => {
         variant: "destructive",
         title: "验证失败",
         description: "章节标题不能为空"
+      });
+      return;
+    }
+
+    // 检查排序值是否重复
+    const excludeId = chapterDialog.mode === 'edit' ? chapterForm.id : undefined;
+    if (isChapterOrderDuplicate(chapterForm.order, chapterDialog.courseId, excludeId)) {
+      toast({
+        variant: "destructive",
+        title: "验证失败",
+        description: `排序值 ${chapterForm.order} 已存在，请选择其他数值`
       });
       return;
     }
@@ -529,7 +562,10 @@ const NewCourseManagement = () => {
   // 考点表单处理
   const handleKeyPointChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setKeyPointForm((prev) => ({ ...prev, [name]: value }));
+    setKeyPointForm((prev) => ({ 
+      ...prev, 
+      [name]: name === 'order' ? parseInt(value) || 1 : value 
+    }));
   };
 
   // 处理考点视频选择
@@ -550,6 +586,27 @@ const NewCourseManagement = () => {
     }));
   };
 
+  // 检查考点排序值是否重复
+  const isKeyPointOrderDuplicate = (order: number, chapterId: string, excludeKeyPointId?: string): boolean => {
+    for (const course of courses) {
+      for (const chapter of course.chapters) {
+        if (chapter.id === chapterId) {
+          for (const keyPoint of chapter.keyPoints) {
+            // 如果是编辑模式，排除当前编辑的考点
+            if (excludeKeyPointId && keyPoint.id === excludeKeyPointId) {
+              continue;
+            }
+            if (keyPoint.order === order) {
+              return true;
+            }
+          }
+          break;
+        }
+      }
+    }
+    return false;
+  };
+
   // 提交考点 - 优化版本，避免整体刷新
   const handleKeyPointSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -567,6 +624,17 @@ const NewCourseManagement = () => {
         variant: "destructive",
         title: "验证失败",
         description: "请选择关联视频"
+      });
+      return;
+    }
+
+    // 检查排序值是否重复
+    const excludeId = keyPointDialog.mode === 'edit' ? keyPointForm.id : undefined;
+    if (isKeyPointOrderDuplicate(keyPointForm.order, keyPointDialog.chapterId, excludeId)) {
+      toast({
+        variant: "destructive",
+        title: "验证失败",
+        description: `排序值 ${keyPointForm.order} 已存在，请选择其他数值`
       });
       return;
     }
@@ -957,12 +1025,43 @@ const NewCourseManagement = () => {
             </div>
             <div>
               <label className="block mb-1 font-medium">排序（数字越小越靠前）</label>
-              <Input name="order" type="number" min={1} value={chapterForm.order} onChange={handleChapterChange} />
+              <Input 
+                name="order" 
+                type="number" 
+                min={1} 
+                value={chapterForm.order} 
+                onChange={handleChapterChange}
+                className={
+                  isChapterOrderDuplicate(
+                    chapterForm.order, 
+                    chapterDialog.courseId, 
+                    chapterDialog.mode === 'edit' ? chapterForm.id : undefined
+                  ) ? 'border-red-500' : ''
+                }
+              />
+              {isChapterOrderDuplicate(
+                chapterForm.order, 
+                chapterDialog.courseId, 
+                chapterDialog.mode === 'edit' ? chapterForm.id : undefined
+              ) && (
+                <p className="text-xs text-red-500 mt-1">
+                  排序值 {chapterForm.order} 已存在，请选择其他数值
+                </p>
+              )}
             </div>
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeChapterDialog}>取消</Button>
-              <Button type="submit">
+              <Button 
+                type="submit"
+                disabled={
+                  isChapterOrderDuplicate(
+                    chapterForm.order, 
+                    chapterDialog.courseId, 
+                    chapterDialog.mode === 'edit' ? chapterForm.id : undefined
+                  )
+                }
+              >
                 {chapterDialog.mode === 'add' ? '添加章节' : '保存章节'}
               </Button>
             </DialogFooter>
@@ -1016,12 +1115,43 @@ const NewCourseManagement = () => {
             </div>
             <div>
               <label className="block mb-1 font-medium">排序（数字越小越靠前）</label>
-              <Input name="order" type="number" min={1} value={keyPointForm.order} onChange={handleKeyPointChange} />
+              <Input 
+                name="order" 
+                type="number" 
+                min={1} 
+                value={keyPointForm.order} 
+                onChange={handleKeyPointChange}
+                className={
+                  isKeyPointOrderDuplicate(
+                    keyPointForm.order, 
+                    keyPointDialog.chapterId, 
+                    keyPointDialog.mode === 'edit' ? keyPointForm.id : undefined
+                  ) ? 'border-red-500' : ''
+                }
+              />
+              {isKeyPointOrderDuplicate(
+                keyPointForm.order, 
+                keyPointDialog.chapterId, 
+                keyPointDialog.mode === 'edit' ? keyPointForm.id : undefined
+              ) && (
+                <p className="text-xs text-red-500 mt-1">
+                  排序值 {keyPointForm.order} 已存在，请选择其他数值
+                </p>
+              )}
             </div>
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeKeyPointDialog}>取消</Button>
-              <Button type="submit">
+              <Button 
+                type="submit" 
+                disabled={
+                  isKeyPointOrderDuplicate(
+                    keyPointForm.order, 
+                    keyPointDialog.chapterId, 
+                    keyPointDialog.mode === 'edit' ? keyPointForm.id : undefined
+                  )
+                }
+              >
                 {keyPointDialog.mode === 'add' ? '添加考点' : '保存考点'}
               </Button>
             </DialogFooter>

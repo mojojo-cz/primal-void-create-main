@@ -202,9 +202,9 @@ const StudentPage = () => {
 
     // 2. 一次性获取所有相关课程的考点信息
     const { data: sectionsData, error: sectionsError } = await supabase
-      .from('course_sections')
-      .select('id, title, course_id')
-      .in('course_id', courseIds);
+      .from('key_points')
+      .select('id, title, chapter_id, chapters!inner(course_id)')
+      .in('chapters.course_id', courseIds);
 
     if (sectionsError) throw sectionsError;
 
@@ -222,10 +222,11 @@ const StudentPage = () => {
     const courseSectionsMap = new Map<string, string[]>();
     sectionsData?.forEach(section => {
       sectionTitleMap.set(section.id, section.title);
-      if (!courseSectionsMap.has(section.course_id)) {
-        courseSectionsMap.set(section.course_id, []);
+      const courseId = (section.chapters as any).course_id;
+      if (!courseSectionsMap.has(courseId)) {
+        courseSectionsMap.set(courseId, []);
       }
-      courseSectionsMap.get(section.course_id)!.push(section.id);
+      courseSectionsMap.get(courseId)!.push(section.id);
     });
 
     const courseProgressMap = new Map<string, { section_id: string; last_played_at: string; is_completed: boolean }[]>();

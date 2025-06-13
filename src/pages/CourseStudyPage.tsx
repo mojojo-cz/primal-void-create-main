@@ -75,6 +75,7 @@ const CourseStudyPage = () => {
 
   const [course, setCourse] = useState<Course | null>(null);
   const [sections, setSections] = useState<CourseSection[]>([]);
+  const [chapters, setChapters] = useState<any[]>([]); // 新增：存储章节信息
   const [enrollment, setEnrollment] = useState<CourseEnrollment | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [videoDialog, setVideoDialog] = useState<{ 
@@ -111,6 +112,7 @@ const CourseStudyPage = () => {
   const dataCache = useRef<{
     course: Course | null;
     sections: CourseSection[] | null;
+    chapters: any[] | null; // 新增：缓存章节信息
     enrollment: CourseEnrollment | null;
     lastFetch: number;
     isInitialLoad: boolean;
@@ -118,6 +120,7 @@ const CourseStudyPage = () => {
   }>({
     course: null,
     sections: null,
+    chapters: null, // 新增：缓存章节信息
     enrollment: null,
     lastFetch: 0,
     isInitialLoad: true,
@@ -166,6 +169,7 @@ const CourseStudyPage = () => {
     if (!forceRefresh && isCacheValid() && dataCache.current.course && dataCache.current.sections && dataCache.current.enrollment) {
       setCourse(dataCache.current.course);
       setSections(dataCache.current.sections);
+      setChapters(dataCache.current.chapters || []);
       setEnrollment(dataCache.current.enrollment);
       
       // 即使使用缓存数据，也要更新最后访问时间（后台进行）
@@ -319,6 +323,7 @@ const CourseStudyPage = () => {
       dataCache.current = {
         course: courseData,
         sections: formattedSections,
+        chapters: chaptersData || [],
         enrollment: enrollmentData as CourseEnrollment,
         lastFetch: Date.now(),
         isInitialLoad: false,
@@ -328,6 +333,7 @@ const CourseStudyPage = () => {
       // 更新状态
       setCourse(courseData);
       setSections(formattedSections);
+      setChapters(chaptersData || []);
       setEnrollment(enrollmentData as CourseEnrollment);
 
       // 数据加载完成后，更新最后访问时间
@@ -1274,6 +1280,36 @@ const CourseStudyPage = () => {
     };
   }, [countdownTimer]);
 
+  // 按章节分组sections
+  const groupSectionsByChapter = () => {
+    const grouped: { chapter: any, sections: CourseSection[] }[] = [];
+    const chapterMap = new Map<string, any>();
+    
+    // 创建章节映射
+    chapters.forEach(chapter => {
+      chapterMap.set(chapter.id, chapter);
+    });
+    
+    // 获取所有相关的章节ID（按章节order排序）
+    const relevantChapters = chapters
+      .filter(chapter => sections.some(s => s.chapter_id === chapter.id))
+      .sort((a, b) => a.order - b.order);
+    
+    // 按排序后的章节分组
+    relevantChapters.forEach(chapter => {
+      const chapterSections = sections.filter(s => s.chapter_id === chapter.id);
+      
+      if (chapterSections.length > 0) {
+        grouped.push({
+          chapter,
+          sections: chapterSections.sort((a, b) => a.order - b.order) // 确保考点也按order排序
+        });
+      }
+    });
+    
+    return grouped;
+  };
+
   if (isLoading && dataCache.current.isInitialLoad) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -1455,59 +1491,72 @@ const CourseStudyPage = () => {
                             <CardTitle className="text-lg">课程考点</CardTitle>
           </CardHeader>
           <CardContent className="px-3 md:px-6">
-            <div className="space-y-3">
-              {sections.map((section, index) => {
-                const status = getSectionStatus(section, sections);
-                const config = getStatusConfig(status);
-                
-                return (
-                  <div
-                    key={section.id}
-                    className={`
-                      border rounded-xl p-3 transition-all duration-200 cursor-pointer
-                      ${config.cardBg} ${config.cardBorder}
-                      active:scale-[0.98] hover:shadow-md
-                      md:p-4
-                      ${!section.video ? 'cursor-not-allowed opacity-60' : ''}
-                    `}
-                    onClick={() => {
-                      if (section.video) {
-                        if (status === 'completed') {
-                          handleResetAndPlayVideo(section);
-                        } else {
-                          handlePlayVideo(section);
-                        }
-                      }
-                    }}
-                  >
-                    <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 pt-1">
-                        {getStatusIcon(status)}
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <h3 className={`font-medium ${config.titleColor} text-sm leading-snug md:text-base`}>
-                          {section.title}
-                        </h3>
-                        {section.description && (
-                          <p className="text-xs text-gray-600 md:text-sm">
-                            {section.description}
-                          </p>
-                        )}
-                        
-                        {/* 状态标签和进度信息同一行 */}
-                        <div className="flex items-center justify-between">
-                          {getStatusBadge(status, section.progress)}
-                          {section.progress && section.progress.progress_percentage > 0 && (
-                            <span className="text-xs text-gray-500">
-                              已学习 {section.progress.progress_percentage}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+            <div className="space-y-6">
+              {groupSectionsByChapter().map((group, groupIndex) => (
+                <div key={group.chapter.id} className="space-y-3">
+                  {/* 章节标题 */}
+                  <div className="flex items-center space-x-2 pb-2">
+                    <div className="w-1 h-4 bg-blue-500 rounded-full"></div>
+                    <h3 className="text-sm font-medium text-gray-700">{group.chapter.title}</h3>
                   </div>
-                );
-              })}
+                  
+                  {/* 该章节的考点列表 */}
+                  <div className="space-y-3">
+                    {group.sections.map((section, index) => {
+                      const status = getSectionStatus(section, sections);
+                      const config = getStatusConfig(status);
+                      
+                      return (
+                        <div
+                          key={section.id}
+                          className={`
+                            border rounded-xl p-3 transition-all duration-200 cursor-pointer
+                            ${config.cardBg} ${config.cardBorder}
+                            active:scale-[0.98] hover:shadow-md
+                            md:p-4
+                            ${!section.video ? 'cursor-not-allowed opacity-60' : ''}
+                          `}
+                          onClick={() => {
+                            if (section.video) {
+                              if (status === 'completed') {
+                                handleResetAndPlayVideo(section);
+                              } else {
+                                handlePlayVideo(section);
+                              }
+                            }
+                          }}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className="flex-shrink-0 pt-1">
+                              {getStatusIcon(status)}
+                            </div>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <h3 className={`font-medium ${config.titleColor} text-sm leading-snug md:text-base`}>
+                                {section.title}
+                              </h3>
+                              {section.description && (
+                                <p className="text-xs text-gray-600 md:text-sm">
+                                  {section.description}
+                                </p>
+                              )}
+                              
+                              {/* 状态标签和进度信息同一行 */}
+                              <div className="flex items-center justify-between">
+                                {getStatusBadge(status, section.progress)}
+                                {section.progress && section.progress.progress_percentage > 0 && (
+                                  <span className="text-xs text-gray-500">
+                                    已学习 {section.progress.progress_percentage}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
               
               {sections.length === 0 && (
                 <div className="text-center py-12">
