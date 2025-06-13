@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, BookOpen, Play, Clock, CheckCircle, Lock, PlayCircle } from "lucide-react";
+import { ArrowLeft, BookOpen, Clock, CheckCircle, Lock, PlayCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
@@ -888,7 +888,7 @@ const CourseStudyPage = () => {
         titleColor: 'text-gray-900'  // 正常黑色标题
       },
       available: { 
-        icon: Play, 
+        icon: PlayCircle, 
         color: 'text-gray-600', 
         bgColor: 'bg-gray-100',
         textColor: 'text-gray-800',
