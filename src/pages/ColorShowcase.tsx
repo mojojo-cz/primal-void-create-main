@@ -75,7 +75,7 @@ const ColorShowcase = () => {
             <CheckCircle className="h-4 w-4 text-success" />
             <AlertTitle className="text-success">学习完成</AlertTitle>
             <AlertDescription>
-              恭喜！您已完成本章节的学习任务
+              恭喜！您已完成本考点的学习任务
             </AlertDescription>
           </Alert>
 

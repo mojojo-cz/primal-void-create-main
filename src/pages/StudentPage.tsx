@@ -200,7 +200,7 @@ const StudentPage = () => {
     const enrolledIds = new Set(enrollmentsData.map(e => e.course_id));
     const courseIds = Array.from(enrolledIds);
 
-    // 2. 一次性获取所有相关课程的章节信息
+    // 2. 一次性获取所有相关课程的考点信息
     const { data: sectionsData, error: sectionsError } = await supabase
       .from('course_sections')
       .select('id, title, course_id')
@@ -245,7 +245,7 @@ const StudentPage = () => {
       const sectionsCount = sections.length;
       const completedSections = progresses.filter(p => p.is_completed).length;
 
-      // 找出上次学习的章节
+      // 找出上次学习的考点
       let lastLearningSectionTitle: string | undefined = undefined;
       const learningProgresses = progresses
         .filter(p => !p.is_completed && p.last_played_at)

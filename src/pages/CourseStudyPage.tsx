@@ -26,6 +26,7 @@ interface CourseSection {
   description: string | null;
   order: number;
   course_id: string;
+  chapter_id?: string; // 新增：关联的章节ID
   video_id: string | null;
   video?: {
     id: string;
@@ -196,15 +197,24 @@ const CourseStudyPage = () => {
 
       if (courseError) throw courseError;
 
-      // 获取课程章节和视频信息
-      const { data: sectionsData, error: sectionsError } = await supabase
-        .from('course_sections')
+      // 获取章节信息
+      const { data: chaptersData, error: chaptersError } = await supabase
+        .from('chapters')
+        .select('*')
+        .eq('course_id', courseId)
+        .order('"order"', { ascending: true });
+
+      if (chaptersError) throw chaptersError;
+
+      // 获取考点和视频信息
+      const { data: keyPointsData, error: keyPointsError } = await supabase
+        .from('key_points')
         .select(`
           id,
           title,
           description,
           order,
-          course_id,
+          chapter_id,
           video_id,
           minio_videos(
             id,
@@ -215,10 +225,9 @@ const CourseStudyPage = () => {
             play_url_expires_at
           )
         `)
-        .eq('course_id', courseId)
         .order('"order"', { ascending: true });
 
-      if (sectionsError) throw sectionsError;
+      if (keyPointsError) throw keyPointsError;
 
       // 获取视频播放进度（包含最后播放时间）
       const { data: progressData, error: progressError } = await supabase
@@ -231,7 +240,7 @@ const CourseStudyPage = () => {
         console.error('获取播放进度失败:', progressError);
       }
 
-      // 将进度数据映射到章节
+      // 将进度数据映射到考点
       const progressMap = new Map<string, VideoProgress>();
       if (progressData) {
         progressData.forEach(progress => {
@@ -251,23 +260,48 @@ const CourseStudyPage = () => {
         });
       }
       
-      const formattedSections: CourseSection[] = sectionsData?.map(section => ({
-        id: section.id,
-        title: section.title,
-        description: section.description,
-        order: section.order,
-        course_id: section.course_id,
-        video_id: section.video_id,
-        video: section.minio_videos ? {
-          id: (section.minio_videos as any).id,
-          title: (section.minio_videos as any).title,
-          video_url: (section.minio_videos as any).video_url,
-          minio_object_name: (section.minio_videos as any).minio_object_name,
-          play_url: (section.minio_videos as any).play_url,
-          play_url_expires_at: (section.minio_videos as any).play_url_expires_at,
-        } : null,
-        progress: progressMap.get(section.id) || null
-      })) || [];
+      // 创建章节映射用于查找课程ID
+      const chapterMap = new Map<string, any>();
+      chaptersData?.forEach(chapter => {
+        chapterMap.set(chapter.id, chapter);
+      });
+
+      // 将考点数据转换为sections格式（扁平化显示）
+      const formattedSections: CourseSection[] = keyPointsData?.map(keyPoint => {
+        const chapter = chapterMap.get(keyPoint.chapter_id!);
+        return {
+          id: keyPoint.id,
+          title: keyPoint.title,
+          description: keyPoint.description,
+          order: keyPoint.order,
+          course_id: chapter?.course_id || courseId, // 从章节获取course_id
+          chapter_id: keyPoint.chapter_id,
+          video_id: keyPoint.video_id,
+          video: keyPoint.minio_videos ? {
+            id: (keyPoint.minio_videos as any).id,
+            title: (keyPoint.minio_videos as any).title,
+            video_url: (keyPoint.minio_videos as any).video_url,
+            minio_object_name: (keyPoint.minio_videos as any).minio_object_name,
+            play_url: (keyPoint.minio_videos as any).play_url,
+            play_url_expires_at: (keyPoint.minio_videos as any).play_url_expires_at,
+          } : null,
+          progress: progressMap.get(keyPoint.id) || null
+        };
+      }) || [];
+
+      // 按章节order和考点order排序
+      formattedSections.sort((a, b) => {
+        const chapterA = chapterMap.get(a.chapter_id!);
+        const chapterB = chapterMap.get(b.chapter_id!);
+        
+        // 首先按章节顺序排序
+        if (chapterA && chapterB && chapterA.order !== chapterB.order) {
+          return chapterA.order - chapterB.order;
+        }
+        
+        // 如果在同一章节内，按考点顺序排序
+        return a.order - b.order;
+      });
 
       // 获取学习进度
       const { data: enrollmentData, error: enrollmentError } = await supabase
@@ -809,7 +843,7 @@ const CourseStudyPage = () => {
     }
   };
 
-  // 获取章节状态（四种状态：未学习、学习中、已完成、上次学习）
+  // 获取考点状态（四种状态：未学习、学习中、已完成、上次学习）
   const getSectionStatus = (section: CourseSection, allSections: CourseSection[]) => {
     // 已完成状态 - 但需要检查是否重新播放
     if (section.progress?.is_completed) {
@@ -885,7 +919,7 @@ const CourseStudyPage = () => {
         textColor: 'text-gray-600',
         cardBg: 'bg-gray-50/30',
         cardBorder: 'border-gray-200',
-        titleColor: 'text-gray-500'  // 已完成章节标题颜色
+        titleColor: 'text-gray-500'  // 已完成考点标题颜色
       },
       last_learning: { 
         icon: PlayCircle, 
@@ -1067,14 +1101,14 @@ const CourseStudyPage = () => {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // 获取下一个可播放的章节
+  // 获取下一个可播放的考点
   const getNextPlayableSection = (currentSectionId: string) => {
     const currentIndex = sections.findIndex(section => section.id === currentSectionId);
     if (currentIndex === -1 || currentIndex >= sections.length - 1) {
-      return null; // 没有下一个章节
+      return null; // 没有下一个考点
     }
     
-    // 查找下一个有视频的章节
+    // 查找下一个有视频的考点
     for (let i = currentIndex + 1; i < sections.length; i++) {
       const nextSection = sections[i];
       if (nextSection.video) {
@@ -1082,7 +1116,7 @@ const CourseStudyPage = () => {
       }
     }
     
-    return null; // 没有找到下一个有视频的章节
+    return null; // 没有找到下一个有视频的考点
   };
 
   // 显示下一个视频选择对话框
@@ -1418,7 +1452,7 @@ const CourseStudyPage = () => {
         {/* 章节列表 */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg">课程章节</CardTitle>
+                            <CardTitle className="text-lg">课程考点</CardTitle>
           </CardHeader>
           <CardContent className="px-3 md:px-6">
             <div className="space-y-3">
@@ -1478,8 +1512,8 @@ const CourseStudyPage = () => {
               {sections.length === 0 && (
                 <div className="text-center py-12">
                   <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2 text-gray-900">暂无章节</h3>
-                  <p className="text-gray-600">该课程还没有添加章节内容</p>
+                  <h3 className="text-lg font-medium mb-2 text-gray-900">暂无考点</h3>
+                  <p className="text-gray-600">该课程还没有添加考点内容</p>
                 </div>
               )}
             </div>

@@ -53,6 +53,44 @@ export type Database = {
           },
         ]
       }
+      chapters: {
+        Row: {
+          course_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapters_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       course_sections: {
         Row: {
           course_id: string | null
@@ -91,6 +129,54 @@ export type Database = {
           },
           {
             foreignKeyName: "course_sections_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "minio_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      key_points: {
+        Row: {
+          chapter_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          order: number
+          title: string
+          updated_at: string
+          video_id: string | null
+        }
+        Insert: {
+          chapter_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order?: number
+          title: string
+          updated_at?: string
+          video_id?: string | null
+        }
+        Update: {
+          chapter_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order?: number
+          title?: string
+          updated_at?: string
+          video_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "key_points_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "key_points_video_id_fkey"
             columns: ["video_id"]
             isOneToOne: false
             referencedRelation: "minio_videos"

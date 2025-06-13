@@ -13,7 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./pages/admin/AdminLayout";
-import CourseManagement from "./pages/admin/CourseManagement";
+import CourseManagement from "./pages/admin/NewCourseManagement";
 import VideoManagement from "./pages/admin/VideoManagement";
 import AccountManagement from "./pages/admin/AccountManagement";
 import Settings from "./pages/admin/Settings";

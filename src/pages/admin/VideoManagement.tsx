@@ -388,7 +388,7 @@ const VideoManagement = () => {
   // 删除视频 - 适配MinIO视频
   const handleDeleteVideo = async (videoId: string, objectName: string) => {
     try {
-      // 检查是否有课程章节使用此视频
+      // 检查是否有课程考点使用此视频
       const { data: sections, error: checkError } = await supabase
         .from("course_sections")
         .select("id, title, course_id")
@@ -400,7 +400,7 @@ const VideoManagement = () => {
         toast({
           variant: "destructive",
           title: "无法删除",
-          description: `该视频正在被${sections.length}个章节使用，请先移除关联`
+          description: `该视频正在被${sections.length}个考点使用，请先移除关联`
         });
         return;
       }
