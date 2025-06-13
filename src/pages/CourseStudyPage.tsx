@@ -440,7 +440,7 @@ const CourseStudyPage = () => {
             progress: progressMap.get(section.id) || null
           }));
           
-          // 在状态更新后立即计算课程进度
+          // 在状态更新后立即重新计算课程进度（包括学习中的进度）
           setTimeout(() => {
             calculateCourseProgressWithSections(updatedSections);
           }, 0);
@@ -459,34 +459,54 @@ const CourseStudyPage = () => {
     if (!user?.id || !courseId) return;
 
     try {
-      // 获取所有章节的完成情况
+      // 获取所有考点的播放进度
       const { data: progressData, error } = await supabase
         .from('video_progress')
-        .select('section_id, is_completed')
+        .select('section_id, is_completed, progress_percentage')
         .eq('user_id', user.id)
-        .eq('course_id', courseId)
-        .eq('is_completed', true);
+        .eq('course_id', courseId);
 
       if (error) throw error;
 
-      const completedCount = progressData?.length || 0;
       const totalSections = sectionsData.length;
       
       if (totalSections > 0) {
-        // 检查是否最后一章已完成（获取order最大的章节）
+        // 创建进度映射
+        const progressMap = new Map<string, { is_completed: boolean; progress_percentage: number }>();
+        progressData?.forEach(progress => {
+          progressMap.set(progress.section_id, {
+            is_completed: progress.is_completed || false,
+            progress_percentage: progress.progress_percentage || 0
+          });
+        });
+
+        // 计算总进度：已完成考点算100%，学习中考点按实际进度计算
+        let totalProgressPoints = 0;
+        sectionsData.forEach(section => {
+          const sectionProgress = progressMap.get(section.id);
+          if (sectionProgress) {
+            if (sectionProgress.is_completed) {
+              totalProgressPoints += 100; // 已完成考点贡献100%
+            } else {
+              totalProgressPoints += sectionProgress.progress_percentage; // 学习中考点按实际进度
+            }
+          }
+          // 未开始学习的考点贡献0%
+        });
+
+        // 检查是否最后一个考点已完成（获取order最大的考点）
         const lastSection = [...sectionsData].sort((a, b) => b.order - a.order)[0];
-        const isLastSectionCompleted = progressData?.some(progress => 
-          progress.section_id === lastSection?.id
-        ) || false;
+        const lastSectionProgress = progressMap.get(lastSection?.id || '');
+        const isLastSectionCompleted = lastSectionProgress?.is_completed || false;
 
         let courseProgress: number;
         
-        // 如果最后一章已完成，直接设置为100%
-        if (isLastSectionCompleted && completedCount > 0) {
+        // 如果最后一个考点已完成，直接设置为100%
+        if (isLastSectionCompleted) {
           courseProgress = 100;
         } else {
-          // 否则按正常比例计算
-          courseProgress = Math.round((completedCount / totalSections) * 100);
+          // 否则按加权平均计算（每个考点的进度贡献相等）
+          courseProgress = Math.round(totalProgressPoints / totalSections);
         }
 
         await updateCourseProgress(courseProgress);
@@ -819,10 +839,8 @@ const CourseStudyPage = () => {
         } : null);
       }
 
-      // 如果章节完成，计算课程整体进度
-      if (isCompleted) {
-        await calculateCourseProgress();
-      }
+      // 每次保存进度都重新计算课程整体进度（包括学习中的进度）
+      await calculateCourseProgress();
 
       // 更新本地章节进度
       setSections(prevSections => 
@@ -1439,7 +1457,17 @@ const CourseStudyPage = () => {
           <Card className="border border-blue-200 shadow-lg bg-gradient-to-r from-blue-50 to-blue-100/50">
             <CardContent className="p-4">
               <div className="space-y-3">
-                {/* 章节标题 */}
+                {/* 章节信息 */}
+                {lastLearningSection.chapter_id && chapters.find(c => c.id === lastLearningSection.chapter_id) && (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-1 h-3 bg-blue-400 rounded-full"></div>
+                    <span className="text-xs text-blue-600 font-medium">
+                      {chapters.find(c => c.id === lastLearningSection.chapter_id)?.title}
+                    </span>
+                  </div>
+                )}
+                
+                {/* 考点标题 */}
                 <h3 className="font-medium text-blue-900 text-sm leading-snug md:text-base">
                   {lastLearningSection.title}
                 </h3>
