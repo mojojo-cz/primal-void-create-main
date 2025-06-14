@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, GraduationCap, User, PlayCircle, Clock, CheckCircle, X, Menu, RotateCcw, Trash2, LogOut, ChevronRight, Shield } from "lucide-react";
+import { BookOpen, GraduationCap, User, PlayCircle, Clock, CheckCircle, X, Menu, RotateCcw, Trash2, LogOut, ChevronRight, Shield, ArrowUp } from "lucide-react";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,8 +37,10 @@ import {
   debounce,
   OPTIMIZATION_CONFIG
 } from '@/utils/performance';
+import KeyActivation from "@/components/KeyActivation";
+import UpgradePage from "@/pages/UpgradePage";
 
-type ActiveTab = "learning" | "courses" | "profile";
+type ActiveTab = "learning" | "courses" | "profile" | "upgrade";
 
 interface Course {
   id: string;
@@ -713,7 +715,7 @@ const StudentPage = () => {
   const navItems = [
     { id: "learning", label: "学习中", icon: <PlayCircle className="h-5 w-5" /> },
     { id: "courses", label: "我的课程", icon: <BookOpen className="h-5 w-5" /> },
-    { id: "profile", label: "个人信息", icon: <User className="h-5 w-5" /> },
+    { id: "profile", label: "个人信息", icon: <User className="h-5 w-5" /> }
   ];
 
   // 用户类型映射
@@ -1021,7 +1023,12 @@ const StudentPage = () => {
       }
     }
     
-        // 个人信息页面
+    // 升级学员页面
+    if (activeTab === 'upgrade') {
+      return <UpgradePage />;
+    }
+    
+    // 个人信息页面
     if (activeTab === 'profile') {
       return (
         <div className="w-full space-y-6">
@@ -1294,6 +1301,22 @@ const StudentPage = () => {
               系统功能
             </h3>
             <div className="space-y-1">
+              {/* 升级学员按钮 - 只对体验用户显示 */}
+              {profile?.user_type === 'trial_user' && (
+                <button
+                  onClick={() => {
+                    setActiveTab('upgrade');
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg w-full text-left ${
+                    activeTab === 'upgrade' ? 'active' : ''
+                  }`}
+                >
+                  <ArrowUp className="h-5 w-5" />
+                  <span className="font-medium">升级学员</span>
+                </button>
+              )}
+              
               {/* 退出登录按钮 */}
               <button
                 onClick={() => {

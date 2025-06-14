@@ -7,6 +7,7 @@ import { User, Shield, AlertCircle, Phone, Mail, MessageCircle } from "lucide-re
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { scrollToTopOnRouteChange } from "@/utils/scrollToTop";
+import KeyActivation from "@/components/KeyActivation";
 
 const Dashboard = () => {
   const { profile } = useAuth();
@@ -116,6 +117,9 @@ const Dashboard = () => {
 
         {/* 权限开通提示区域 */}
         <div className="grid gap-4 md:gap-6">
+          {/* 密钥激活卡片 */}
+          <KeyActivation />
+
           {/* 主要提示卡片 */}
           <Card className="border-amber-200 bg-amber-50/50">
             <CardHeader className="pb-4">
@@ -126,12 +130,33 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="bg-white/60 rounded-lg p-4">
-                <h3 className="font-semibold text-amber-900 mb-2">
-                  正式学员请联系班主任或管理员开通权限
+                <h3 className="font-semibold text-amber-900 mb-3">
+                  账户升级方式
                 </h3>
-                <p className="text-sm text-amber-800 leading-relaxed">
-                  您的账户已成功注册，但需要班主任或管理员将账户授权为正式学员账户后，才能访问课程内容和学习资料。请联系相关人员开通权限
-              </p>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-semibold mt-0.5">
+                      1
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-amber-900 mb-1">使用激活密钥（推荐）</h4>
+                      <p className="text-sm text-amber-800">
+                        如果您有激活密钥，请在上方的"激活密钥"区域输入密钥即可快速升级账户权限
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-sm font-semibold mt-0.5">
+                      2
+                    </div>
+                    <div>
+                                             <h4 className="font-medium text-amber-900 mb-1">联系管理员开通</h4>
+                       <p className="text-sm text-amber-800">
+                         联系老师或管理员，请求将您的账户手动升级为正式学员或体验用户
+                       </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

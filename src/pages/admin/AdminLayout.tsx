@@ -12,7 +12,8 @@ import {
   Menu,
   X,
   Database,
-  LogOut
+  LogOut,
+  Key
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -99,6 +100,13 @@ const AdminLayout = () => {
         showDashboardLink: false,
         breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 账号管理`
       };
+    } else if (path.includes('/keys')) {
+      return { 
+        title: '密钥管理', 
+        breadcrumb: '密钥管理',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 密钥管理`
+      };
     } else if (path.includes('/settings')) {
       return { 
         title: '系统设置', 
@@ -134,6 +142,12 @@ const AdminLayout = () => {
       to: "/admin/accounts", 
       label: "账号管理", 
       icon: <Users className="h-5 w-5" />,
+      allowedForTeachers: true // 班主任和业务老师可以访问
+    },
+    { 
+      to: "/admin/keys", 
+      label: "密钥管理", 
+      icon: <Key className="h-5 w-5" />,
       allowedForTeachers: true // 班主任和业务老师可以访问
     },
   ].filter(item => {
