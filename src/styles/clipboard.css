@@ -1,0 +1,86 @@
+/* 可选中文本样式 */
+.selectable-text {
+  user-select: all !important;
+  -webkit-user-select: all !important;
+  -moz-user-select: all !important;
+  -ms-user-select: all !important;
+  cursor: text;
+  
+  /* 移动端优化 */
+  -webkit-touch-callout: default;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  
+  /* 视觉反馈 */
+  transition: background-color 0.2s ease;
+}
+
+.selectable-text:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.selectable-text:active {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 选中状态样式 */
+.selectable-text::selection {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.selectable-text::-moz-selection {
+  background-color: #3b82f6;
+  color: white;
+}
+
+/* 密钥特定样式 */
+.key-text {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.875rem;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  display: inline-block;
+  min-width: 200px;
+  word-break: break-all;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .key-text {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
+    min-width: 150px;
+  }
+}
+
+/* 复制提示样式 */
+.copy-hint {
+  position: relative;
+}
+
+.copy-hint::after {
+  content: "点击选中，长按复制";
+  position: absolute;
+  bottom: -1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  color: #6b7280;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.copy-hint:hover::after {
+  opacity: 1;
+}
+
+/* 移动端隐藏提示文字 */
+@media (max-width: 768px) {
+  .copy-hint::after {
+    display: none;
+  }
+} 

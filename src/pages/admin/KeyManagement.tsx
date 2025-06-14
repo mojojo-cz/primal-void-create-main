@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { EnhancedPagination } from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
+import { copyKeyToClipboard } from "@/utils/clipboard";
+import "@/styles/clipboard.css";
 
 // 激活密钥类型
 interface ActivationKey {
@@ -142,20 +144,7 @@ const KeyManagement = () => {
 
   // 复制密钥到剪贴板
   const copyToClipboard = async (key: string) => {
-    try {
-      await navigator.clipboard.writeText(key);
-      toast({
-        title: "复制成功",
-        description: "密钥已复制到剪贴板"
-      });
-    } catch (error) {
-      console.error('复制失败:', error);
-      toast({
-        variant: "destructive",
-        title: "复制失败",
-        description: "无法复制到剪贴板"
-      });
-    }
+    await copyKeyToClipboard(key);
   };
 
   // 获取密钥类型显示名称
@@ -360,7 +349,12 @@ const KeyManagement = () => {
                   {paginatedKeys.map((key) => (
                     <TableRow key={key.id}>
                       <TableCell className="font-mono text-sm">
-                        {key.key}
+                        <span 
+                          className="selectable-text key-text copy-hint"
+                          title="点击选中全部内容，长按可复制"
+                        >
+                          {key.key}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <Badge className={getKeyTypeColor(key.key_type)}>
@@ -411,6 +405,7 @@ const KeyManagement = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => copyToClipboard(key.key)}
+                          title="复制密钥（移动端可长按密钥内容手动复制）"
                         >
                           <Copy className="h-4 w-4" />
                         </Button>
