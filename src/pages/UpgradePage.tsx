@@ -3,7 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUp, Sparkles, Gift, Star } from "lucide-react";
 import KeyActivation from "@/components/KeyActivation";
 
-const UpgradePage = () => {
+interface UpgradePageProps {
+  onActivationSuccess?: () => void;
+}
+
+const UpgradePage = ({ onActivationSuccess }: UpgradePageProps) => {
   return (
     <div className="w-full p-4 md:p-6 lg:p-8">
       {/* 页面标题 */}
@@ -19,7 +23,7 @@ const UpgradePage = () => {
 
       <div className="w-full space-y-6">
         {/* 密钥激活卡片 */}
-        <KeyActivation />
+        <KeyActivation onActivationSuccess={onActivationSuccess} />
 
         {/* 升级说明卡片 */}
         <Card className="border-blue-200 bg-blue-50/50">

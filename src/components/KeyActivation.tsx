@@ -7,7 +7,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Key, Sparkles, Gift } from "lucide-react";
 
-const KeyActivation = () => {
+interface KeyActivationProps {
+  onActivationSuccess?: () => void;
+}
+
+const KeyActivation = ({ onActivationSuccess }: KeyActivationProps) => {
   const { user, profile, refreshProfile } = useAuth();
   const [activationKey, setActivationKey] = useState("");
   const [isActivating, setIsActivating] = useState(false);
@@ -82,6 +86,10 @@ const KeyActivation = () => {
               description: `有效期至：${new Date(data.expires_at).toLocaleDateString('zh-CN')}`
             });
           }, 1000);
+        }
+
+        if (onActivationSuccess) {
+          onActivationSuccess();
         }
 
       } else {

@@ -1025,7 +1025,7 @@ const StudentPage = () => {
     
     // 升级学员页面
     if (activeTab === 'upgrade') {
-      return <UpgradePage />;
+      return <UpgradePage onActivationSuccess={() => setActiveTab('profile')} />;
     }
     
     // 个人信息页面
