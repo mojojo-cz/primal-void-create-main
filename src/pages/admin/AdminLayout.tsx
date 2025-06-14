@@ -139,15 +139,15 @@ const AdminLayout = () => {
       allowedForTeachers: false // 班主任和业务老师不可访问
     },
     { 
-      to: "/admin/accounts", 
-      label: "账号管理", 
-      icon: <Users className="h-5 w-5" />,
-      allowedForTeachers: true // 班主任和业务老师可以访问
-    },
-    { 
       to: "/admin/keys", 
       label: "密钥管理", 
       icon: <Key className="h-5 w-5" />,
+      allowedForTeachers: true // 班主任和业务老师可以访问
+    },
+    { 
+      to: "/admin/accounts", 
+      label: "账号管理", 
+      icon: <Users className="h-5 w-5" />,
       allowedForTeachers: true // 班主任和业务老师可以访问
     },
   ].filter(item => {
