@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, BookOpen, Clock, CheckCircle, Lock, PlayCircle } from "lucide-react";
+import { ArrowLeft, BookOpen, Clock, CheckCircle, Lock, PlayCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
@@ -94,6 +94,7 @@ const CourseStudyPage = () => {
     startTime: 0
   });
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+  const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [progressSaveInterval, setProgressSaveInterval] = useState<NodeJS.Timeout | null>(null);
   const [nextVideoDialog, setNextVideoDialog] = useState<{ 
     open: boolean; 
@@ -107,6 +108,12 @@ const CourseStudyPage = () => {
     countdown: 10
   });
   const [countdownTimer, setCountdownTimer] = useState<NodeJS.Timeout | null>(null);
+
+
+
+  // 新增：预加载相关状态
+  const [preloadingVideos, setPreloadingVideos] = useState<Set<string>>(new Set());
+  const preloadCache = useRef<Map<string, { url: string; expiresAt: string }>>(new Map());
 
   // 数据缓存和加载状态管理
   const dataCache = useRef<{
@@ -158,6 +165,143 @@ const CourseStudyPage = () => {
 
     } catch (error: any) {
       console.error('更新最后访问时间失败:', error);
+    }
+  };
+
+  // 新增：生成视频播放URL的通用函数
+  const generateVideoPlayURL = async (video: CourseSection['video']): Promise<{ playUrl: string; expiresAt: string } | null> => {
+    if (!video) return null;
+
+    try {
+      // 检查是否有存储的播放URL且未过期
+      if (video.play_url && video.play_url_expires_at) {
+        const expiresAt = new Date(video.play_url_expires_at);
+        const now = new Date();
+        const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+        
+        // 如果URL将在10小时内过期，则重新生成
+        if (timeUntilExpiry > 10 * 60 * 60 * 1000) {
+          return {
+            playUrl: video.play_url,
+            expiresAt: video.play_url_expires_at
+          };
+        }
+      }
+      
+      // 生成新的播放URL
+      const { data, error } = await supabase.functions.invoke('minio-presigned-upload', {
+        body: { 
+          action: 'generatePlayUrl',
+          objectName: video.minio_object_name 
+        }
+      });
+      
+      if (error) throw error;
+
+      if (data?.playUrl) {
+        return {
+          playUrl: data.playUrl,
+          expiresAt: data.expiresAt
+        };
+      }
+      
+      return null;
+    } catch (error: any) {
+      console.error('生成视频播放URL失败:', error);
+      return null;
+    }
+  };
+
+  // 新增：渐进式预加载前3个视频URL
+  const preloadInitialVideos = async (sectionsData: CourseSection[]) => {
+    if (!sectionsData.length) return;
+
+    console.log('🎬 开始渐进式预加载前3个视频...');
+    
+    // 获取前3个有视频的考点
+    const videosToPreload = sectionsData
+      .filter(section => section.video && !section.video.play_url)
+      .slice(0, 3);
+
+    if (videosToPreload.length === 0) {
+      console.log('✅ 前3个视频已有有效URL，无需预加载');
+      return;
+    }
+
+    // 设置预加载状态
+    const preloadingIds = new Set(videosToPreload.map(s => s.video!.id));
+    setPreloadingVideos(preloadingIds);
+
+    try {
+      // 并行预加载视频URL
+      const preloadPromises = videosToPreload.map(async (section) => {
+        if (!section.video) return null;
+
+        try {
+          const result = await generateVideoPlayURL(section.video);
+          if (result) {
+            // 🔧 修复：先更新数据库中的播放URL
+            try {
+              await supabase
+                .from('minio_videos')
+                .update({
+                  play_url: result.playUrl,
+                  play_url_expires_at: result.expiresAt
+                })
+                .eq('id', section.video.id);
+              
+              console.log(`📝 预加载数据库URL已更新: ${section.title}`);
+            } catch (dbError) {
+              console.error('预加载数据库URL更新失败:', dbError);
+              // 即使数据库更新失败，也继续使用预加载的URL
+            }
+            
+            // 缓存预加载结果
+            preloadCache.current.set(section.video.id, { url: result.playUrl, expiresAt: result.expiresAt });
+            
+            // 更新本地sections状态
+            setSections(prevSections => 
+              prevSections.map(s => 
+                s.id === section.id && s.video ? {
+                  ...s,
+                  video: {
+                    ...s.video,
+                    play_url: result.playUrl,
+                    play_url_expires_at: result.expiresAt
+                  }
+                } : s
+              )
+            );
+
+            console.log(`✅ 预加载完成: ${section.title}`);
+            return { sectionId: section.id, success: true };
+          }
+          return { sectionId: section.id, success: false };
+        } catch (error) {
+          console.error(`❌ 预加载失败: ${section.title}`, error);
+          return { sectionId: section.id, success: false };
+        }
+      });
+
+      // 等待所有预加载完成
+      const results = await Promise.allSettled(preloadPromises);
+      const successCount = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+      
+      console.log(`🎯 渐进式预加载完成: ${successCount}/${videosToPreload.length} 个视频`);
+      
+      if (successCount > 0) {
+        toast({
+          title: "🚀 智能预加载",
+          description: `已预加载 ${successCount} 个视频，播放将更加流畅`,
+          duration: 2000
+        });
+      }
+
+    } catch (error) {
+      console.error('渐进式预加载失败:', error);
+    } finally {
+      // 清除预加载状态
+      setPreloadingVideos(new Set());
     }
   };
 
@@ -229,6 +373,7 @@ const CourseStudyPage = () => {
             play_url_expires_at
           )
         `)
+        .in('chapter_id', (chaptersData || []).map(ch => ch.id)) // 🔧 修复：只获取当前课程章节的考点
         .order('"order"', { ascending: true });
 
       if (keyPointsError) throw keyPointsError;
@@ -343,7 +488,15 @@ const CourseStudyPage = () => {
         }, 100);
       }
 
-    } catch (error: any) {
+             // 渐进式预加载前3个视频URL
+       await preloadInitialVideos(formattedSections);
+
+       // 用户行为预测预加载（在数据加载完成后执行）
+       setTimeout(() => {
+         predictivePreload();
+       }, 2000); // 延迟2秒，让主要功能先加载完成
+
+     } catch (error: any) {
       console.error('获取课程数据失败:', error);
       dataCache.current.backgroundRefreshing = false;
       toast({
@@ -402,6 +555,9 @@ const CourseStudyPage = () => {
     if (!courseId || !user?.id) return;
 
     try {
+      console.log('🔄 开始刷新视频进度...');
+      const startTime = performance.now();
+      
       // 只获取视频播放进度数据
       const { data: progressData, error: progressError } = await supabase
         .from('video_progress')
@@ -413,6 +569,8 @@ const CourseStudyPage = () => {
         console.error('刷新播放进度失败:', progressError);
         return;
       }
+
+      console.log(`📊 获取到 ${progressData?.length || 0} 条进度记录`);
 
       // 更新本地章节的进度信息
       if (progressData) {
@@ -433,21 +591,51 @@ const CourseStudyPage = () => {
           }
         });
 
-        // 只更新进度信息，保持其他数据不变
+        // 🚀 优化：只在数据真正发生变化时才更新状态
         setSections(prevSections => {
-          const updatedSections = prevSections.map(section => ({
-            ...section,
-            progress: progressMap.get(section.id) || null
-          }));
+          let hasChanges = false;
+          const updatedSections = prevSections.map(section => {
+            const newProgress = progressMap.get(section.id) || null;
+            const oldProgress = section.progress;
+            
+            // 检查进度是否真的发生了变化
+            const progressChanged = !oldProgress && newProgress || 
+                                  oldProgress && !newProgress ||
+                                  oldProgress && newProgress && (
+                                    oldProgress.current_position !== newProgress.current_position ||
+                                    oldProgress.progress_percentage !== newProgress.progress_percentage ||
+                                    oldProgress.is_completed !== newProgress.is_completed ||
+                                    oldProgress.last_played_at !== newProgress.last_played_at
+                                  );
+            
+            if (progressChanged) {
+              hasChanges = true;
+              console.log(`📝 更新章节进度: ${section.title}`);
+            }
+            
+            return {
+              ...section,
+              progress: newProgress
+            };
+          });
           
-          // 在状态更新后立即重新计算课程进度（包括学习中的进度）
-          setTimeout(() => {
-            calculateCourseProgressWithSections(updatedSections);
-          }, 0);
-          
-          return updatedSections;
+          if (hasChanges) {
+            console.log('✅ 检测到进度变化，更新状态');
+            // 在状态更新后立即重新计算课程进度（包括学习中的进度）
+            setTimeout(() => {
+              calculateCourseProgressWithSections(updatedSections);
+            }, 0);
+            
+            return updatedSections;
+          } else {
+            console.log('ℹ️ 无进度变化，跳过状态更新');
+            return prevSections;
+          }
         });
       }
+      
+      const endTime = performance.now();
+      console.log(`⚡ 视频进度刷新完成，耗时: ${Math.round(endTime - startTime)}ms`);
 
     } catch (error: any) {
       console.error('刷新视频进度失败:', error);
@@ -482,11 +670,14 @@ const CourseStudyPage = () => {
 
         // 计算总进度：已完成考点算100%，学习中考点按实际进度计算
         let totalProgressPoints = 0;
+        let completedSections = 0;
+        
         sectionsData.forEach(section => {
           const sectionProgress = progressMap.get(section.id);
           if (sectionProgress) {
             if (sectionProgress.is_completed) {
               totalProgressPoints += 100; // 已完成考点贡献100%
+              completedSections++;
             } else {
               totalProgressPoints += sectionProgress.progress_percentage; // 学习中考点按实际进度
             }
@@ -494,21 +685,18 @@ const CourseStudyPage = () => {
           // 未开始学习的考点贡献0%
         });
 
-        // 检查是否最后一个考点已完成（获取order最大的考点）
-        const lastSection = [...sectionsData].sort((a, b) => b.order - a.order)[0];
-        const lastSectionProgress = progressMap.get(lastSection?.id || '');
-        const isLastSectionCompleted = lastSectionProgress?.is_completed || false;
-
         let courseProgress: number;
         
-        // 如果最后一个考点已完成，直接设置为100%
-        if (isLastSectionCompleted) {
+        // 🔧 修复：只有当所有考点都完成时，才设置为100%
+        if (completedSections === totalSections && totalSections > 0) {
           courseProgress = 100;
         } else {
           // 否则按加权平均计算（每个考点的进度贡献相等）
           courseProgress = Math.round(totalProgressPoints / totalSections);
         }
 
+        console.log(`📊 课程进度计算: 已完成 ${completedSections}/${totalSections} 个考点，总进度: ${courseProgress}%`);
+        
         await updateCourseProgress(courseProgress);
       }
 
@@ -522,8 +710,8 @@ const CourseStudyPage = () => {
     await calculateCourseProgressWithSections(sections);
   };
 
-  // 播放视频（使用智能缓存）
-  const handlePlayVideo = async (section: CourseSection) => {
+  // 处理播放视频（稳定引用）
+  const handlePlayVideo = useCallback(async (section: CourseSection) => {
     if (!section.video) {
       toast({
         variant: "destructive",
@@ -533,8 +721,24 @@ const CourseStudyPage = () => {
       return;
     }
 
+    // 防止重复点击
+    if (loadingVideoId === section.video.id) {
+      return;
+    }
+
     try {
+      setLoadingVideoId(section.video.id);
       setPlayingVideoId(section.video.id);
+      
+      // 立即打开播放器，显示加载状态
+      setVideoDialog({ 
+        open: true, 
+        url: '', // 先设置为空，加载完成后更新
+        title: section.title,
+        sectionId: section.id,
+        videoId: section.video.id,
+        startTime: section.progress?.current_position || 0
+      });
       
       // 如果是第一章且状态为未开始，更新进度为1%
       if (section.order === 1 && enrollment?.status === 'not_started') {
@@ -542,6 +746,43 @@ const CourseStudyPage = () => {
       }
 
       let playUrl = section.video.play_url;
+      
+      // 🚀 优先检查预加载缓存（修复版）
+      const cachedVideo = preloadCache.current.get(section.video.id);
+      if (cachedVideo && cachedVideo.url !== 'triggered') {
+        console.log(`⚡ 发现预加载缓存: ${section.title}`);
+        
+        // 🔧 修复：检查预加载URL是否过期
+        try {
+          const cachedExpiresAt = new Date(cachedVideo.expiresAt);
+          const now = new Date();
+          const timeUntilExpiry = cachedExpiresAt.getTime() - now.getTime();
+          
+          // 如果预加载URL仍然有效（还有至少6小时）
+          if (timeUntilExpiry > 6 * 60 * 60 * 1000) {
+            console.log(`✅ 使用有效的预加载URL: ${section.title}`);
+            setVideoDialog(prev => ({ 
+              ...prev,
+              url: cachedVideo.url
+            }));
+            
+            toast({
+              title: "⚡ 预加载命中",
+              description: "视频已预加载，立即播放",
+              duration: 1500
+            });
+            return;
+          } else {
+            console.log(`⚠️ 预加载URL已过期，清除缓存: ${section.title}`);
+            // 清除过期的预加载缓存
+            preloadCache.current.delete(section.video.id);
+          }
+        } catch (error) {
+          console.error('预加载URL过期检查失败:', error);
+          // 如果时间解析失败，清除可能损坏的缓存
+          preloadCache.current.delete(section.video.id);
+        }
+      }
       
       // 检查是否有存储的播放URL且未过期
       if (section.video.play_url && section.video.play_url_expires_at) {
@@ -551,15 +792,13 @@ const CourseStudyPage = () => {
         
         // 如果URL将在10小时内过期，则重新生成（适应长视频播放）
         if (timeUntilExpiry > 10 * 60 * 60 * 1000) {
-          // URL仍然有效，直接使用
-          setVideoDialog({ 
-            open: true, 
-            url: section.video.play_url, 
-            title: `${course?.title} - ${section.title}`,
-            sectionId: section.id,
-            videoId: section.video.id,
-            startTime: section.progress?.current_position || 0
-          });
+          // URL仍然有效，直接使用 - 更快加载
+          setVideoDialog(prev => ({ 
+            ...prev,
+            url: section.video.play_url!
+          }));
+          
+          console.log(`🎯 使用缓存URL: ${section.title}`);
           return;
         }
       }
@@ -575,6 +814,24 @@ const CourseStudyPage = () => {
       if (error) throw error;
 
       if (data?.playUrl) {
+        // 🔧 修复：先更新数据库中的播放URL
+        if (data.expiresAt && section.video) {
+          try {
+            await supabase
+              .from('minio_videos')
+              .update({
+                play_url: data.playUrl,
+                play_url_expires_at: data.expiresAt
+              })
+              .eq('id', section.video.id);
+            
+            console.log(`📝 数据库URL已更新: ${section.title}`);
+          } catch (dbError) {
+            console.error('数据库URL更新失败:', dbError);
+            // 即使数据库更新失败，也继续使用新URL播放
+          }
+        }
+        
         // 更新本地缓存URL
         setSections(prevSections => 
           prevSections.map(s => 
@@ -589,14 +846,12 @@ const CourseStudyPage = () => {
           )
         );
         
-        setVideoDialog({ 
-          open: true, 
-          url: data.playUrl, 
-          title: `${course?.title} - ${section.title}`,
-          sectionId: section.id,
-          videoId: section.video.id,
-          startTime: section.progress?.current_position || 0
-        });
+        // 更新播放器URL
+        setVideoDialog(prev => ({ 
+          ...prev,
+          url: data.playUrl
+        }));
+
       } else {
         throw new Error('未能获取视频播放URL');
       }
@@ -609,8 +864,18 @@ const CourseStudyPage = () => {
       });
     } finally {
       setPlayingVideoId(null);
+      setLoadingVideoId(null);
     }
-  };
+  }, [
+    loadingVideoId, 
+    enrollment?.status, 
+    preloadCache, 
+    setVideoDialog, 
+    setLoadingVideoId, 
+    setPlayingVideoId, 
+    setSections, 
+    toast
+  ]);
 
   // 重置并播放视频（用于已完成的视频重新播放）
   const handleResetAndPlayVideo = async (section: CourseSection) => {
@@ -623,33 +888,48 @@ const CourseStudyPage = () => {
       return;
     }
 
+    // 防止重复点击
+    if (loadingVideoId === section.video.id) {
+      return;
+    }
+
+
+
     try {
+      setLoadingVideoId(section.video.id);
       setPlayingVideoId(section.video.id);
+      
+      // 立即打开播放器，显示加载状态
+      setVideoDialog({ 
+        open: true, 
+        url: '', // 先设置为空，加载完成后更新
+        title: section.title,
+        sectionId: section.id,
+        videoId: section.video.id,
+        startTime: 0 // 从头开始播放
+      });
 
-      // 首先重置该章节的播放进度
-      const { error: resetError } = await supabase
-        .from('video_progress')
-        .upsert({
-          user_id: user.id,
-          course_id: courseId,
-          section_id: section.id,
-          video_id: section.video.id,
-          current_position: 0,
-          duration: section.progress?.duration || 0,
-          progress_percentage: 0,
-          is_completed: false,
-          last_played_at: new Date().toISOString(),
-          completed_at: null // 清除完成时间
-        }, {
-          onConflict: 'user_id,section_id'
-        });
-
-      if (resetError) {
-        console.error('重置播放进度失败:', resetError);
-        throw new Error('重置播放进度失败');
+      // 🔧 新设计：立即重置进度状态（包括数据库）
+      if (section.progress) {
+        await supabase
+          .from('video_progress')
+          .upsert({
+            user_id: user.id,
+            course_id: courseId,
+            section_id: section.id,
+            video_id: section.video.id,
+            current_position: 0,
+            duration: section.progress.duration,
+            progress_percentage: 0,
+            is_completed: false,
+            last_played_at: new Date().toISOString(),
+            completed_at: null
+          }, {
+            onConflict: 'user_id,section_id'
+          });
       }
 
-      // 更新本地状态，重置进度
+      // 更新本地状态
       setSections(prevSections => 
         prevSections.map(s => 
           s.id === section.id ? {
@@ -678,20 +958,11 @@ const CourseStudyPage = () => {
         // 如果URL将在10小时内过期，则重新生成（适应长视频播放）
         if (timeUntilExpiry > 10 * 60 * 60 * 1000) {
           // URL仍然有效，直接使用，从头开始播放
-          setVideoDialog({ 
-            open: true, 
-            url: section.video.play_url, 
-            title: `${course?.title} - ${section.title}`,
-            sectionId: section.id,
-            videoId: section.video.id,
-            startTime: 0 // 从头开始播放
-          });
+          setVideoDialog(prev => ({ 
+            ...prev,
+            url: section.video.play_url!
+          }));
           
-          toast({
-            title: "开始重新播放",
-            description: `正在从头播放：${section.title}`,
-            duration: 3000
-          });
           return;
         }
       }
@@ -707,6 +978,24 @@ const CourseStudyPage = () => {
       if (error) throw error;
 
       if (data?.playUrl) {
+        // 🔧 修复：先更新数据库中的播放URL
+        if (data.expiresAt && section.video) {
+          try {
+            await supabase
+              .from('minio_videos')
+              .update({
+                play_url: data.playUrl,
+                play_url_expires_at: data.expiresAt
+              })
+              .eq('id', section.video.id);
+            
+            console.log(`📝 数据库URL已更新: ${section.title}`);
+          } catch (dbError) {
+            console.error('数据库URL更新失败:', dbError);
+            // 即使数据库更新失败，也继续使用新URL播放
+          }
+        }
+        
         // 更新本地缓存URL
         setSections(prevSections => 
           prevSections.map(s => 
@@ -721,20 +1010,11 @@ const CourseStudyPage = () => {
           )
         );
         
-        setVideoDialog({ 
-          open: true, 
-          url: data.playUrl, 
-          title: `${course?.title} - ${section.title}`,
-          sectionId: section.id,
-          videoId: section.video.id,
-          startTime: 0 // 从头开始播放
-        });
-        
-        toast({
-          title: "开始重新播放",
-          description: `正在从头播放：${section.title}`,
-          duration: 3000
-        });
+        // 更新播放器URL
+        setVideoDialog(prev => ({ 
+          ...prev,
+          url: data.playUrl
+        }));
       } else {
         throw new Error('未能获取视频播放URL');
       }
@@ -747,6 +1027,7 @@ const CourseStudyPage = () => {
       });
     } finally {
       setPlayingVideoId(null);
+      setLoadingVideoId(null);
     }
   };
 
@@ -776,29 +1057,215 @@ const CourseStudyPage = () => {
         last_accessed_at: new Date().toISOString()
       } : null);
 
-      if (newStatus === 'completed') {
-        toast({
-          title: "恭喜完成课程！",
-          description: "您已完成所有章节的学习"
-        });
-      }
+
 
     } catch (error: any) {
       console.error('更新课程进度失败:', error);
     }
   };
 
-  // 保存视频播放进度
-  const saveVideoProgress = async (
+  // 新增：自适应预加载下一个视频
+  const preloadNextVideo = async (currentSectionId: string) => {
+    const nextSection = getNextPlayableSection(currentSectionId);
+    
+    if (!nextSection?.video) {
+      console.log('没有下一个视频需要预加载');
+      return;
+    }
+
+    // 检查是否已经预加载过
+    if (nextSection.video.play_url || preloadCache.current.has(nextSection.video.id)) {
+      console.log(`下一个视频已预加载: ${nextSection.title}`);
+      return;
+    }
+
+    // 检查是否正在预加载
+    if (preloadingVideos.has(nextSection.video.id)) {
+      console.log(`下一个视频正在预加载中: ${nextSection.title}`);
+      return;
+    }
+
+    console.log(`🎯 开始自适应预加载下一个视频: ${nextSection.title}`);
+
+    // 设置预加载状态
+    setPreloadingVideos(prev => new Set([...prev, nextSection.video!.id]));
+
+    try {
+      const result = await generateVideoPlayURL(nextSection.video);
+      
+      if (result) {
+        // 🔧 修复：先更新数据库中的播放URL
+        try {
+          await supabase
+            .from('minio_videos')
+            .update({
+              play_url: result.playUrl,
+              play_url_expires_at: result.expiresAt
+            })
+            .eq('id', nextSection.video.id);
+          
+          console.log(`📝 自适应预加载数据库URL已更新: ${nextSection.title}`);
+        } catch (dbError) {
+          console.error('自适应预加载数据库URL更新失败:', dbError);
+          // 即使数据库更新失败，也继续使用预加载的URL
+        }
+        
+        // 缓存预加载结果
+        preloadCache.current.set(nextSection.video.id, { url: result.playUrl, expiresAt: result.expiresAt });
+        
+        // 更新本地sections状态
+        setSections(prevSections => 
+          prevSections.map(s => 
+            s.id === nextSection.id && s.video ? {
+              ...s,
+              video: {
+                ...s.video,
+                play_url: result.playUrl,
+                play_url_expires_at: result.expiresAt
+              }
+            } : s
+          )
+        );
+
+        console.log(`✅ 下一个视频预加载完成: ${nextSection.title}`);
+        
+        // 静默提示用户
+        toast({
+          title: "⚡ 智能预加载",
+          description: `下一个视频已准备就绪`,
+          duration: 1500
+        });
+      }
+    } catch (error) {
+      console.error(`❌ 预加载下一个视频失败: ${nextSection.title}`, error);
+    } finally {
+      // 清除预加载状态
+      setPreloadingVideos(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(nextSection.video!.id);
+        return newSet;
+      });
+    }
+  };
+
+  // 新增：标记视频为完成状态的专用函数
+  const markVideoAsCompleted = async (
     sectionId: string, 
     videoId: string, 
-    currentTime: number, 
     duration: number
   ) => {
     if (!user?.id || !courseId) return;
 
+    try {
+      // 强制标记为完成状态
+      const { data, error } = await supabase
+        .from('video_progress')
+        .upsert({
+          user_id: user.id,
+          course_id: courseId,
+          section_id: sectionId,
+          video_id: videoId,
+          current_position: Math.floor(duration),
+          duration: Math.floor(duration),
+          progress_percentage: 100,
+          is_completed: true, // 强制设置为完成
+          last_played_at: new Date().toISOString(),
+          completed_at: new Date().toISOString() // 设置完成时间
+        }, {
+          onConflict: 'user_id,section_id'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // 更新课程的最后访问时间
+      if (enrollment) {
+        await supabase
+          .from('course_enrollments')
+          .update({
+            last_accessed_at: new Date().toISOString()
+          })
+          .eq('id', enrollment.id);
+
+        setEnrollment(prev => prev ? {
+          ...prev,
+          last_accessed_at: new Date().toISOString()
+        } : null);
+      }
+
+      // 重新计算课程整体进度
+      await calculateCourseProgress();
+
+      // 更新本地状态
+      setSections(prevSections => 
+        prevSections.map(section => 
+          section.id === sectionId ? {
+            ...section,
+            progress: {
+              id: data.id,
+              current_position: Math.floor(duration),
+              duration: Math.floor(duration),
+              progress_percentage: 100,
+              is_completed: true,
+              section_id: sectionId,
+              video_id: videoId,
+              last_played_at: new Date().toISOString(),
+              completed_at: new Date().toISOString()
+            }
+          } : section
+        )
+      );
+
+      console.log(`✅ 视频已标记为完成: ${sectionId}`);
+
+    } catch (error: any) {
+      console.error('标记视频完成失败:', error);
+    }
+  };
+
+  // 修改视频进度保存函数，添加自适应预加载触发
+  const saveVideoProgress = async (
+    sectionId: string, 
+    videoId: string, 
+    currentTime: number, 
+    duration: number,
+    forceComplete = false // 新增参数：强制标记为完成
+  ) => {
+    if (!user?.id || !courseId) return;
+
     const progressPercentage = duration > 0 ? Math.round((currentTime / duration) * 100) : 0;
-    const isCompleted = progressPercentage >= 90; // 播放90%以上算完成
+    // 只有播放到99%以上才算完成（防止四舍五入误差），或者由forceComplete参数强制完成
+    const isCompleted = forceComplete || progressPercentage >= 99;
+
+    // 🚀 优化：立即更新本地状态，提供即时UI反馈
+    const currentTimestamp = new Date().toISOString();
+    setSections(prevSections => 
+      prevSections.map(section => 
+        section.id === sectionId ? {
+          ...section,
+          progress: section.progress ? {
+            ...section.progress,
+            current_position: Math.floor(currentTime),
+            duration: Math.floor(duration),
+            progress_percentage: progressPercentage,
+            is_completed: isCompleted,
+            last_played_at: currentTimestamp,
+            ...(isCompleted && { completed_at: currentTimestamp })
+          } : {
+            id: 'temp-' + Date.now(), // 临时ID
+            current_position: Math.floor(currentTime),
+            duration: Math.floor(duration),
+            progress_percentage: progressPercentage,
+            is_completed: isCompleted,
+            section_id: sectionId,
+            video_id: videoId,
+            last_played_at: currentTimestamp,
+            ...(isCompleted && { completed_at: currentTimestamp })
+          }
+        } : section
+      )
+    );
 
     try {
       // 使用upsert操作插入或更新播放进度
@@ -813,8 +1280,8 @@ const CourseStudyPage = () => {
           duration: Math.floor(duration),
           progress_percentage: progressPercentage,
           is_completed: isCompleted,
-          last_played_at: new Date().toISOString(),
-          ...(isCompleted && { completed_at: new Date().toISOString() })
+          last_played_at: currentTimestamp,
+          ...(isCompleted && { completed_at: currentTimestamp })
         }, {
           onConflict: 'user_id,section_id'
         })
@@ -823,145 +1290,115 @@ const CourseStudyPage = () => {
 
       if (error) throw error;
 
-      // 更新课程的最后访问时间（学习活动）
-      if (enrollment) {
-        await supabase
-          .from('course_enrollments')
-          .update({
-            last_accessed_at: new Date().toISOString()
-          })
-          .eq('id', enrollment.id);
-
-        // 更新本地状态
-        setEnrollment(prev => prev ? {
-          ...prev,
-          last_accessed_at: new Date().toISOString()
-        } : null);
-      }
-
-      // 每次保存进度都重新计算课程整体进度（包括学习中的进度）
-      await calculateCourseProgress();
-
-      // 更新本地章节进度
+      // 🚀 优化：数据库操作成功后，用真实的ID更新本地状态
       setSections(prevSections => 
         prevSections.map(section => 
           section.id === sectionId ? {
             ...section,
             progress: {
-              id: data.id,
+              id: data.id, // 使用真实的数据库ID
               current_position: Math.floor(currentTime),
               duration: Math.floor(duration),
               progress_percentage: progressPercentage,
               is_completed: isCompleted,
               section_id: sectionId,
               video_id: videoId,
-              last_played_at: new Date().toISOString(),
-              completed_at: isCompleted ? new Date().toISOString() : section.progress?.completed_at
+              last_played_at: currentTimestamp,
+              completed_at: isCompleted ? currentTimestamp : section.progress?.completed_at
             }
           } : section
         )
       );
 
+      // 更新课程的最后访问时间（学习活动）
+      if (enrollment) {
+        await supabase
+          .from('course_enrollments')
+          .update({
+            last_accessed_at: currentTimestamp
+          })
+          .eq('id', enrollment.id);
+
+        // 更新本地状态
+        setEnrollment(prev => prev ? {
+          ...prev,
+          last_accessed_at: currentTimestamp
+        } : null);
+      }
+
+      // 每次保存进度都重新计算课程整体进度（包括学习中的进度）
+      await calculateCourseProgress();
+
+      // 🎯 自适应预加载：当播放进度达到70%时，预加载下一个视频
+      if (progressPercentage >= 70) {
+        // 使用防抖，避免重复触发
+        const preloadKey = `preload_${sectionId}`;
+        if (!preloadCache.current.has(preloadKey)) {
+          preloadCache.current.set(preloadKey, { url: 'triggered', expiresAt: Date.now().toString() });
+          setTimeout(() => {
+            preloadNextVideo(sectionId);
+          }, 1000); // 延迟1秒执行，避免频繁调用
+        }
+      }
+
     } catch (error: any) {
       console.error('保存播放进度失败:', error);
+      // 🚀 优化：如果数据库操作失败，恢复到之前的状态或保持乐观更新
+      // 这里我们选择保持乐观更新，因为大多数情况下操作会成功
     }
   };
 
-  // 获取考点状态（四种状态：未学习、学习中、已完成、上次学习）
+  // 获取考点状态和标签（三种状态：未开始、学习中、已完成 + 上次学习标签）
   const getSectionStatus = (section: CourseSection, allSections: CourseSection[]) => {
-    // 已完成状态 - 但需要检查是否重新播放
-    if (section.progress?.is_completed) {
-      // 如果已完成但有更新的播放记录，说明重新播放了
-      const hasRecentPlay = section.progress.last_played_at && 
-        section.progress.completed_at && 
-        new Date(section.progress.last_played_at) > new Date(section.progress.completed_at);
-      
-      if (!hasRecentPlay) {
-        return 'completed';
+    // 基础状态判断
+    let status = 'available'; // 默认：未开始
+    
+    if (section.progress) {
+      if (section.progress.is_completed) {
+        status = 'completed'; // 已完成
+      } else {
+        status = 'learning'; // 学习中
       }
     }
     
-    // 找出所有有进度且未完成的章节，或已完成但重新播放的章节
-    const learningProgresses = allSections
-      .filter(s => {
-        if (!s.progress || !s.progress.current_position || s.progress.current_position <= 0) {
-          return false;
-        }
-        
-        // 未完成的章节
-        if (!s.progress.is_completed) {
-          return true;
-        }
-        
-        // 已完成但重新播放的章节
-        const hasRecentPlay = s.progress.last_played_at && 
-          s.progress.completed_at && 
-          new Date(s.progress.last_played_at) > new Date(s.progress.completed_at);
-        
-        return hasRecentPlay;
-      })
+    return status;
+  };
+
+  // 新增：判断是否为"上次学习"
+  const isLastLearning = (section: CourseSection, allSections: CourseSection[]) => {
+    // 找出所有有播放记录的章节
+    const allPlayedSections = allSections
+      .filter(s => s.progress && s.progress.last_played_at)
       .map(s => ({
         sectionId: s.id,
         lastPlayedAt: s.progress!.last_played_at
       }))
-      .filter(p => p.lastPlayedAt) // 只保留有播放时间的
-      .sort((a, b) => new Date(b.lastPlayedAt!).getTime() - new Date(a.lastPlayedAt!).getTime()); // 按时间倒序排列
+      .sort((a, b) => new Date(b.lastPlayedAt!).getTime() - new Date(a.lastPlayedAt!).getTime());
     
-    // 如果当前章节是最后播放的且未完成（或已完成但重新播放），则为"上次学习"状态
-    if (learningProgresses.length > 0 && learningProgresses[0].sectionId === section.id) {
-      return 'last_learning';
-    }
-    
-    // 如果有播放进度但不是最后播放的，则为"学习中"状态
-    if (section.progress && section.progress.current_position > 0) {
-      // 未完成的章节
-      if (!section.progress.is_completed) {
-        return 'learning';
-      }
-      
-      // 已完成但重新播放的章节
-      const hasRecentPlay = section.progress.last_played_at && 
-        section.progress.completed_at && 
-        new Date(section.progress.last_played_at) > new Date(section.progress.completed_at);
-      
-      if (hasRecentPlay) {
-        return 'learning';
-      }
-    }
-    
-    // 没有播放进度，为"未学习"状态
-    return 'available';
+    // 如果当前章节是最后播放的，则为"上次学习"
+    return allPlayedSections.length > 0 && allPlayedSections[0].sectionId === section.id;
   };
 
-  // 获取状态配置（统一状态设计）
-  const getStatusConfig = (status: string) => {
+  // 获取状态配置（三种状态 + 上次学习标签）
+  const getStatusConfig = (status: string, isLastLearning: boolean = false) => {
     const configs = {
       completed: { 
         icon: CheckCircle, 
-        color: 'text-gray-500', 
-        bgColor: 'bg-gray-100',
-        textColor: 'text-gray-600',
-        cardBg: 'bg-gray-50/30',
-        cardBorder: 'border-gray-200',
-        titleColor: 'text-gray-500'  // 已完成考点标题颜色
-      },
-      last_learning: { 
-        icon: PlayCircle, 
-        color: 'text-blue-600', 
-        bgColor: 'bg-blue-100',
-        textColor: 'text-blue-800',
-        cardBg: 'bg-blue-50/30',
-        cardBorder: 'border-blue-200',
-        titleColor: 'text-gray-900'  // 正常黑色标题
+        color: isLastLearning ? 'text-blue-600' : 'text-gray-500', 
+        bgColor: isLastLearning ? 'bg-blue-100' : 'bg-gray-100',
+        textColor: isLastLearning ? 'text-blue-800' : 'text-gray-600',
+        cardBg: isLastLearning ? 'bg-blue-50/30' : 'bg-gray-50/30',
+        cardBorder: isLastLearning ? 'border-blue-200' : 'border-gray-200',
+        titleColor: isLastLearning ? 'text-gray-900' : 'text-gray-500'
       },
       learning: { 
         icon: PlayCircle, 
-        color: 'text-orange-600', 
-        bgColor: 'bg-orange-100',
-        textColor: 'text-orange-800',
-        cardBg: 'bg-orange-50/30',
-        cardBorder: 'border-orange-200',
-        titleColor: 'text-gray-900'  // 正常黑色标题
+        color: isLastLearning ? 'text-blue-600' : 'text-orange-600', 
+        bgColor: isLastLearning ? 'bg-blue-100' : 'bg-orange-100',
+        textColor: isLastLearning ? 'text-blue-800' : 'text-orange-800',
+        cardBg: isLastLearning ? 'bg-blue-50/30' : 'bg-orange-50/30',
+        cardBorder: isLastLearning ? 'border-blue-200' : 'border-orange-200',
+        titleColor: 'text-gray-900'
       },
       available: { 
         icon: PlayCircle, 
@@ -970,36 +1407,40 @@ const CourseStudyPage = () => {
         textColor: 'text-gray-800',
         cardBg: 'bg-white',
         cardBorder: 'border-gray-200',
-        titleColor: 'text-gray-900'  // 正常黑色标题
+        titleColor: 'text-gray-900'
       }
     };
     return configs[status as keyof typeof configs] || configs.available;
   };
 
   // 获取状态图标（使用统一配置）
-  const getStatusIcon = (status: string) => {
-    const config = getStatusConfig(status);
+  const getStatusIcon = (status: string, section?: CourseSection, allSections?: CourseSection[]) => {
+    // 如果正在加载，显示加载图标
+    if (section?.video && loadingVideoId === section.video.id) {
+      return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
+    }
+    
+    const isLast = section && allSections ? isLastLearning(section, allSections) : false;
+    const config = getStatusConfig(status, isLast);
     const IconComponent = config.icon;
     return <IconComponent className={`h-5 w-5 ${config.color}`} />;
   };
 
-  // 获取状态徽章（使用统一配置）
-  const getStatusBadge = (status: string, progress?: VideoProgress | null) => {
-    const config = getStatusConfig(status);
-    let text = '';
+  // 获取状态徽章（状态 + 标签）
+  const getStatusBadge = (status: string, section: CourseSection, allSections: CourseSection[]) => {
+    const isLast = isLastLearning(section, allSections);
+    const config = getStatusConfig(status, isLast);
     
+    let text = '';
     switch (status) {
       case 'completed':
-        text = '已完成';
-        break;
-      case 'last_learning':
-        text = '上次学习';
+        text = isLast ? '已完成 · 上次学习' : '已完成';
         break;
       case 'learning':
-        text = '学习中';
+        text = isLast ? '学习中 · 上次学习' : '学习中';
         break;
       case 'available':
-        text = '未学习';
+        text = '未开始';
         break;
       default:
         text = '未知';
@@ -1013,8 +1454,9 @@ const CourseStudyPage = () => {
   };
 
   // 获取播放按钮配置
-  const getPlayButtonConfig = (section: CourseSection, status: string) => {
+  const getPlayButtonConfig = (section: CourseSection, status: string, allSections: CourseSection[]) => {
     const isLoading = playingVideoId === section.video?.id;
+    const isLast = isLastLearning(section, allSections);
     
     if (isLoading) {
       return {
@@ -1024,18 +1466,10 @@ const CourseStudyPage = () => {
       };
     }
     
-    if (status === 'last_learning') {
-      return {
-        text: '继续播放',
-        variant: 'default' as const,
-        disabled: false
-      };
-    }
-    
     if (status === 'learning') {
       return {
         text: '继续播放',
-        variant: 'secondary' as const,
+        variant: isLast ? 'default' : 'secondary',
         disabled: false
       };
     }
@@ -1043,7 +1477,7 @@ const CourseStudyPage = () => {
     if (status === 'completed') {
       return {
         text: '重新播放',
-        variant: 'outline' as const,
+        variant: isLast ? 'default' : 'outline',
         disabled: false
       };
     }
@@ -1080,8 +1514,8 @@ const CourseStudyPage = () => {
       // 关闭选择对话框
       setNextVideoDialog({ open: false, currentSectionId: '', nextSection: null, countdown: 10 });
       
-      // 关闭对话框前保存当前播放进度
-      getCurrentVideoProgressAndSave();
+      // 🚀 优化1：立即同步保存播放进度
+      const currentProgress = getCurrentVideoProgressAndSave();
       
       // 清除定期保存的定时器
       if (progressSaveInterval) {
@@ -1089,10 +1523,46 @@ const CourseStudyPage = () => {
         setProgressSaveInterval(null);
       }
 
-      // 精准刷新视频进度状态（避免整个页面刷新）
+      // 🚀 优化2：立即更新本地状态，无需等待数据库
+      if (videoDialog.sectionId && videoDialog.videoId) {
+        const video = document.querySelector('video');
+        if (video && video.duration > 0) {
+          const progressPercentage = Math.round((video.currentTime / video.duration) * 100);
+          const isCompleted = progressPercentage >= 99;
+          
+          // 立即更新本地状态
+          setSections(prevSections => 
+            prevSections.map(section => 
+              section.id === videoDialog.sectionId ? {
+                ...section,
+                progress: section.progress ? {
+                  ...section.progress,
+                  current_position: Math.floor(video.currentTime),
+                  progress_percentage: progressPercentage,
+                  is_completed: isCompleted,
+                  last_played_at: new Date().toISOString(),
+                  ...(isCompleted && { completed_at: new Date().toISOString() })
+                } : {
+                  id: '', // 临时ID，数据库保存后会更新
+                  current_position: Math.floor(video.currentTime),
+                  duration: Math.floor(video.duration),
+                  progress_percentage: progressPercentage,
+                  is_completed: isCompleted,
+                  section_id: videoDialog.sectionId,
+                  video_id: videoDialog.videoId,
+                  last_played_at: new Date().toISOString(),
+                  ...(isCompleted && { completed_at: new Date().toISOString() })
+                }
+              } : section
+            )
+          );
+        }
+      }
+
+      // 🚀 优化3：大幅减少延迟时间，从500ms降低到100ms
       setTimeout(() => {
         refreshVideoProgress();
-      }, 500); // 稍微延迟以确保进度保存完成
+      }, 100); // 仅100ms延迟确保数据库写入完成
     }
     
     setVideoDialog(prev => ({ ...prev, open }));
@@ -1143,6 +1613,38 @@ const CourseStudyPage = () => {
     return null; // 没有找到下一个有视频的考点
   };
 
+  // 检查课程是否真正完成
+  const isCourseCompleted = () => {
+    // 🔍 详细调试：打印所有章节信息
+    console.group('🔍 检查课程完成状态 - 详细信息');
+    console.log(`所有章节数量: ${sections.length}`);
+    
+    sections.forEach((section, index) => {
+      console.log(`章节${index + 1}: ${section.title}`);
+      console.log(`  - 有视频: ${!!section.video}`);
+      console.log(`  - 视频ID: ${section.video?.id || 'N/A'}`);
+      console.log(`  - 有进度记录: ${!!section.progress}`);
+      console.log(`  - 是否已完成: ${section.progress?.is_completed || false}`);
+    });
+    
+    // 获取所有有视频的章节
+    const sectionsWithVideo = sections.filter(section => section.video);
+    console.log(`过滤后有视频的章节数: ${sectionsWithVideo.length}`);
+    
+    if (sectionsWithVideo.length === 0) {
+      console.log('没有找到有视频的章节，返回 false');
+      console.groupEnd();
+      return false;
+    }
+    
+    // 检查是否所有有视频的章节都已完成
+    const allCompleted = sectionsWithVideo.every(section => section.progress?.is_completed);
+    console.log(`所有有视频章节都已完成: ${allCompleted}`);
+    console.groupEnd();
+    
+    return allCompleted;
+  };
+
   // 显示下一个视频选择对话框
   const showNextVideoChoice = async (currentSectionId: string) => {
     const nextSection = getNextPlayableSection(currentSectionId);
@@ -1166,12 +1668,24 @@ const CourseStudyPage = () => {
           // 自动播放下一个视频 - 先关闭对话框，再播放视频
           setNextVideoDialog({ open: false, currentSectionId: '', nextSection: null, countdown: 10 });
           setTimeout(async () => {
-            await handlePlayVideo(nextSection);
-            toast({
-              title: "自动播放",
-              description: `正在播放下一章节：${nextSection.title}`,
-              duration: 3000
-            });
+            // 🔧 修复：如果下一个视频是已完成状态，使用重播逻辑
+            if (nextSection.progress?.is_completed) {
+              console.log('倒计时自动播放：下一个视频已完成，使用重播逻辑');
+              await handleResetAndPlayVideo(nextSection);
+              toast({
+                title: "自动重播",
+                description: `正在从头播放：${nextSection.title}`,
+                duration: 3000
+              });
+            } else {
+              console.log('倒计时自动播放：下一个视频未完成，使用普通播放逻辑');
+              await handlePlayVideo(nextSection);
+              toast({
+                title: "自动播放",
+                description: `正在播放下一章节：${nextSection.title}`,
+                duration: 3000
+              });
+            }
           }, 100);
         } else {
           setNextVideoDialog(prev => ({ ...prev, countdown: timeLeft }));
@@ -1180,12 +1694,15 @@ const CourseStudyPage = () => {
       
       setCountdownTimer(timer);
     } else {
-      // 已经是最后一个章节，显示课程完成提示
-      toast({
-        title: "🎉 恭喜完成课程！",
-        description: "您已经观看完所有视频章节",
-        duration: 5000
-      });
+      // 🔧 修复：只有真正完成所有视频才显示完成提示
+      if (isCourseCompleted()) {
+        toast({
+          title: "🎉 恭喜完成课程！",
+          description: "您已经观看完所有视频章节",
+          duration: 5000
+        });
+      }
+      // 如果还有未完成的视频，不显示任何提示
       
       // 刷新进度状态
       setTimeout(() => {
@@ -1194,56 +1711,72 @@ const CourseStudyPage = () => {
     }
   };
 
-  // 播放下一个视频
-  const playNextVideo = async () => {
-    console.log('playNextVideo 被调用');
-    console.log('nextVideoDialog:', nextVideoDialog);
-    
+
+
+  // 🔧 新增：专门处理立即播放的函数
+  const handleImmediatePlay = useCallback(async () => {
     const { nextSection } = nextVideoDialog;
-    console.log('nextSection:', nextSection);
+    if (!nextSection) {
+      console.error('立即播放：nextSection为空');
+      return;
+    }
+
+    console.log('立即播放：开始处理', nextSection.title);
     
-    if (nextSection) {
-      console.log('准备播放下一个视频:', nextSection.title);
-      
-      // 清除倒计时
+    try {
+      // 1. 清除倒计时
       if (countdownTimer) {
-        console.log('清除倒计时');
+        console.log('立即播放：清除倒计时');
         clearInterval(countdownTimer);
         setCountdownTimer(null);
       }
       
-      // 先关闭选择对话框
-      console.log('关闭选择对话框');
+      // 2. 关闭倒计时对话框
+      console.log('立即播放：关闭倒计时对话框');
       setNextVideoDialog({ open: false, currentSectionId: '', nextSection: null, countdown: 10 });
       
-      // 稍微延迟后播放视频，确保状态更新完成
-      setTimeout(async () => {
-        try {
-          console.log('开始调用 handlePlayVideo');
-          await handlePlayVideo(nextSection);
-          console.log('handlePlayVideo 调用成功');
-          
-          toast({
-            title: "继续播放",
-            description: `正在播放下一章节：${nextSection.title}`,
-            duration: 3000
-          });
-        } catch (error) {
-          console.error('播放下一个视频失败:', error);
-          toast({
-            title: "播放失败",
-            description: "播放下一章节时出现错误，请重试",
-            duration: 3000
-          });
-        }
-      }, 100);
-    } else {
-      console.log('nextSection 为空，无法播放');
+      // 3. 等待一个微任务确保状态更新完成
+      await new Promise(resolve => setTimeout(resolve, 0));
+      
+      // 4. 🔧 修复：如果下一个视频是已完成状态，使用重播逻辑
+      console.log('立即播放：检查下一个视频状态', { 
+        isCompleted: nextSection.progress?.is_completed,
+        title: nextSection.title 
+      });
+      
+      if (nextSection.progress?.is_completed) {
+        console.log('立即播放：下一个视频已完成，使用重播逻辑');
+        await handleResetAndPlayVideo(nextSection);
+        toast({
+          title: "重新播放",
+          description: `正在从头播放：${nextSection.title}`,
+          duration: 3000
+        });
+      } else {
+        console.log('立即播放：下一个视频未完成，使用普通播放逻辑');
+        await handlePlayVideo(nextSection);
+        toast({
+          title: "立即播放",
+          description: `正在播放下一章节：${nextSection.title}`,
+          duration: 3000
+        });
+      }
+      
+      console.log('立即播放：播放逻辑执行成功');
+      
+    } catch (error) {
+      console.error('立即播放：播放失败', error);
+      toast({
+        variant: "destructive",
+        title: "立即播放失败",
+        description: `无法播放下一章节：${nextSection.title}`,
+        duration: 3000
+      });
     }
-  };
+  }, [nextVideoDialog, countdownTimer, handlePlayVideo, handleResetAndPlayVideo, toast]);
 
   // 退出播放，关闭视频对话框
-  const exitVideoPlayback = () => {
+  const exitVideoPlayback = useCallback(() => {
     // 清除倒计时
     if (countdownTimer) {
       clearInterval(countdownTimer);
@@ -1252,11 +1785,11 @@ const CourseStudyPage = () => {
     
     setNextVideoDialog({ open: false, currentSectionId: '', nextSection: null, countdown: 10 });
     setVideoDialog(prev => ({ ...prev, open: false }));
-  };
+  }, [countdownTimer, setCountdownTimer, setNextVideoDialog, setVideoDialog]); // 🔧 修复：添加所有必要的依赖
 
   // 获取"上次学习"的章节
   const getLastLearningSection = () => {
-    return sections.find(section => getSectionStatus(section, sections) === 'last_learning');
+    return sections.find(section => isLastLearning(section, sections));
   };
 
   // 键盘快捷键支持
@@ -1269,8 +1802,9 @@ const CourseStudyPage = () => {
             event.preventDefault();
             console.log('键盘事件触发 - 空格/回车');
             if (nextVideoDialog.nextSection) {
-              console.log('键盘事件调用 playNextVideo');
-              playNextVideo();
+              console.log('键盘事件：使用专门的立即播放函数');
+              // 🔧 修复：使用专门的立即播放函数
+              handleImmediatePlay();
             } else {
               console.log('键盘事件 - nextSection 为空');
             }
@@ -1287,7 +1821,7 @@ const CourseStudyPage = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyPress);
     };
-  }, [nextVideoDialog.open, nextVideoDialog.nextSection]);
+  }, [nextVideoDialog, handleImmediatePlay, exitVideoPlayback]); // 🔧 修复：更新依赖数组
 
   // 清理倒计时器
   useEffect(() => {
@@ -1326,6 +1860,111 @@ const CourseStudyPage = () => {
     });
     
     return grouped;
+  };
+
+  // 新增：用户行为预测预加载
+  const predictivePreload = async () => {
+    console.log('🧠 开始用户行为预测预加载...');
+
+    try {
+      // 1. 查找"上次学习"的章节（优先级最高）
+      const lastLearningSection = getLastLearningSection();
+      if (lastLearningSection?.video && !lastLearningSection.video.play_url) {
+        console.log(`🎯 预测用户会继续学习: ${lastLearningSection.title}`);
+        await predictivePreloadSingleVideo(lastLearningSection, '继续学习');
+      }
+
+      // 2. 查找第一个未完成的章节（适合新用户）
+      const firstIncompleteSection = sections.find(section => 
+        section.video && 
+        (!section.progress || !section.progress.is_completed) &&
+        !section.video.play_url
+      );
+      
+      if (firstIncompleteSection && firstIncompleteSection.id !== lastLearningSection?.id) {
+        console.log(`📚 预测新用户从第一章节开始: ${firstIncompleteSection.title}`);
+        await predictivePreloadSingleVideo(firstIncompleteSection, '新课程开始');
+      }
+
+      // 3. 基于学习模式预测（连续学习模式）
+      const completedSections = sections.filter(s => s.progress?.is_completed);
+      if (completedSections.length > 0) {
+        // 找到最后完成的章节，预加载其下一个章节
+        const lastCompletedSection = completedSections
+          .sort((a, b) => new Date(b.progress!.completed_at!).getTime() - new Date(a.progress!.completed_at!).getTime())[0];
+        
+        const nextAfterCompleted = getNextPlayableSection(lastCompletedSection.id);
+        if (nextAfterCompleted?.video && !nextAfterCompleted.video.play_url) {
+          console.log(`⏭️ 预测连续学习下一章节: ${nextAfterCompleted.title}`);
+          await predictivePreloadSingleVideo(nextAfterCompleted, '连续学习');
+        }
+      }
+
+    } catch (error) {
+      console.error('用户行为预测预加载失败:', error);
+    }
+  };
+
+  // 预测性预加载单个视频的辅助函数
+  const predictivePreloadSingleVideo = async (section: CourseSection, reason: string) => {
+    if (!section.video || preloadingVideos.has(section.video.id)) {
+      return;
+    }
+
+    console.log(`🔮 预测性预加载 (${reason}): ${section.title}`);
+
+    // 设置预加载状态
+    setPreloadingVideos(prev => new Set([...prev, section.video!.id]));
+
+    try {
+      const result = await generateVideoPlayURL(section.video);
+      
+      if (result) {
+        // 🔧 修复：先更新数据库中的播放URL
+        try {
+          await supabase
+            .from('minio_videos')
+            .update({
+              play_url: result.playUrl,
+              play_url_expires_at: result.expiresAt
+            })
+            .eq('id', section.video.id);
+          
+          console.log(`📝 预测性预加载数据库URL已更新: ${section.title}`);
+        } catch (dbError) {
+          console.error('预测性预加载数据库URL更新失败:', dbError);
+          // 即使数据库更新失败，也继续使用预加载的URL
+        }
+        
+        // 缓存预加载结果
+        preloadCache.current.set(section.video.id, { url: result.playUrl, expiresAt: result.expiresAt });
+        
+        // 更新本地sections状态
+        setSections(prevSections => 
+          prevSections.map(s => 
+            s.id === section.id && s.video ? {
+              ...s,
+              video: {
+                ...s.video,
+                play_url: result.playUrl,
+                play_url_expires_at: result.expiresAt
+              }
+            } : s
+          )
+        );
+
+        console.log(`✅ 预测性预加载完成 (${reason}): ${section.title}`);
+      }
+    } catch (error) {
+      console.error(`❌ 预测性预加载失败 (${reason}): ${section.title}`, error);
+    } finally {
+      // 清除预加载状态
+      setPreloadingVideos(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(section.video!.id);
+        return newSet;
+      });
+    }
   };
 
   if (isLoading && dataCache.current.isInitialLoad) {
@@ -1487,11 +2126,37 @@ const CourseStudyPage = () => {
                   <Button
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm font-medium"
                     onClick={() => {
-                      const status = getSectionStatus(lastLearningSection, sections);
-                      // 如果是已完成状态，使用重置播放函数
-                      if (status === 'completed') {
-                        handleResetAndPlayVideo(lastLearningSection);
+                      // 🔧 优化：如果上次学习的视频已完成，则播放下一个视频
+                      if (lastLearningSection.progress?.is_completed) {
+                        const nextSection = getNextPlayableSection(lastLearningSection.id);
+                        if (nextSection) {
+                          // 播放下一个视频
+                          if (nextSection.progress?.is_completed) {
+                            handleResetAndPlayVideo(nextSection);
+                            toast({
+                              title: "智能播放",
+                              description: `当前视频已完成，正在从头播放下一章节：${nextSection.title}`,
+                              duration: 3000
+                            });
+                          } else {
+                            handlePlayVideo(nextSection);
+                            toast({
+                              title: "智能播放",
+                              description: `当前视频已完成，正在播放下一章节：${nextSection.title}`,
+                              duration: 3000
+                            });
+                          }
+                        } else {
+                          // 没有下一个视频，重播当前视频
+                          handleResetAndPlayVideo(lastLearningSection);
+                          toast({
+                            title: "重新播放",
+                            description: `已完成课程，正在重播：${lastLearningSection.title}`,
+                            duration: 3000
+                          });
+                        }
                       } else {
+                        // 未完成，继续播放当前视频
                         handlePlayVideo(lastLearningSection);
                       }
                     }}
@@ -1532,7 +2197,8 @@ const CourseStudyPage = () => {
                   <div className="space-y-3">
                     {group.sections.map((section, index) => {
                       const status = getSectionStatus(section, sections);
-                      const config = getStatusConfig(status);
+                      const isLast = isLastLearning(section, sections);
+                      const config = getStatusConfig(status, isLast);
                       
                       return (
                         <div
@@ -1543,10 +2209,12 @@ const CourseStudyPage = () => {
                             active:scale-[0.98] hover:shadow-md
                             md:p-4
                             ${!section.video ? 'cursor-not-allowed opacity-60' : ''}
+                            ${loadingVideoId === section.video?.id ? 'cursor-wait opacity-70' : ''}
                           `}
                           onClick={() => {
-                            if (section.video) {
-                              if (status === 'completed') {
+                            if (section.video && loadingVideoId !== section.video.id) {
+                              // 🔧 修复：对于已完成的视频（无论显示什么状态），都重置播放
+                              if (section.progress?.is_completed) {
                                 handleResetAndPlayVideo(section);
                               } else {
                                 handlePlayVideo(section);
@@ -1556,7 +2224,7 @@ const CourseStudyPage = () => {
                         >
                           <div className="flex items-start space-x-3">
                             <div className="flex-shrink-0 pt-1">
-                              {getStatusIcon(status)}
+                              {getStatusIcon(status, section, sections)}
                             </div>
                             <div className="flex-1 min-w-0 space-y-2">
                               <h3 className={`font-medium ${config.titleColor} text-sm leading-snug md:text-base`}>
@@ -1570,7 +2238,7 @@ const CourseStudyPage = () => {
                               
                               {/* 状态标签和进度信息同一行 */}
                               <div className="flex items-center justify-between">
-                                {getStatusBadge(status, section.progress)}
+                                {getStatusBadge(status, section, sections)}
                                 {section.progress && section.progress.progress_percentage > 0 && (
                                   <span className="text-xs text-gray-500">
                                     已学习 {section.progress.progress_percentage}%
@@ -1600,10 +2268,7 @@ const CourseStudyPage = () => {
 
       {/* 视频播放对话框 */}
       <Dialog open={videoDialog.open} onOpenChange={handleVideoDialogClose}>
-        <DialogContent className="max-w-5xl max-h-[90vh] p-0 bg-black border-0 overflow-hidden [&>button:has(svg[data-lucide=x])]:hidden">
-          <DialogHeader className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/60 to-transparent p-4">
-            <DialogTitle className="text-white text-lg font-medium">{videoDialog.title}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-5xl max-h-[90vh] p-0 bg-black border-0 overflow-hidden [&>button]:!hidden [&_button[type='button']]:!hidden">
           
           <div className="aspect-video bg-black">
             <VideoPlayer
@@ -1613,6 +2278,14 @@ const CourseStudyPage = () => {
               autoFullscreen={false}
               className="w-full h-full"
               startTime={videoDialog.startTime}
+              onLoadStart={() => {
+                // 视频开始加载
+                console.log('视频开始加载');
+              }}
+              onCanPlay={() => {
+                // 视频可以播放
+                console.log('视频可以播放');
+              }}
               onPlay={() => {
                 // 视频开始播放时启动自动保存进度
                 startProgressAutoSave();
@@ -1622,13 +2295,12 @@ const CourseStudyPage = () => {
                 getCurrentVideoProgressAndSave();
               }}
               onEnded={() => {
-                // 视频播放结束时保存进度
+                // 视频播放结束时，使用专门的完成函数标记为完成
                 const video = document.querySelector('video');
                 if (video && videoDialog.sectionId && videoDialog.videoId) {
-                  saveVideoProgress(
+                  markVideoAsCompleted(
                     videoDialog.sectionId,
                     videoDialog.videoId,
-                    video.duration, // 播放结束，设置为总时长
                     video.duration
                   );
                 }
@@ -1655,6 +2327,14 @@ const CourseStudyPage = () => {
           onClick={(e) => {
             console.log('背景被点击');
             e.stopPropagation();
+          }}
+          // 🔧 修复：自动获得焦点，支持键盘快捷键
+          tabIndex={-1}
+          ref={(el) => {
+            if (el && nextVideoDialog.open) {
+              // 延迟获得焦点，确保DOM已渲染
+              setTimeout(() => el.focus(), 0);
+            }
           }}
         >
           <div 
@@ -1695,7 +2375,9 @@ const CourseStudyPage = () => {
                       console.log('立即播放按钮被点击 - 原生事件');
                       e.preventDefault();
                       e.stopPropagation();
-                      playNextVideo();
+                      
+                      // 🔧 修复：使用专门的立即播放函数
+                      handleImmediatePlay();
                     }}
                     onMouseDown={(e) => {
                       console.log('立即播放按钮 mousedown');

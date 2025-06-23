@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>立即打开播放器测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .test-card {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            background: #f9f9f9;
+        }
+        .test-card:hover {
+            background: #f0f0f0;
+        }
+        .player-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .player {
+            width: 80%;
+            height: 60%;
+            background: black;
+            position: relative;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        video {
+            width: 100%;
+            height: 100%;
+        }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .title {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>立即打开播放器测试</h1>
+    <p>点击下面的卡片测试立即打开播放器的功能：</p>
+    
+    <div class="test-card" onclick="playVideo('第一章 基础知识', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')">
+        <h3>第一章 基础知识</h3>
+        <p>点击播放视频 - 将立即打开播放器</p>
+    </div>
+    
+    <div class="test-card" onclick="playVideo('第二章 进阶内容', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4')">
+        <h3>第二章 进阶内容</h3>
+        <p>点击播放视频 - 将立即打开播放器</p>
+    </div>
+    
+    <div class="test-card" onclick="simulateSlowLoading('第三章 高级特性')">
+        <h3>第三章 高级特性</h3>
+        <p>点击播放视频 - 模拟慢速加载（3秒延迟）</p>
+    </div>
+    
+    <!-- 播放器容器 -->
+    <div id="playerContainer" class="player-container">
+        <div class="player">
+            <button class="close-btn" onclick="closePlayer()">✕</button>
+            <div id="videoTitle" class="title"></div>
+            
+            <!-- 加载状态 -->
+            <div id="loadingState" class="loading">
+                <div class="spinner"></div>
+                <span>正在加载视频...</span>
+            </div>
+            
+            <!-- 视频元素 -->
+            <video id="videoElement" controls style="display: none;">
+            </video>
+        </div>
+    </div>
+
+    <script>
+        let playerContainer = document.getElementById('playerContainer');
+        let videoElement = document.getElementById('videoElement');
+        let loadingState = document.getElementById('loadingState');
+        let videoTitle = document.getElementById('videoTitle');
+
+        function playVideo(title, videoUrl) {
+            console.log('点击播放:', title);
+            
+            // 立即打开播放器
+            playerContainer.style.display = 'flex';
+            videoTitle.textContent = title;
+            
+            // 显示加载状态
+            loadingState.style.display = 'flex';
+            videoElement.style.display = 'none';
+            
+            // 模拟获取视频URL的延迟
+            setTimeout(() => {
+                console.log('视频URL获取完成:', videoUrl);
+                
+                // 设置视频源
+                videoElement.src = videoUrl;
+                
+                // 隐藏加载状态，显示视频
+                loadingState.style.display = 'none';
+                videoElement.style.display = 'block';
+                
+                // 尝试自动播放
+                videoElement.play().catch(e => {
+                    console.log('自动播放失败，用户需要手动点击播放');
+                });
+            }, 1000); // 1秒延迟模拟网络请求
+        }
+
+        function simulateSlowLoading(title) {
+            console.log('点击播放（慢速加载）:', title);
+            
+            // 立即打开播放器
+            playerContainer.style.display = 'flex';
+            videoTitle.textContent = title;
+            
+            // 显示加载状态
+            loadingState.style.display = 'flex';
+            videoElement.style.display = 'none';
+            
+            // 模拟慢速加载（3秒）
+            setTimeout(() => {
+                console.log('慢速加载完成');
+                
+                // 设置视频源
+                videoElement.src = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+                
+                // 隐藏加载状态，显示视频
+                loadingState.style.display = 'none';
+                videoElement.style.display = 'block';
+                
+                // 尝试自动播放
+                videoElement.play().catch(e => {
+                    console.log('自动播放失败，用户需要手动点击播放');
+                });
+            }, 3000); // 3秒延迟
+        }
+
+        function closePlayer() {
+            playerContainer.style.display = 'none';
+            videoElement.pause();
+            videoElement.src = '';
+            loadingState.style.display = 'flex';
+            videoElement.style.display = 'none';
+        }
+
+        // ESC键关闭播放器
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closePlayer();
+            }
+        });
+    </script>
+</body>
+</html> 

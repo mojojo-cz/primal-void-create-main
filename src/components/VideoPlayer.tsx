@@ -12,6 +12,8 @@ interface VideoPlayerProps {
   onPlay?: () => void;
   onPause?: () => void;
   onEnded?: () => void;
+  onLoadStart?: () => void;
+  onCanPlay?: () => void;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -23,12 +25,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   startTime = 0,
   onPlay,
   onPause,
-  onEnded
+  onEnded,
+  onLoadStart,
+  onCanPlay
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   // 检测全屏状态变化
   useEffect(() => {
@@ -217,6 +222,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     onEnded?.();
   };
 
+  // 处理视频开始加载事件
+  const handleLoadStart = () => {
+    setIsLoading(true);
+    onLoadStart?.();
+  };
+
+  // 处理视频可以播放事件
+  const handleCanPlay = () => {
+    setIsLoading(false);
+    onCanPlay?.();
+  };
+
+  // 当src变化时，更新加载状态
+  useEffect(() => {
+    if (!src) {
+      setIsLoading(true);
+    }
+  }, [src]);
+
   // 鼠标移动时显示控制条
   const handleMouseMove = () => {
     setShowControls(true);
@@ -265,29 +289,64 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     >
       <video
         ref={videoRef}
-        src={src}
+        src={src || undefined}
         controls
-        autoPlay={autoPlay}
+        autoPlay={autoPlay && !!src}
         playsInline
+        preload="metadata"
         className="w-full h-full"
         onPlay={handlePlay}
         onPause={handlePause}
         onEnded={handleEnded}
-        title={title}
+        onLoadStart={handleLoadStart}
+        onCanPlay={handleCanPlay}
+        onLoadedData={() => setIsLoading(false)}
+        onWaiting={() => setIsLoading(true)}
       />
+      
+      {/* 加载遮罩 */}
+      {isLoading && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-30">
+          <div className="bg-black/70 rounded-lg p-4 flex items-center space-x-3">
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>
+            <span className="text-white text-sm">加载中...</span>
+          </div>
+        </div>
+      )}
+      
+      {/* 考点标题 */}
+      {title && (
+        <div 
+          className={`absolute top-3 left-3 transition-all duration-300 z-40 max-w-[calc(100%-6rem)] ${
+            isFullscreen ? (showControls ? 'opacity-70' : 'opacity-0') : 'opacity-70'
+          }`}
+          style={{
+            top: isFullscreen ? 'max(0.75rem, env(safe-area-inset-top))' : '0.75rem',
+            left: isFullscreen ? 'max(0.75rem, env(safe-area-inset-left))' : '0.75rem'
+          }}
+        >
+          <div className="bg-black/40 text-white/80 px-2 py-1 rounded text-xs backdrop-blur-sm truncate">
+            {title}
+          </div>
+        </div>
+      )}
       
       {/* 全屏按钮 */}
       <div 
-        className={`absolute top-4 right-4 transition-opacity duration-300 z-50 ${
-          isFullscreen ? (showControls ? 'opacity-100' : 'opacity-0') : 'opacity-100'
+        className={`absolute top-3 right-3 transition-all duration-300 z-50 ${
+          isFullscreen ? (showControls ? 'opacity-70' : 'opacity-0') : 'opacity-70'
         }`}
-        style={{ pointerEvents: 'auto' }}
+        style={{ 
+          pointerEvents: 'auto',
+          top: isFullscreen ? 'max(0.75rem, env(safe-area-inset-top))' : '0.75rem',
+          right: isFullscreen ? 'max(0.75rem, env(safe-area-inset-right))' : '0.75rem'
+        }}
       >
         <Button
           size="sm"
-          variant="secondary"
+          variant="ghost"
           onClick={toggleFullscreen}
-          className="bg-black/70 hover:bg-black/90 text-white border-0 backdrop-blur-sm min-w-[44px] min-h-[44px] p-2 touch-manipulation"
+          className="bg-black/40 text-white/80 border-0 backdrop-blur-sm w-8 h-8 p-0 touch-manipulation rounded-full"
           title={isFullscreen ? '退出全屏' : '进入全屏'}
           style={{ 
             WebkitTapHighlightColor: 'transparent',
@@ -299,25 +358,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }}
         >
           {isFullscreen ? (
-            <Minimize className="h-5 w-5" />
+            <Minimize className="h-4 w-4" />
           ) : (
-            <Maximize className="h-5 w-5" />
+            <Maximize className="h-4 w-4" />
           )}
         </Button>
       </div>
 
-      {/* 全屏模式下的标题 */}
-      {isFullscreen && title && (
-        <div 
-          className={`absolute top-4 left-4 transition-opacity duration-300 ${
-            showControls ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <div className="bg-black/50 text-white px-3 py-2 rounded backdrop-blur-sm">
-            <h3 className="text-lg font-medium">{title}</h3>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

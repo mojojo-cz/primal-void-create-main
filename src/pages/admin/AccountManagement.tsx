@@ -197,10 +197,7 @@ const AccountManagement = () => {
   const handleEdit = (profile: Profile) => {
     setEditForm({
       ...profile,
-      full_name: profile.full_name || "",
-      department: profile.department || "",
-      major: profile.major || "",
-      grade: profile.grade || ""
+      full_name: profile.full_name || ""
     });
     setEditDialog({ open: true, profile });
   };
@@ -291,9 +288,6 @@ const AccountManagement = () => {
       };
       
       // 仅当有值时才添加可选字段，避免写入undefined
-      if (editForm.department) updateData.department = editForm.department.trim();
-      if (editForm.major) updateData.major = editForm.major.trim();
-      if (editForm.grade) updateData.grade = editForm.grade.trim();
       
       // 特殊处理日期字段
       if (editForm.access_expires_at) {
@@ -1121,33 +1115,6 @@ const AccountManagement = () => {
                   )}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <label className="block mb-1 font-medium">院系</label>
-              <Input
-                name="department"
-                value={editForm.department || ""}
-                onChange={handleChange}
-                placeholder="请输入院系"
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium">专业</label>
-              <Input
-                name="major"
-                value={editForm.major || ""}
-                onChange={handleChange}
-                placeholder="请输入专业"
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium">年级</label>
-              <Input
-                name="grade"
-                value={editForm.grade || ""}
-                onChange={handleChange}
-                placeholder="请输入年级"
-              />
             </div>
             <div>
               <label className="block mb-1 font-medium">访问过期时间</label>

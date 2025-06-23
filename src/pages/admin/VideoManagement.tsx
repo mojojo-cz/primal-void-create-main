@@ -324,6 +324,13 @@ const VideoManagement = () => {
 
   // 播放视频 - 适配MinIO视频（优化版）
   const handlePlayVideo = async (video: Video) => {
+    // 显示加载提示
+    toast({
+      title: "🎬 正在加载视频",
+      description: `准备播放：${video.title}`,
+      duration: 3000
+    });
+    
     try {
       let playUrl = video.play_url;
       
@@ -1171,10 +1178,7 @@ const VideoManagement = () => {
 
       {/* 视频播放对话框 */}
       <Dialog open={videoDialog.open} onOpenChange={(open) => setVideoDialog(prev => ({ ...prev, open }))}>
-        <DialogContent className="max-w-4xl p-0 bg-black border-0 overflow-hidden [&>button:has(svg[data-lucide=x])]:hidden">
-          <DialogHeader className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/60 to-transparent p-4">
-            <DialogTitle className="text-white text-lg font-medium">{videoDialog.title}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-4xl p-0 bg-black border-0 overflow-hidden [&>button]:!hidden [&_button[type='button']]:!hidden">
           <div className="aspect-video bg-black">
             <VideoPlayer
               src={videoDialog.url}
