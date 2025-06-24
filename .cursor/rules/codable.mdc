@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+必须要先搜索代码库,理解项目之后再执行任务,必要时调用supabase的mcp

@@ -169,26 +169,30 @@ const CourseStudyPage = () => {
   };
 
   // 新增：生成视频播放URL的通用函数
-  const generateVideoPlayURL = async (video: CourseSection['video']): Promise<{ playUrl: string; expiresAt: string } | null> => {
+  const generateVideoPlayURL = async (video: CourseSection['video'], forceRefresh = false): Promise<{ playUrl: string; expiresAt: string } | null> => {
     if (!video) return null;
 
     try {
-      // 检查是否有存储的播放URL且未过期
-      if (video.play_url && video.play_url_expires_at) {
+      // 检查是否有存储的播放URL且未过期（除非强制刷新）
+      if (!forceRefresh && video.play_url && video.play_url_expires_at) {
         const expiresAt = new Date(video.play_url_expires_at);
         const now = new Date();
         const timeUntilExpiry = expiresAt.getTime() - now.getTime();
         
         // 如果URL将在10小时内过期，则重新生成
         if (timeUntilExpiry > 10 * 60 * 60 * 1000) {
+          console.log(`✅ 使用有效的数据库URL (剩余时间: ${Math.round(timeUntilExpiry / (60 * 60 * 1000))}小时)`);
           return {
             playUrl: video.play_url,
             expiresAt: video.play_url_expires_at
           };
+        } else {
+          console.log(`⚠️ 数据库URL即将过期，重新生成 (剩余时间: ${Math.round(timeUntilExpiry / (60 * 60 * 1000))}小时)`);
         }
       }
       
       // 生成新的播放URL
+      console.log('🔄 正在生成新的视频播放URL...');
       const { data, error } = await supabase.functions.invoke('minio-presigned-upload', {
         body: { 
           action: 'generatePlayUrl',
@@ -199,6 +203,22 @@ const CourseStudyPage = () => {
       if (error) throw error;
 
       if (data?.playUrl) {
+        // 🔧 新增：自动更新数据库中的URL和过期时间
+        try {
+          await supabase
+            .from('minio_videos')
+            .update({
+              play_url: data.playUrl,
+              play_url_expires_at: data.expiresAt
+            })
+            .eq('id', video.id);
+          
+          console.log(`📝 自动更新数据库URL成功`);
+        } catch (dbError) {
+          console.error('自动更新数据库URL失败:', dbError);
+          // 即使数据库更新失败，也返回有效的URL
+        }
+
         return {
           playUrl: data.playUrl,
           expiresAt: data.expiresAt
@@ -212,19 +232,27 @@ const CourseStudyPage = () => {
     }
   };
 
-  // 新增：渐进式预加载前3个视频URL
+  // 新增：渐进式预加载前3个"非已完成"状态的视频URL
   const preloadInitialVideos = async (sectionsData: CourseSection[]) => {
     if (!sectionsData.length) return;
 
-    console.log('🎬 开始渐进式预加载前3个视频...');
+    console.log('🎬 开始渐进式预加载前3个"非已完成"状态的视频...');
     
-    // 获取前3个有视频的考点
+    // 获取前3个"非已完成"状态且有视频的考点
     const videosToPreload = sectionsData
-      .filter(section => section.video && !section.video.play_url)
+      .filter(section => {
+        // 必须有视频
+        if (!section.video) return false;
+        
+        // 必须是"非已完成"状态（没有播放进度或未完成）
+        const isNotCompleted = !section.progress || !section.progress.is_completed;
+        
+        return isNotCompleted;
+      })
       .slice(0, 3);
 
     if (videosToPreload.length === 0) {
-      console.log('✅ 前3个视频已有有效URL，无需预加载');
+      console.log('✅ 前3个"非已完成"状态的视频不存在，无需预加载');
       return;
     }
 
@@ -238,44 +266,57 @@ const CourseStudyPage = () => {
         if (!section.video) return null;
 
         try {
-          const result = await generateVideoPlayURL(section.video);
-          if (result) {
-            // 🔧 修复：先更新数据库中的播放URL
-            try {
-              await supabase
-                .from('minio_videos')
-                .update({
-                  play_url: result.playUrl,
-                  play_url_expires_at: result.expiresAt
-                })
-                .eq('id', section.video.id);
+          // 🔧 检查URL有效性：确保预加载的URL至少还有10小时有效期
+          let needsRegenerate = true;
+          if (section.video.play_url && section.video.play_url_expires_at) {
+            const expiresAt = new Date(section.video.play_url_expires_at);
+            const now = new Date();
+            const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+            
+            // 如果URL还有超过10小时有效期，则无需重新生成
+            if (timeUntilExpiry >= 10 * 60 * 60 * 1000) {
+              console.log(`✅ URL仍有效 ${section.title} (剩余: ${Math.round(timeUntilExpiry / (60 * 60 * 1000))}小时)`);
+              needsRegenerate = false;
               
-              console.log(`📝 预加载数据库URL已更新: ${section.title}`);
-            } catch (dbError) {
-              console.error('预加载数据库URL更新失败:', dbError);
-              // 即使数据库更新失败，也继续使用预加载的URL
+              // 缓存有效的URL
+              preloadCache.current.set(section.video.id, { 
+                url: section.video.play_url, 
+                expiresAt: section.video.play_url_expires_at 
+              });
+              
+              return { sectionId: section.id, success: true, skipped: true };
+            } else {
+              console.log(`🔄 URL即将过期，需要重新生成 ${section.title} (剩余: ${Math.round(timeUntilExpiry / (60 * 60 * 1000))}小时)`);
             }
-            
-            // 缓存预加载结果
-            preloadCache.current.set(section.video.id, { url: result.playUrl, expiresAt: result.expiresAt });
-            
-            // 更新本地sections状态
-            setSections(prevSections => 
-              prevSections.map(s => 
-                s.id === section.id && s.video ? {
-                  ...s,
-                  video: {
-                    ...s.video,
-                    play_url: result.playUrl,
-                    play_url_expires_at: result.expiresAt
-                  }
-                } : s
-              )
-            );
-
-            console.log(`✅ 预加载完成: ${section.title}`);
-            return { sectionId: section.id, success: true };
+          } else {
+            console.log(`🆕 首次生成URL ${section.title}`);
           }
+
+          if (needsRegenerate) {
+            const result = await generateVideoPlayURL(section.video);
+            if (result) {
+              // 缓存预加载结果
+              preloadCache.current.set(section.video.id, { url: result.playUrl, expiresAt: result.expiresAt });
+              
+              // 更新本地sections状态
+              setSections(prevSections => 
+                prevSections.map(s => 
+                  s.id === section.id && s.video ? {
+                    ...s,
+                    video: {
+                      ...s.video,
+                      play_url: result.playUrl,
+                      play_url_expires_at: result.expiresAt
+                    }
+                  } : s
+                )
+              );
+
+              console.log(`✅ 预加载完成: ${section.title}`);
+              return { sectionId: section.id, success: true };
+            }
+          }
+          
           return { sectionId: section.id, success: false };
         } catch (error) {
           console.error(`❌ 预加载失败: ${section.title}`, error);
@@ -286,16 +327,12 @@ const CourseStudyPage = () => {
       // 等待所有预加载完成
       const results = await Promise.allSettled(preloadPromises);
       const successCount = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+      const skippedCount = results.filter(r => r.status === 'fulfilled' && r.value?.skipped).length;
+      const regeneratedCount = successCount - skippedCount;
       
-      console.log(`🎯 渐进式预加载完成: ${successCount}/${videosToPreload.length} 个视频`);
+      console.log(`🎯 渐进式预加载完成: ${successCount}/${videosToPreload.length} 个"非已完成"状态的视频 (${regeneratedCount}个重新生成, ${skippedCount}个已有效)`);
       
-      if (successCount > 0) {
-        toast({
-          title: "🚀 智能预加载",
-          description: `已预加载 ${successCount} 个视频，播放将更加流畅`,
-          duration: 2000
-        });
-      }
+      // 预加载静默完成，无需用户提示
 
     } catch (error) {
       console.error('渐进式预加载失败:', error);
@@ -495,6 +532,11 @@ const CourseStudyPage = () => {
        setTimeout(() => {
          predictivePreload();
        }, 2000); // 延迟2秒，让主要功能先加载完成
+
+       // 延迟缓存全部章节（在课程页面加载5秒后执行）
+       setTimeout(() => {
+         delayedPreloadAllRemaining(formattedSections);
+       }, 5000); // 延迟5秒，作为后台任务执行
 
      } catch (error: any) {
       console.error('获取课程数据失败:', error);
@@ -765,12 +807,6 @@ const CourseStudyPage = () => {
               ...prev,
               url: cachedVideo.url
             }));
-            
-            toast({
-              title: "⚡ 预加载命中",
-              description: "视频已预加载，立即播放",
-              duration: 1500
-            });
             return;
           } else {
             console.log(`⚠️ 预加载URL已过期，清除缓存: ${section.title}`);
@@ -1073,15 +1109,38 @@ const CourseStudyPage = () => {
       return;
     }
 
-    // 检查是否已经预加载过
-    if (nextSection.video.play_url || preloadCache.current.has(nextSection.video.id)) {
-      console.log(`下一个视频已预加载: ${nextSection.title}`);
-      return;
-    }
-
     // 检查是否正在预加载
     if (preloadingVideos.has(nextSection.video.id)) {
       console.log(`下一个视频正在预加载中: ${nextSection.title}`);
+      return;
+    }
+
+    // 🔧 检查URL有效性：确保预加载的URL至少还有10小时有效期
+    if (nextSection.video.play_url && nextSection.video.play_url_expires_at) {
+      const expiresAt = new Date(nextSection.video.play_url_expires_at);
+      const now = new Date();
+      const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+      
+      // 如果URL还有超过10小时有效期，则无需重新生成
+      if (timeUntilExpiry >= 10 * 60 * 60 * 1000) {
+        console.log(`✅ 下一个视频URL仍有效: ${nextSection.title} (剩余: ${Math.round(timeUntilExpiry / (60 * 60 * 1000))}小时)`);
+        
+        // 缓存有效的URL
+        preloadCache.current.set(nextSection.video.id, { 
+          url: nextSection.video.play_url, 
+          expiresAt: nextSection.video.play_url_expires_at 
+        });
+        return;
+      } else {
+        console.log(`🔄 下一个视频URL即将过期，需要重新生成: ${nextSection.title} (剩余: ${Math.round(timeUntilExpiry / (60 * 60 * 1000))}小时)`);
+      }
+    } else {
+      console.log(`🆕 下一个视频首次生成URL: ${nextSection.title}`);
+    }
+
+    // 检查缓存
+    if (preloadCache.current.has(nextSection.video.id)) {
+      console.log(`下一个视频已在缓存中: ${nextSection.title}`);
       return;
     }
 
@@ -1094,22 +1153,6 @@ const CourseStudyPage = () => {
       const result = await generateVideoPlayURL(nextSection.video);
       
       if (result) {
-        // 🔧 修复：先更新数据库中的播放URL
-        try {
-          await supabase
-            .from('minio_videos')
-            .update({
-              play_url: result.playUrl,
-              play_url_expires_at: result.expiresAt
-            })
-            .eq('id', nextSection.video.id);
-          
-          console.log(`📝 自适应预加载数据库URL已更新: ${nextSection.title}`);
-        } catch (dbError) {
-          console.error('自适应预加载数据库URL更新失败:', dbError);
-          // 即使数据库更新失败，也继续使用预加载的URL
-        }
-        
         // 缓存预加载结果
         preloadCache.current.set(nextSection.video.id, { url: result.playUrl, expiresAt: result.expiresAt });
         
@@ -1128,13 +1171,6 @@ const CourseStudyPage = () => {
         );
 
         console.log(`✅ 下一个视频预加载完成: ${nextSection.title}`);
-        
-        // 静默提示用户
-        toast({
-          title: "⚡ 智能预加载",
-          description: `下一个视频已准备就绪`,
-          duration: 1500
-        });
       }
     } catch (error) {
       console.error(`❌ 预加载下一个视频失败: ${nextSection.title}`, error);
@@ -1911,6 +1947,35 @@ const CourseStudyPage = () => {
       return;
     }
 
+    // 🔧 检查URL有效性：确保预加载的URL至少还有10小时有效期
+    if (section.video.play_url && section.video.play_url_expires_at) {
+      const expiresAt = new Date(section.video.play_url_expires_at);
+      const now = new Date();
+      const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+      
+      // 如果URL还有超过10小时有效期，则无需重新生成
+      if (timeUntilExpiry >= 10 * 60 * 60 * 1000) {
+        console.log(`✅ 预测性预加载URL仍有效 (${reason}): ${section.title} (剩余: ${Math.round(timeUntilExpiry / (60 * 60 * 1000))}小时)`);
+        
+        // 缓存有效的URL
+        preloadCache.current.set(section.video.id, { 
+          url: section.video.play_url, 
+          expiresAt: section.video.play_url_expires_at 
+        });
+        return;
+      } else {
+        console.log(`🔄 预测性预加载URL即将过期 (${reason}): ${section.title} (剩余: ${Math.round(timeUntilExpiry / (60 * 60 * 1000))}小时)`);
+      }
+    } else {
+      console.log(`🆕 预测性预加载首次生成URL (${reason}): ${section.title}`);
+    }
+
+    // 检查缓存
+    if (preloadCache.current.has(section.video.id)) {
+      console.log(`预测性预加载跳过 (${reason})，已在缓存中: ${section.title}`);
+      return;
+    }
+
     console.log(`🔮 预测性预加载 (${reason}): ${section.title}`);
 
     // 设置预加载状态
@@ -1920,22 +1985,6 @@ const CourseStudyPage = () => {
       const result = await generateVideoPlayURL(section.video);
       
       if (result) {
-        // 🔧 修复：先更新数据库中的播放URL
-        try {
-          await supabase
-            .from('minio_videos')
-            .update({
-              play_url: result.playUrl,
-              play_url_expires_at: result.expiresAt
-            })
-            .eq('id', section.video.id);
-          
-          console.log(`📝 预测性预加载数据库URL已更新: ${section.title}`);
-        } catch (dbError) {
-          console.error('预测性预加载数据库URL更新失败:', dbError);
-          // 即使数据库更新失败，也继续使用预加载的URL
-        }
-        
         // 缓存预加载结果
         preloadCache.current.set(section.video.id, { url: result.playUrl, expiresAt: result.expiresAt });
         
@@ -1962,6 +2011,133 @@ const CourseStudyPage = () => {
       setPreloadingVideos(prev => {
         const newSet = new Set(prev);
         newSet.delete(section.video!.id);
+        return newSet;
+      });
+    }
+  };
+
+  // 新增：延迟缓存全部剩余章节
+  const delayedPreloadAllRemaining = async (sectionsData: CourseSection[]) => {
+    if (!sectionsData.length) return;
+
+    console.log('🕒 开始延迟缓存全部剩余章节...');
+
+    try {
+      // 获取所有需要预加载的视频（智能过滤）
+      const remainingVideos = sectionsData.filter(section => {
+        // 必须有视频
+        if (!section.video) return false;
+        
+        // 排除正在预加载的视频
+        if (preloadingVideos.has(section.video.id)) return false;
+        
+        // 排除已在缓存中的视频
+        if (preloadCache.current.has(section.video.id)) return false;
+        
+        // 🔧 检查URL是否需要重新生成：只有过期或即将过期的才需要
+        if (section.video.play_url && section.video.play_url_expires_at) {
+          const expiresAt = new Date(section.video.play_url_expires_at);
+          const now = new Date();
+          const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+          
+          // 如果URL还有超过10小时有效期，则无需重新生成，但要缓存
+          if (timeUntilExpiry >= 10 * 60 * 60 * 1000) {
+            // 缓存有效的URL
+            preloadCache.current.set(section.video.id, { 
+              url: section.video.play_url, 
+              expiresAt: section.video.play_url_expires_at 
+            });
+            return false; // 不需要重新生成
+          }
+        }
+        
+        return true;
+      });
+
+      if (remainingVideos.length === 0) {
+        console.log('✅ 所有视频都已预加载或正在预加载中，无需延迟缓存');
+        return;
+      }
+
+      console.log(`📦 发现 ${remainingVideos.length} 个剩余视频需要延迟缓存`);
+
+      // 设置预加载状态
+      const remainingVideoIds = new Set(remainingVideos.map(s => s.video!.id));
+      setPreloadingVideos(prev => new Set([...prev, ...remainingVideoIds]));
+
+      // 分批预加载，避免同时发起太多请求
+      const batchSize = 3; // 每批预加载3个视频
+      const batches = [];
+      for (let i = 0; i < remainingVideos.length; i += batchSize) {
+        batches.push(remainingVideos.slice(i, i + batchSize));
+      }
+
+      let totalSuccessCount = 0;
+
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        console.log(`🔄 处理第 ${batchIndex + 1}/${batches.length} 批，包含 ${batch.length} 个视频`);
+
+        // 并行处理当前批次
+        const batchPromises = batch.map(async (section) => {
+          if (!section.video) return null;
+
+          try {
+            const result = await generateVideoPlayURL(section.video);
+            if (result) {
+              // 缓存预加载结果
+              preloadCache.current.set(section.video.id, { url: result.playUrl, expiresAt: result.expiresAt });
+              
+              // 更新本地sections状态
+              setSections(prevSections => 
+                prevSections.map(s => 
+                  s.id === section.id && s.video ? {
+                    ...s,
+                    video: {
+                      ...s.video,
+                      play_url: result.playUrl,
+                      play_url_expires_at: result.expiresAt
+                    }
+                  } : s
+                )
+              );
+
+              console.log(`✅ 延迟缓存完成: ${section.title}`);
+              return { sectionId: section.id, success: true };
+            }
+            return { sectionId: section.id, success: false };
+          } catch (error) {
+            console.error(`❌ 延迟缓存失败: ${section.title}`, error);
+            return { sectionId: section.id, success: false };
+          }
+        });
+
+        // 等待当前批次完成
+        const batchResults = await Promise.allSettled(batchPromises);
+        const batchSuccessCount = batchResults.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+        totalSuccessCount += batchSuccessCount;
+
+        console.log(`✅ 第 ${batchIndex + 1} 批完成: ${batchSuccessCount}/${batch.length} 个视频`);
+
+        // 批次之间添加延迟，避免过于频繁的请求
+        if (batchIndex < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 延迟1秒
+        }
+      }
+
+      console.log(`🎯 延迟缓存全部完成: ${totalSuccessCount}/${remainingVideos.length} 个剩余视频`);
+
+    } catch (error) {
+      console.error('延迟缓存全部剩余章节失败:', error);
+    } finally {
+      // 清除预加载状态
+      const remainingVideoIds = sectionsData
+        .filter(s => s.video)
+        .map(s => s.video!.id);
+      
+      setPreloadingVideos(prev => {
+        const newSet = new Set(prev);
+        remainingVideoIds.forEach(id => newSet.delete(id));
         return newSet;
       });
     }

@@ -2,8 +2,8 @@ name: 视频URL定时刷新
 
 on:
   schedule:
-    # 每6小时执行一次 (北京时间: 2:00, 8:00, 14:00, 20:00)
-    - cron: '0 18,0,6,12 * * *'  # UTC时间
+    # 每6天执行一次 (北京时间每周三上午8:00)
+    - cron: '0 0 */6 * *'  # 每6天执行一次，UTC时间
   workflow_dispatch:  # 允许手动触发
     inputs:
       action:
@@ -207,5 +207,5 @@ jobs:
         if: always()
         run: |
           echo "🏁 工作流执行完成"
-          echo "下次自动执行时间: $(date -d '+6 hours' -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "下次自动执行时间: $(date -d '+6 days' -u '+%Y-%m-%d %H:%M:%S UTC')"
           echo "您也可以随时在Actions页面手动触发执行" 

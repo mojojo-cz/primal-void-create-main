@@ -16,7 +16,13 @@ import {
   Eye,
   Settings as SettingsIcon,
   List,
-  Grid3X3
+  Grid3X3,
+  RefreshCw,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Database
 } from "lucide-react";
 import { 
   SystemSettings,
@@ -38,6 +44,30 @@ import {
   getAvailablePageSizes,
   resetToDefaultPreferences
 } from "@/utils/userPreferences";
+import { supabase } from "@/lib/supabase";
+
+// URL刷新结果类型
+interface RefreshResult {
+  success: boolean;
+  action: string;
+  duration: number;
+  timestamp: string;
+  result: {
+    total: number;
+    expired: number;
+    refreshed: number;
+    failed: number;
+    errors: string[];
+    details: Array<{
+      id: string;
+      title: string;
+      status: 'valid' | 'expired' | 'expiring_soon' | 'refreshed' | 'failed';
+      error?: string;
+      oldExpiry?: string;
+      newExpiry?: string;
+    }>;
+  };
+}
 
 const Settings = () => {
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
@@ -47,6 +77,11 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [previewLogo, setPreviewLogo] = useState(false);
   const [previewFavicon, setPreviewFavicon] = useState(false);
+
+  // URL刷新相关状态
+  const [urlRefreshLoading, setUrlRefreshLoading] = useState(false);
+  const [lastRefreshResult, setLastRefreshResult] = useState<RefreshResult | null>(null);
+  const [showRefreshDetails, setShowRefreshDetails] = useState(false);
 
   // 加载设置
   const loadSettings = async () => {
@@ -190,6 +225,129 @@ const Settings = () => {
       title: "已重置",
       description: "用户偏好已重置为默认值"
     });
+  };
+
+  // URL刷新功能
+  const handleUrlRefresh = async (action: 'check' | 'refresh') => {
+    try {
+      setUrlRefreshLoading(true);
+
+      toast({
+        title: action === 'check' ? "🔍 正在检查URL状态" : "🔄 正在刷新过期URL",
+        description: "请稍候，正在处理中...",
+        duration: 3000
+      });
+
+      const { data, error } = await supabase.functions.invoke('minio-url-refresh', {
+        body: {
+          action,
+          onlyExpired: action === 'refresh', // 刷新时只处理过期的
+          batchSize: 100
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message || '请求失败');
+      }
+
+      // Edge Function直接返回结果，不需要检查success字段
+      if (data.error) {
+        throw new Error(data.error || '操作失败');
+      }
+
+      // 构造兼容的结果格式
+      const refreshResult = {
+        success: true,
+        action,
+        duration: 0, // Edge Function没有返回执行时间
+        timestamp: new Date().toISOString(),
+        result: data // data就是RefreshResult
+      };
+
+      setLastRefreshResult(refreshResult);
+      
+      const result = data;
+      
+      if (action === 'check') {
+        // 根据详细结果统计真实的状态分布
+        const expiredVideos = result.details?.filter(d => d.status === 'expired').length || 0;
+        const expiringSoonVideos = result.details?.filter(d => d.status === 'expiring_soon').length || 0;
+        
+        let description = `检查了 ${result.total} 个视频`;
+        if (expiredVideos > 0 && expiringSoonVideos > 0) {
+          description += `，发现 ${expiredVideos} 个已过期，${expiringSoonVideos} 个即将过期`;
+        } else if (expiredVideos > 0) {
+          description += `，发现 ${expiredVideos} 个已过期`;
+        } else if (expiringSoonVideos > 0) {
+          description += `，发现 ${expiringSoonVideos} 个即将过期`;
+        } else {
+          description += `，所有URL状态良好`;
+        }
+        
+        toast({
+          title: "✅ 检查完成",
+          description,
+          duration: 5000
+        });
+      } else {
+        const successMsg = result.refreshed > 0 
+          ? `成功刷新 ${result.refreshed} 个过期URL` 
+          : '所有URL都在有效期内';
+        const failMsg = result.failed > 0 ? `，${result.failed} 个失败` : '';
+        
+        toast({
+          title: result.failed > 0 ? "⚠️ 刷新完成（部分失败）" : "🎉 刷新完成",
+          description: successMsg + failMsg,
+          duration: 5000,
+          variant: result.failed > 0 ? "destructive" : "default"
+        });
+      }
+
+    } catch (error: any) {
+      console.error(`URL ${action} 失败:`, error);
+      toast({
+        variant: "destructive",
+        title: `${action === 'check' ? '检查' : '刷新'}失败`,
+        description: error.message || `URL ${action === 'check' ? '检查' : '刷新'}操作失败`
+      });
+    } finally {
+      setUrlRefreshLoading(false);
+    }
+  };
+
+  // 获取状态图标和颜色
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'valid':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'expired':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case 'expiring_soon':
+        return <Clock className="h-4 w-4 text-yellow-500" />;
+      case 'refreshed':
+        return <RefreshCw className="h-4 w-4 text-blue-500" />;
+      case 'failed':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <AlertTriangle className="h-4 w-4 text-gray-500" />;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'valid':
+        return '有效';
+      case 'expired':
+        return '已过期';
+      case 'expiring_soon':
+        return '即将过期';
+      case 'refreshed':
+        return '已刷新';
+      case 'failed':
+        return '失败';
+      default:
+        return '未知';
+    }
   };
 
   useEffect(() => {
@@ -387,6 +545,150 @@ const Settings = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 视频URL管理 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5 text-primary" />
+              视频URL管理
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium mb-3">URL状态管理</h4>
+                <p className="text-sm text-muted-foreground mb-4">
+                  定期检查和刷新视频播放URL，确保用户能够正常播放视频。系统会自动检测即将过期的URL（24小时内）并重新生成。
+                </p>
+                
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleUrlRefresh('check')}
+                    disabled={urlRefreshLoading}
+                    className="flex-1 sm:flex-none"
+                  >
+                    {urlRefreshLoading ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Eye className="h-4 w-4 mr-2" />
+                    )}
+                    检查URL状态
+                  </Button>
+                  
+                  <Button
+                    onClick={() => handleUrlRefresh('refresh')}
+                    disabled={urlRefreshLoading}
+                    className="flex-1 sm:flex-none"
+                  >
+                    {urlRefreshLoading ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    刷新过期URL
+                  </Button>
+                </div>
+              </div>
+
+              {/* 上次刷新结果 */}
+              {lastRefreshResult && (
+                <div className="space-y-3">
+                  <Separator />
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium">
+                        上次{lastRefreshResult.action === 'check' ? '检查' : '刷新'}结果
+                      </h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowRefreshDetails(!showRefreshDetails)}
+                      >
+                        {showRefreshDetails ? '隐藏详情' : '查看详情'}
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="text-center p-3 bg-blue-50 rounded-lg">
+                        <div className="font-medium text-blue-600">{lastRefreshResult.result.total}</div>
+                        <div className="text-xs text-blue-500">总数</div>
+                      </div>
+                      <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                        <div className="font-medium text-yellow-600">{lastRefreshResult.result.expired}</div>
+                        <div className="text-xs text-yellow-500">需刷新</div>
+                      </div>
+                      <div className="text-center p-3 bg-green-50 rounded-lg">
+                        <div className="font-medium text-green-600">{lastRefreshResult.result.refreshed}</div>
+                        <div className="text-xs text-green-500">已刷新</div>
+                      </div>
+                      <div className="text-center p-3 bg-red-50 rounded-lg">
+                        <div className="font-medium text-red-600">{lastRefreshResult.result.failed}</div>
+                        <div className="text-xs text-red-500">失败</div>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground mb-3">
+                      执行时间: {new Date(lastRefreshResult.timestamp).toLocaleString()} 
+                      • 耗时: {lastRefreshResult.duration}ms
+                    </div>
+
+                    {/* 详细结果 */}
+                    {showRefreshDetails && lastRefreshResult.result.details.length > 0 && (
+                      <div className="border rounded-lg p-3 bg-muted/30 max-h-60 overflow-y-auto">
+                        <div className="space-y-2">
+                          {lastRefreshResult.result.details.slice(0, 10).map((detail, index) => (
+                            <div key={index} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                {getStatusIcon(detail.status)}
+                                <span className="truncate">{detail.title}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>{getStatusText(detail.status)}</span>
+                                {detail.error && (
+                                  <span className="text-red-500" title={detail.error}>⚠️</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {lastRefreshResult.result.details.length > 10 && (
+                            <div className="text-xs text-muted-foreground text-center pt-2">
+                              还有 {lastRefreshResult.result.details.length - 10} 个项目未显示
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 错误信息 */}
+                    {lastRefreshResult.result.errors.length > 0 && (
+                      <div className="border border-red-200 rounded-lg p-3 bg-red-50">
+                        <div className="text-sm font-medium text-red-600 mb-2">错误信息:</div>
+                        <div className="space-y-1">
+                          {lastRefreshResult.result.errors.slice(0, 3).map((error, index) => (
+                            <div key={index} className="text-xs text-red-500">{error}</div>
+                          ))}
+                          {lastRefreshResult.result.errors.length > 3 && (
+                            <div className="text-xs text-red-400">
+                              还有 {lastRefreshResult.result.errors.length - 3} 个错误未显示
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>• URL有效期为7天，系统会在URL到期前24小时标记为"即将过期"</p>
+                <p>• 建议定期检查URL状态，特别是在重要的学习活动前</p>
+                <p>• 刷新操作只会处理过期或即将过期的URL，不会影响有效的URL</p>
+              </div>
             </div>
           </CardContent>
         </Card>
