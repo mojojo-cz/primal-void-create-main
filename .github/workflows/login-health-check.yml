@@ -1,0 +1,282 @@
+name: 登录功能健康检查
+
+on:
+  schedule:
+    # 每天北京时间凌晨2点执行（UTC时间前一天18点）
+    - cron: '0 18 * * *'  # UTC时间
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      test_account:
+        description: '测试账号（可选，默认使用Secrets中的账号）'
+        required: false
+        type: string
+      test_password:
+        description: '测试密码（可选，默认使用Secrets中的密码）'
+        required: false
+        type: string
+
+jobs:
+  login-health-check:
+    runs-on: ubuntu-latest
+    name: 登录功能健康检查
+    timeout-minutes: 10
+    
+    steps:
+      - name: 检查输入参数
+        run: |
+          echo "🚀 开始执行登录功能健康检查"
+          echo "触发方式: ${{ github.event_name }}"
+          echo "执行时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "北京时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
+
+      - name: 执行登录健康检查
+        id: login_check
+        run: |
+          echo "🔐 开始登录功能测试..."
+          
+          # 设置测试账号和密码
+          TEST_ACCOUNT="${{ github.event.inputs.test_account || secrets.TEST_ACCOUNT }}"
+          TEST_PASSWORD="${{ github.event.inputs.test_password || secrets.TEST_PASSWORD }}"
+          
+          if [ -z "$TEST_ACCOUNT" ] || [ -z "$TEST_PASSWORD" ]; then
+            echo "❌ 测试账号或密码未配置"
+            echo "请在GitHub仓库设置中添加以下Secrets:"
+            echo "- TEST_ACCOUNT: 测试账号（用户名/手机号/邮箱）"
+            echo "- TEST_PASSWORD: 测试密码"
+            exit 1
+          fi
+          
+          echo "📧 测试账号: ${TEST_ACCOUNT:0:3}***${TEST_ACCOUNT: -3}"
+          
+          # 构建登录请求数据
+          LOGIN_DATA=$(cat << EOF
+          {
+            "account": "$TEST_ACCOUNT",
+            "password": "$TEST_PASSWORD"
+          }
+          EOF
+          )
+          
+          # 执行登录测试
+          echo "🌐 正在测试登录API..."
+          
+          # 第一步：获取Supabase会话
+          SUPABASE_URL="https://sxsyprzckdnfyhadodhj.supabase.co"
+          SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs"
+          
+          # 判断账号类型并转换为登录邮箱
+          if [[ "$TEST_ACCOUNT" =~ ^1[3-9][0-9]{9}$ ]]; then
+            # 手机号转换为虚拟邮箱
+            LOGIN_EMAIL="${TEST_ACCOUNT}@phone.auth"
+            ACCOUNT_TYPE="phone"
+            echo "📱 检测到手机号，转换为虚拟邮箱: ${LOGIN_EMAIL}"
+          elif [[ "$TEST_ACCOUNT" =~ ^[a-zA-Z0-9_]{3,50}$ ]]; then
+            # 用户名需要查询数据库
+            echo "👤 检测到用户名，需要查询对应邮箱..."
+            
+            # 调用数据库函数查询用户名对应的邮箱
+            USERNAME_QUERY_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/get_login_email_by_username" \
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              -H "Content-Type: application/json" \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              -d "{\"username_input\": \"$TEST_ACCOUNT\"}")
+              
+            HTTP_CODE=$(echo "$USERNAME_QUERY_RESPONSE" | tail -n1 | cut -d':' -f2)
+            RESPONSE_BODY=$(echo "$USERNAME_QUERY_RESPONSE" | sed '$d')
+            
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ 查询用户名失败，HTTP状态码: $HTTP_CODE"
+              echo "响应内容: $RESPONSE_BODY"
+              exit 1
+            fi
+            
+            LOGIN_EMAIL=$(echo "$RESPONSE_BODY" | jq -r '.')
+            if [ "$LOGIN_EMAIL" = "null" ] || [ -z "$LOGIN_EMAIL" ]; then
+              echo "❌ 用户名不存在: $TEST_ACCOUNT"
+              exit 1
+            fi
+            
+            ACCOUNT_TYPE="username"
+            echo "🔍 查询到用户名对应邮箱: ${LOGIN_EMAIL:0:5}***@***"
+          elif [[ "$TEST_ACCOUNT" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
+            # 邮箱直接使用
+            LOGIN_EMAIL="$TEST_ACCOUNT"
+            ACCOUNT_TYPE="email"
+            echo "📧 检测到邮箱，直接使用: ${LOGIN_EMAIL:0:5}***@***"
+          else
+            echo "❌ 无效的账号格式: $TEST_ACCOUNT"
+            echo "支持的格式: 用户名(3-50字符)、手机号(11位)、邮箱地址"
+            exit 1
+          fi
+          
+          # 执行Supabase登录
+          echo "🔑 正在执行登录..."
+          LOGIN_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
+            -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -d "{
+              \"email\": \"$LOGIN_EMAIL\",
+              \"password\": \"$TEST_PASSWORD\"
+            }")
+          
+          # 提取HTTP状态码和响应体
+          HTTP_CODE=$(echo "$LOGIN_RESPONSE" | tail -n1 | cut -d':' -f2)
+          RESPONSE_BODY=$(echo "$LOGIN_RESPONSE" | sed '$d')
+          
+          echo "HTTP状态码: $HTTP_CODE"
+          
+          # 检查登录结果
+          if [ "$HTTP_CODE" = "200" ]; then
+            # 解析登录成功响应
+            ACCESS_TOKEN=$(echo "$RESPONSE_BODY" | jq -r '.access_token // empty')
+            USER_ID=$(echo "$RESPONSE_BODY" | jq -r '.user.id // empty')
+            USER_EMAIL=$(echo "$RESPONSE_BODY" | jq -r '.user.email // empty')
+            
+            if [ -n "$ACCESS_TOKEN" ] && [ -n "$USER_ID" ]; then
+              echo "✅ 登录成功!"
+              echo "用户ID: $USER_ID"
+              echo "登录邮箱: ${USER_EMAIL:0:5}***@***"
+              echo "令牌长度: ${#ACCESS_TOKEN} 字符"
+              
+              # 验证令牌有效性 - 获取用户资料
+              echo "🔍 验证令牌有效性..."
+              PROFILE_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
+                -X POST "$SUPABASE_URL/rest/v1/rpc/get_user_profile_for_login" \
+                -H "Authorization: Bearer $ACCESS_TOKEN" \
+                -H "Content-Type: application/json" \
+                -H "apikey: $SUPABASE_ANON_KEY" \
+                -d "{\"user_id\": \"$USER_ID\"}")
+              
+              PROFILE_HTTP_CODE=$(echo "$PROFILE_RESPONSE" | tail -n1 | cut -d':' -f2)
+              PROFILE_BODY=$(echo "$PROFILE_RESPONSE" | sed '$d')
+              
+              if [ "$PROFILE_HTTP_CODE" = "200" ]; then
+                USER_TYPE=$(echo "$PROFILE_BODY" | jq -r '.[0].user_type // "unknown"')
+                FULL_NAME=$(echo "$PROFILE_BODY" | jq -r '.[0].full_name // "未知"')
+                
+                echo "✅ 令牌验证成功!"
+                echo "用户类型: $USER_TYPE"
+                echo "用户姓名: $FULL_NAME"
+                
+                # 设置成功结果
+                echo "login_success=true" >> $GITHUB_OUTPUT
+                echo "account_type=$ACCOUNT_TYPE" >> $GITHUB_OUTPUT
+                echo "user_type=$USER_TYPE" >> $GITHUB_OUTPUT
+                echo "user_name=$FULL_NAME" >> $GITHUB_OUTPUT
+                echo "user_id=$USER_ID" >> $GITHUB_OUTPUT
+              else
+                echo "⚠️ 登录成功但令牌验证失败"
+                echo "Profile API响应码: $PROFILE_HTTP_CODE"
+                echo "Profile API响应: $PROFILE_BODY"
+                echo "login_success=partial" >> $GITHUB_OUTPUT
+                echo "error_message=令牌验证失败" >> $GITHUB_OUTPUT
+              fi
+              
+            else
+              echo "❌ 登录响应格式异常"
+              echo "响应内容: $RESPONSE_BODY"
+              echo "login_success=false" >> $GITHUB_OUTPUT
+              echo "error_message=登录响应格式异常" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          else
+            # 登录失败
+            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error_description // .message // .error // "未知错误"')
+            echo "❌ 登录失败!"
+            echo "HTTP状态码: $HTTP_CODE"
+            echo "错误信息: $ERROR_MSG"
+            echo "完整响应: $RESPONSE_BODY"
+            
+            echo "login_success=false" >> $GITHUB_OUTPUT
+            echo "error_message=$ERROR_MSG" >> $GITHUB_OUTPUT
+            echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: 生成健康检查报告
+        if: always()
+        run: |
+          echo "## 📋 登录功能健康检查报告" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**检查时间**: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') (北京时间)" >> $GITHUB_STEP_SUMMARY
+          echo "**触发方式**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.login_check.outcome }}" = "success" ]; then
+            if [ "${{ steps.login_check.outputs.login_success }}" = "true" ]; then
+              echo "### ✅ 登录功能正常" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "| 检查项 | 结果 |" >> $GITHUB_STEP_SUMMARY
+              echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+              echo "| 账号类型 | ${{ steps.login_check.outputs.account_type }} |" >> $GITHUB_STEP_SUMMARY
+              echo "| 用户类型 | ${{ steps.login_check.outputs.user_type }} |" >> $GITHUB_STEP_SUMMARY
+              echo "| 用户姓名 | ${{ steps.login_check.outputs.user_name }} |" >> $GITHUB_STEP_SUMMARY
+              echo "| 登录状态 | ✅ 成功 |" >> $GITHUB_STEP_SUMMARY
+              echo "| 令牌验证 | ✅ 通过 |" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ steps.login_check.outputs.login_success }}" = "partial" ]; then
+              echo "### ⚠️ 登录功能部分异常" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**问题**: ${{ steps.login_check.outputs.error_message }}" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "登录成功但后续验证失败，请检查用户资料查询功能。" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "### ❌ 登录功能异常" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**错误信息**: ${{ steps.login_check.outputs.error_message }}" >> $GITHUB_STEP_SUMMARY
+              echo "**HTTP状态码**: ${{ steps.login_check.outputs.http_code }}" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### ❌ 健康检查执行失败" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "请检查执行日志获取详细错误信息" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*下次自动检查时间: $(TZ='Asia/Shanghai' date -d '+1 day' '+%Y-%m-%d 02:00:00') (北京时间)*" >> $GITHUB_STEP_SUMMARY
+
+      - name: 登录成功通知
+        if: success() && steps.login_check.outputs.login_success == 'true'
+        run: |
+          echo "🎉 登录功能健康检查通过"
+          echo "测试账号类型: ${{ steps.login_check.outputs.account_type }}"
+          echo "用户类型: ${{ steps.login_check.outputs.user_type }}"
+          echo "用户姓名: ${{ steps.login_check.outputs.user_name }}"
+          echo "登录系统运行正常，用户可以正常访问"
+
+      - name: 登录异常通知
+        if: failure() || steps.login_check.outputs.login_success != 'true'
+        run: |
+          echo "🚨 登录功能异常警告"
+          echo "这可能导致用户无法正常登录系统"
+          echo ""
+          echo "请立即检查以下可能的原因:"
+          echo "1. 测试账号密码是否正确"
+          echo "2. Supabase认证服务状态"
+          echo "3. 数据库连接是否正常"
+          echo "4. 用户资料查询功能是否正常"
+          echo "5. 网络连接问题"
+          echo ""
+          echo "紧急处理方案:"
+          echo "1. 检查Supabase控制台认证日志"
+          echo "2. 验证测试账号在数据库中的状态"
+          echo "3. 手动在网站上测试登录功能"
+          echo "4. 重新运行此健康检查"
+          
+          # 如果需要，可以在这里添加更多通知方式
+          # 比如发送邮件、Slack消息、企业微信等
+
+      - name: 清理和总结
+        if: always()
+        run: |
+          echo "🏁 登录健康检查完成"
+          echo "检查结果: ${{ steps.login_check.outputs.login_success || '失败' }}"
+          echo "下次自动检查: $(TZ='Asia/Shanghai' date -d '+1 day' '+%Y-%m-%d 02:00:00') (北京时间)"
+          echo ""
+          echo "💡 提示:"
+          echo "- 可以在Actions页面手动触发检查"
+          echo "- 如需修改测试账号，请更新Repository Secrets"
+          echo "- 建议定期检查测试账号的有效性" 
