@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MinIO分块上传调试工具</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 0;
+        }
+        .log-info { color: #0066cc; }
+        .log-success { color: #28a745; }
+        .log-warning { color: #ffc107; }
+        .log-error { color: #dc3545; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .progress-container {
+            margin: 10px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #007bff;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .chunk-progress {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            margin: 10px 0;
+        }
+        .chunk-item {
+            width: 20px;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+        }
+        .chunk-pending { background-color: #e9ecef; }
+        .chunk-uploading { background-color: #ffc107; }
+        .chunk-success { background-color: #28a745; }
+        .chunk-error { background-color: #dc3545; }
+        .file-info {
+            background-color: #e7f3ff;
+            border: 1px solid #b6d7ff;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .config {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        input[type="number"], select {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-waiting { background-color: #6c757d; }
+        .status-processing { background-color: #ffc107; }
+        .status-success { background-color: #28a745; }
+        .status-error { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧩 MinIO分块上传调试工具</h1>
+        <p>支持大文件分片上传，详细进度跟踪和错误调试</p>
+
+        <div class="config">
+            <h3>🔧 上传配置</h3>
+            <label>
+                分块大小: 
+                <select id="chunkSizeSelect">
+                    <option value="1048576">1 MB</option>
+                    <option value="2097152">2 MB</option>
+                    <option value="5242880" selected>5 MB</option>
+                    <option value="10485760">10 MB</option>
+                </select>
+            </label>
+            <label>
+                并发上传数: 
+                <input type="number" id="concurrentUploads" value="3" min="1" max="10">
+            </label>
+            <label>
+                重试次数: 
+                <input type="number" id="retryCount" value="3" min="0" max="10">
+            </label>
+        </div>
+
+        <div class="section">
+            <h3>📁 文件选择</h3>
+            <input type="file" id="videoFile" accept="video/*">
+            <div id="fileInfo" class="file-info" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h3>🚀 上传控制</h3>
+            <button onclick="startChunkedUpload()" id="uploadBtn">开始分块上传</button>
+            <button onclick="pauseUpload()" id="pauseBtn" disabled>暂停上传</button>
+            <button onclick="resumeUpload()" id="resumeBtn" disabled>继续上传</button>
+            <button onclick="cancelUpload()" id="cancelBtn" disabled>取消上传</button>
+            <button onclick="clearLogs()">清除日志</button>
+        </div>
+
+        <div class="section">
+            <h3>📊 上传进度</h3>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div id="progressText">等待开始...</div>
+            </div>
+            
+            <div>
+                <strong>分块状态:</strong>
+                <div id="chunkProgress" class="chunk-progress"></div>
+            </div>
+            
+            <div id="uploadStats" style="margin-top: 10px;">
+                <div><span class="status-indicator status-waiting"></span>等待中: <span id="pendingChunks">0</span></div>
+                <div><span class="status-indicator status-processing"></span>上传中: <span id="uploadingChunks">0</span></div>
+                <div><span class="status-indicator status-success"></span>已完成: <span id="completedChunks">0</span></div>
+                <div><span class="status-indicator status-error"></span>失败: <span id="failedChunks">0</span></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📝 调试日志</h3>
+            <div id="debugLog" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://eotqgpcgzgjtywddvdpd.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvdHFncGNnemdqdHl3ZGR2ZHBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI1NDA1MTgsImV4cCI6MjA0ODExNjUxOH0.Hmu8xOLXNhqEZSfJMQxW50Q-fXE4R8zlnO1L0B-F_Y4';
+        
+        // 上传状态
+        let uploadState = {
+            file: null,
+            chunks: [],
+            uploadId: null,
+            objectName: null,
+            isPaused: false,
+            isCancelled: false,
+            completedChunks: 0,
+            failedChunks: 0,
+            etags: []
+        };
+
+        // 配置
+        let config = {
+            chunkSize: 5242880, // 5MB
+            concurrentUploads: 3,
+            retryCount: 3
+        };
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('debugLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressText').textContent = text;
+        }
+
+        function updateStats() {
+            const pending = uploadState.chunks.filter(c => c.status === 'pending').length;
+            const uploading = uploadState.chunks.filter(c => c.status === 'uploading').length;
+            const completed = uploadState.chunks.filter(c => c.status === 'completed').length;
+            const failed = uploadState.chunks.filter(c => c.status === 'failed').length;
+
+            document.getElementById('pendingChunks').textContent = pending;
+            document.getElementById('uploadingChunks').textContent = uploading;
+            document.getElementById('completedChunks').textContent = completed;
+            document.getElementById('failedChunks').textContent = failed;
+        }
+
+        function updateChunkVisuals() {
+            const container = document.getElementById('chunkProgress');
+            container.innerHTML = '';
+            
+            uploadState.chunks.forEach((chunk, index) => {
+                const item = document.createElement('div');
+                item.className = `chunk-item chunk-${chunk.status}`;
+                item.textContent = (index + 1).toString();
+                item.title = `分块 ${index + 1}: ${chunk.status}`;
+                container.appendChild(item);
+            });
+        }
+
+        function clearLogs() {
+            document.getElementById('debugLog').innerHTML = '';
+            updateProgress(0, '等待开始...');
+        }
+
+        // 更新配置
+        document.getElementById('chunkSizeSelect').addEventListener('change', function() {
+            config.chunkSize = parseInt(this.value);
+            log(`分块大小设置为: ${config.chunkSize / 1024 / 1024} MB`, 'info');
+        });
+
+        document.getElementById('concurrentUploads').addEventListener('change', function() {
+            config.concurrentUploads = parseInt(this.value);
+            log(`并发上传数设置为: ${config.concurrentUploads}`, 'info');
+        });
+
+        document.getElementById('retryCount').addEventListener('change', function() {
+            config.retryCount = parseInt(this.value);
+            log(`重试次数设置为: ${config.retryCount}`, 'info');
+        });
+
+        // 文件选择处理
+        document.getElementById('videoFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                uploadState.file = file;
+                const fileInfo = document.getElementById('fileInfo');
+                const sizeInMB = (file.size / 1024 / 1024).toFixed(2);
+                const chunkCount = Math.ceil(file.size / config.chunkSize);
+                
+                fileInfo.innerHTML = `
+                    <strong>文件信息:</strong><br>
+                    名称: ${file.name}<br>
+                    大小: ${sizeInMB} MB (${file.size} bytes)<br>
+                    类型: ${file.type}<br>
+                    预计分块数: ${chunkCount}<br>
+                    分块大小: ${config.chunkSize / 1024 / 1024} MB
+                `;
+                fileInfo.style.display = 'block';
+                log(`文件已选择: ${file.name} (${sizeInMB} MB, ${chunkCount}个分块)`, 'info');
+            }
+        });
+
+        async function startChunkedUpload() {
+            if (!uploadState.file) {
+                log('❌ 请先选择视频文件', 'error');
+                return;
+            }
+
+            log('🚀 开始分块上传', 'info');
+            resetUploadState();
+            
+            try {
+                // 步骤1: 初始化上传
+                await initializeUpload();
+                
+                // 步骤2: 创建分块
+                createChunks();
+                
+                // 步骤3: 并发上传分块
+                await uploadChunks();
+                
+                // 步骤4: 完成上传
+                await completeUpload();
+                
+            } catch (error) {
+                log(`❌ 上传失败: ${error.message}`, 'error');
+                resetButtons();
+            }
+        }
+
+        function resetUploadState() {
+            uploadState.chunks = [];
+            uploadState.uploadId = null;
+            uploadState.objectName = null;
+            uploadState.isPaused = false;
+            uploadState.isCancelled = false;
+            uploadState.completedChunks = 0;
+            uploadState.failedChunks = 0;
+            uploadState.etags = [];
+            
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+            document.getElementById('cancelBtn').disabled = false;
+        }
+
+        function resetButtons() {
+            document.getElementById('uploadBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('resumeBtn').disabled = true;
+            document.getElementById('cancelBtn').disabled = true;
+        }
+
+        async function initializeUpload() {
+            log('📋 初始化分块上传...', 'info');
+            updateProgress(5, '初始化上传...');
+            
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/minio-video-upload-chunked`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'init',
+                    filename: uploadState.file.name,
+                    title: uploadState.file.name.split('.')[0],
+                    description: `分块上传于 ${new Date().toLocaleString()}`
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`初始化失败: ${response.status} - ${errorText}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || '初始化失败');
+            }
+
+            uploadState.uploadId = result.uploadId;
+            uploadState.objectName = result.objectName;
+            
+            log(`✅ 初始化成功: uploadId=${result.uploadId}`, 'success');
+            log(`📁 对象名称: ${result.objectName}`, 'info');
+        }
+
+        function createChunks() {
+            log('🧩 创建文件分块...', 'info');
+            const file = uploadState.file;
+            const chunkCount = Math.ceil(file.size / config.chunkSize);
+            
+            uploadState.chunks = [];
+            uploadState.etags = new Array(chunkCount);
+            
+            for (let i = 0; i < chunkCount; i++) {
+                const start = i * config.chunkSize;
+                const end = Math.min(start + config.chunkSize, file.size);
+                const chunk = file.slice(start, end);
+                
+                uploadState.chunks.push({
+                    index: i + 1,
+                    data: chunk,
+                    status: 'pending',
+                    retryCount: 0,
+                    etag: null
+                });
+            }
+            
+            log(`📊 创建了 ${chunkCount} 个分块`, 'info');
+            updateChunkVisuals();
+            updateStats();
+        }
+
+        async function uploadChunks() {
+            log('⬆️ 开始并发上传分块...', 'info');
+            
+            const uploadPromises = [];
+            let activeUploads = 0;
+            let chunkIndex = 0;
+            
+            return new Promise((resolve, reject) => {
+                const processNext = async () => {
+                    if (uploadState.isCancelled) {
+                        reject(new Error('上传已取消'));
+                        return;
+                    }
+                    
+                    if (uploadState.isPaused) {
+                        return;
+                    }
+                    
+                    // 检查是否完成
+                    if (uploadState.completedChunks === uploadState.chunks.length) {
+                        resolve();
+                        return;
+                    }
+                    
+                    // 开始新的上传
+                    while (activeUploads < config.concurrentUploads && chunkIndex < uploadState.chunks.length) {
+                        const chunk = uploadState.chunks[chunkIndex];
+                        if (chunk.status === 'pending' || (chunk.status === 'failed' && chunk.retryCount < config.retryCount)) {
+                            activeUploads++;
+                            uploadChunk(chunk).finally(() => {
+                                activeUploads--;
+                                processNext();
+                            });
+                        }
+                        chunkIndex++;
+                    }
+                    
+                    // 如果没有活跃上传且还有失败的分块，重新开始
+                    if (activeUploads === 0 && chunkIndex >= uploadState.chunks.length) {
+                        const failedChunks = uploadState.chunks.filter(c => c.status === 'failed' && c.retryCount < config.retryCount);
+                        if (failedChunks.length > 0) {
+                            chunkIndex = 0;
+                            setTimeout(processNext, 1000); // 1秒后重试
+                        } else if (uploadState.completedChunks < uploadState.chunks.length) {
+                            reject(new Error('有分块上传失败且超过重试次数'));
+                        }
+                    }
+                };
+                
+                processNext();
+            });
+        }
+
+        async function uploadChunk(chunk) {
+            chunk.status = 'uploading';
+            updateChunkVisuals();
+            updateStats();
+            
+            log(`⬆️ 上传分块 ${chunk.index}...`, 'info');
+            
+            try {
+                // 读取分块数据并转换为base64
+                const arrayBuffer = await chunk.data.arrayBuffer();
+                const uint8Array = new Uint8Array(arrayBuffer);
+                const base64Data = btoa(String.fromCharCode.apply(null, uint8Array));
+                
+                const response = await fetch(`${SUPABASE_URL}/functions/v1/minio-video-upload-chunked`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'upload',
+                        uploadId: uploadState.uploadId,
+                        objectName: uploadState.objectName,
+                        chunkNumber: chunk.index,
+                        chunkData: base64Data
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || '上传失败');
+                }
+
+                // 成功
+                chunk.status = 'completed';
+                chunk.etag = result.etag;
+                uploadState.etags[chunk.index - 1] = result.etag;
+                uploadState.completedChunks++;
+                
+                log(`✅ 分块 ${chunk.index} 上传成功`, 'success');
+                
+                // 更新进度
+                const progress = (uploadState.completedChunks / uploadState.chunks.length) * 90 + 10;
+                updateProgress(progress, `已上传 ${uploadState.completedChunks}/${uploadState.chunks.length} 个分块`);
+                
+            } catch (error) {
+                chunk.status = 'failed';
+                chunk.retryCount++;
+                uploadState.failedChunks++;
+                
+                log(`❌ 分块 ${chunk.index} 上传失败: ${error.message} (重试 ${chunk.retryCount}/${config.retryCount})`, 'error');
+            }
+            
+            updateChunkVisuals();
+            updateStats();
+        }
+
+        async function completeUpload() {
+            log('🏁 完成分块上传...', 'info');
+            updateProgress(95, '完成上传...');
+            
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/minio-video-upload-chunked`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'complete',
+                    uploadId: uploadState.uploadId,
+                    objectName: uploadState.objectName,
+                    title: uploadState.file.name.split('.')[0],
+                    description: `分块上传于 ${new Date().toLocaleString()}`,
+                    etags: uploadState.etags.filter(etag => etag !== undefined)
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`完成上传失败: ${response.status} - ${errorText}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || '完成上传失败');
+            }
+
+            log('🎉 分块上传完成！', 'success');
+            log(`📁 文件ID: ${result.id}`, 'success');
+            log(`🔗 视频URL: ${result.video_url}`, 'success');
+            
+            updateProgress(100, '上传完成！');
+            resetButtons();
+        }
+
+        function pauseUpload() {
+            uploadState.isPaused = true;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('resumeBtn').disabled = false;
+            log('⏸️ 上传已暂停', 'warning');
+        }
+
+        function resumeUpload() {
+            uploadState.isPaused = false;
+            document.getElementById('pauseBtn').disabled = false;
+            document.getElementById('resumeBtn').disabled = true;
+            log('▶️ 上传已恢复', 'info');
+        }
+
+        function cancelUpload() {
+            uploadState.isCancelled = true;
+            resetButtons();
+            log('🛑 上传已取消', 'warning');
+        }
+
+        // 页面加载时初始化
+        window.addEventListener('load', function() {
+            log('分块上传调试工具已加载', 'info');
+            log(`默认配置: 分块大小=${config.chunkSize/1024/1024}MB, 并发数=${config.concurrentUploads}, 重试=${config.retryCount}次`, 'info');
+        });
+    </script>
+</body>
+</html> 

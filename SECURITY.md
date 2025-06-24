@@ -1,24 +1,8 @@
 # 🛡️ 安全配置指南
 
-## 🔐 环境变量配置
+## ⚠️ 重要提醒
 
-### 本地开发环境
-
-在项目根目录创建 `.env` 文件：
-
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-```
-
-### GitHub Actions Secrets
-
-在GitHub仓库中配置以下Secrets：
-
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `TEST_ACCOUNT` (登录健康检查用)
-- `TEST_PASSWORD` (登录健康检查用)
+**绝对不要将真实的API密钥提交到Git仓库中！**
 
 ## 🔧 环境配置
 
@@ -72,28 +56,4 @@ project_id = "your_real_project_id"
 1. 立即到Supabase控制台重新生成API密钥
 2. 更新所有环境配置
 3. 检查访问日志是否有异常活动
-4. 考虑重置数据库凭证
-
-## ⚠️ 安全要求
-
-1. **禁止硬编码密钥**：任何密钥都不得直接写在代码中
-2. **使用环境变量**：通过 `import.meta.env` 访问环境变量
-3. **定期轮换密钥**：建议每3-6个月更换一次
-4. **最小权限原则**：只使用必要的权限
-
-## 🚨 紧急处理
-
-如果密钥泄露：
-
-1. 立即在Supabase控制台重新生成密钥
-2. 更新所有环境变量配置
-3. 检查Git历史，确保没有敏感信息
-4. 通知团队成员更新本地配置
-
-## ✅ 安全检查清单
-
-- [ ] 所有密钥都通过环境变量管理
-- [ ] `.env` 文件已加入 `.gitignore`
-- [ ] GitHub Secrets配置正确
-- [ ] 代码中无硬编码密钥
-- [ ] 定期检查密钥有效性 
+4. 考虑重置数据库凭证 
