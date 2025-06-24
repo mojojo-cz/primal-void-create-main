@@ -69,15 +69,33 @@ jobs:
             exit 1
           fi
           
-          # 解析响应JSON
-          SUCCESS=$(echo "$RESPONSE_BODY" | jq -r '.success // false')
+          # 解析响应JSON - 检查是否是Edge Function的直接响应格式
+          SUCCESS=$(echo "$RESPONSE_BODY" | jq -r '.success // "check_direct"')
           
-          if [ "$SUCCESS" = "true" ]; then
+          # 如果response_body直接包含total字段，说明是Edge Function的直接响应
+          if [ "$SUCCESS" = "check_direct" ]; then
+            # 检查是否有total字段，表示这是有效的响应
+            TOTAL=$(echo "$RESPONSE_BODY" | jq -r '.total // null')
+            if [ "$TOTAL" != "null" ]; then
+              # 直接解析Edge Function响应
+              EXPIRED=$(echo "$RESPONSE_BODY" | jq -r '.expired // 0')
+              REFRESHED=$(echo "$RESPONSE_BODY" | jq -r '.refreshed // 0')
+              FAILED=$(echo "$RESPONSE_BODY" | jq -r '.failed // 0')
+              DURATION="unknown"
+              SUCCESS="true"
+            else
+              SUCCESS="false"
+            fi
+          else
+            # 原有的嵌套格式
             TOTAL=$(echo "$RESPONSE_BODY" | jq -r '.result.total // 0')
             EXPIRED=$(echo "$RESPONSE_BODY" | jq -r '.result.expired // 0')
             REFRESHED=$(echo "$RESPONSE_BODY" | jq -r '.result.refreshed // 0')
             FAILED=$(echo "$RESPONSE_BODY" | jq -r '.result.failed // 0')
             DURATION=$(echo "$RESPONSE_BODY" | jq -r '.duration // 0')
+          fi
+          
+          if [ "$SUCCESS" = "true" ]; then
             
             echo "✅ URL刷新任务完成"
             echo "📊 执行统计:"
@@ -99,8 +117,12 @@ jobs:
               echo "⚠️  有 $FAILED 个URL刷新失败，请检查详细日志"
               echo "failed_urls=true" >> $GITHUB_OUTPUT
               
-              # 提取错误信息
-              ERRORS=$(echo "$RESPONSE_BODY" | jq -r '.result.errors[]?' | head -5)
+              # 提取错误信息 - 兼容两种响应格式
+              if [ "$DURATION" = "unknown" ]; then
+                ERRORS=$(echo "$RESPONSE_BODY" | jq -r '.errors[]?' | head -5)
+              else
+                ERRORS=$(echo "$RESPONSE_BODY" | jq -r '.result.errors[]?' | head -5)
+              fi
               if [ -n "$ERRORS" ]; then
                 echo "🔍 错误示例:"
                 echo "$ERRORS" | while read -r error; do
@@ -111,8 +133,10 @@ jobs:
               echo "failed_urls=false" >> $GITHUB_OUTPUT
             fi
           else
-            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error // "未知错误"')
+            # 尝试从不同位置提取错误信息
+            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error // .message // "API响应格式不正确"')
             echo "❌ URL刷新任务失败: $ERROR_MSG"
+            echo "完整响应: $RESPONSE_BODY"
             exit 1
           fi
 
