@@ -35,7 +35,7 @@ interface FileStatus {
   uploadStartTime?: number;
 }
 
-const SUPABASE_URL = 'https://sxsyprzckdnfyhadodhj.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/minio-presigned-upload`;
 
 const PresignedUpload: React.FC = () => {
@@ -78,8 +78,8 @@ const PresignedUpload: React.FC = () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs',
-        'authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs'
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
       },
       body: JSON.stringify({
         fileName,
