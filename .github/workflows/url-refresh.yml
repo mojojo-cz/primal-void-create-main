@@ -1,0 +1,178 @@
+name: 视频URL定时刷新
+
+on:
+  schedule:
+    # 每6小时执行一次 (北京时间: 2:00, 8:00, 14:00, 20:00)
+    - cron: '0 18,0,6,12 * * *'  # UTC时间
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      action:
+        description: '执行操作'
+        required: false
+        default: 'refresh'
+        type: choice
+        options:
+        - check
+        - refresh
+      batchSize:
+        description: '批处理大小'
+        required: false
+        default: '50'
+        type: string
+
+jobs:
+  refresh-video-urls:
+    runs-on: ubuntu-latest
+    name: 刷新视频URL
+    timeout-minutes: 10
+    
+    steps:
+      - name: 检查输入参数
+        run: |
+          echo "🚀 开始执行视频URL刷新任务"
+          echo "操作类型: ${{ github.event.inputs.action || 'refresh' }}"
+          echo "批处理大小: ${{ github.event.inputs.batchSize || '50' }}"
+          echo "触发方式: ${{ github.event_name }}"
+          echo "执行时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      - name: 检查和刷新过期URL
+        id: refresh
+        run: |
+          echo "📡 调用Supabase Edge Function..."
+          
+          # 设置请求参数
+          ACTION="${{ github.event.inputs.action || 'refresh' }}"
+          BATCH_SIZE="${{ github.event.inputs.batchSize || '50' }}"
+          
+          # 调用Supabase Edge Function
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
+            "https://sxsyprzckdnfyhadodhj.supabase.co/functions/v1/minio-url-refresh" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"action\": \"$ACTION\",
+              \"onlyExpired\": true,
+              \"batchSize\": $BATCH_SIZE
+            }")
+          
+          # 提取HTTP状态码和响应体
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1 | cut -d':' -f2)
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP状态码: $HTTP_CODE"
+          echo "API响应: $RESPONSE_BODY"
+          
+          # 检查HTTP状态码
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ API调用失败，HTTP状态码: $HTTP_CODE"
+            echo "响应内容: $RESPONSE_BODY"
+            exit 1
+          fi
+          
+          # 解析响应JSON
+          SUCCESS=$(echo "$RESPONSE_BODY" | jq -r '.success // false')
+          
+          if [ "$SUCCESS" = "true" ]; then
+            TOTAL=$(echo "$RESPONSE_BODY" | jq -r '.result.total // 0')
+            EXPIRED=$(echo "$RESPONSE_BODY" | jq -r '.result.expired // 0')
+            REFRESHED=$(echo "$RESPONSE_BODY" | jq -r '.result.refreshed // 0')
+            FAILED=$(echo "$RESPONSE_BODY" | jq -r '.result.failed // 0')
+            DURATION=$(echo "$RESPONSE_BODY" | jq -r '.duration // 0')
+            
+            echo "✅ URL刷新任务完成"
+            echo "📊 执行统计:"
+            echo "   - 总计视频: $TOTAL 个"
+            echo "   - 过期URL: $EXPIRED 个"
+            echo "   - 刷新成功: $REFRESHED 个"
+            echo "   - 刷新失败: $FAILED 个"
+            echo "   - 执行耗时: ${DURATION}ms"
+            
+            # 保存结果到环境变量
+            echo "total=$TOTAL" >> $GITHUB_OUTPUT
+            echo "expired=$EXPIRED" >> $GITHUB_OUTPUT
+            echo "refreshed=$REFRESHED" >> $GITHUB_OUTPUT
+            echo "failed=$FAILED" >> $GITHUB_OUTPUT
+            echo "duration=$DURATION" >> $GITHUB_OUTPUT
+            
+            # 如果有失败的，设置警告
+            if [ "$FAILED" -gt 0 ]; then
+              echo "⚠️  有 $FAILED 个URL刷新失败，请检查详细日志"
+              echo "failed_urls=true" >> $GITHUB_OUTPUT
+              
+              # 提取错误信息
+              ERRORS=$(echo "$RESPONSE_BODY" | jq -r '.result.errors[]?' | head -5)
+              if [ -n "$ERRORS" ]; then
+                echo "🔍 错误示例:"
+                echo "$ERRORS" | while read -r error; do
+                  echo "   - $error"
+                done
+              fi
+            else
+              echo "failed_urls=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error // "未知错误"')
+            echo "❌ URL刷新任务失败: $ERROR_MSG"
+            exit 1
+          fi
+
+      - name: 生成执行报告
+        if: always()
+        run: |
+          echo "## 📋 视频URL刷新执行报告" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**执行时间**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**触发方式**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**操作类型**: ${{ github.event.inputs.action || 'refresh' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.refresh.outcome }}" = "success" ]; then
+            echo "### ✅ 执行成功" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| 指标 | 数量 |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 总计视频 | ${{ steps.refresh.outputs.total }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 过期URL | ${{ steps.refresh.outputs.expired }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 刷新成功 | ${{ steps.refresh.outputs.refreshed }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 刷新失败 | ${{ steps.refresh.outputs.failed }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 执行耗时 | ${{ steps.refresh.outputs.duration }}ms |" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "${{ steps.refresh.outputs.failed_urls }}" = "true" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "⚠️ **注意**: 有部分URL刷新失败，请检查详细日志" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### ❌ 执行失败" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "请检查执行日志获取详细错误信息" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: 发送成功通知
+        if: success() && steps.refresh.outputs.refreshed > 0
+        run: |
+          echo "🎉 URL刷新任务执行成功"
+          echo "本次共刷新了 ${{ steps.refresh.outputs.refreshed }} 个视频URL"
+          echo "确保用户可以正常访问所有视频内容"
+
+      - name: 发送失败通知
+        if: failure()
+        run: |
+          echo "🚨 URL刷新任务执行失败"
+          echo "这可能导致用户无法正常访问视频内容"
+          echo "请立即检查以下可能的原因:"
+          echo "1. Supabase Edge Function状态"
+          echo "2. MinIO服务器连接"
+          echo "3. 环境变量配置"
+          echo "4. 网络连接问题"
+          echo ""
+          echo "紧急处理方案:"
+          echo "1. 在管理员控制台手动执行URL刷新"
+          echo "2. 检查并修复相关配置"
+          echo "3. 重新运行此工作流"
+
+      - name: 清理和总结
+        if: always()
+        run: |
+          echo "🏁 工作流执行完成"
+          echo "下次自动执行时间: $(date -d '+6 hours' -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "您也可以随时在Actions页面手动触发执行" 
