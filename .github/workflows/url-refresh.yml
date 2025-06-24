@@ -19,6 +19,14 @@ on:
         required: false
         default: '50'
         type: string
+      onlyExpired:
+        description: '只查询过期视频'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
 
 jobs:
   refresh-video-urls:
@@ -43,6 +51,7 @@ jobs:
           # 设置请求参数
           ACTION="${{ github.event.inputs.action || 'refresh' }}"
           BATCH_SIZE="${{ github.event.inputs.batchSize || '50' }}"
+          ONLY_EXPIRED="${{ github.event.inputs.onlyExpired || 'true' }}"
           
           # 调用Supabase Edge Function
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
@@ -51,7 +60,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{
               \"action\": \"$ACTION\",
-              \"onlyExpired\": true,
+              \"onlyExpired\": $ONLY_EXPIRED,
               \"batchSize\": $BATCH_SIZE
             }")
           
