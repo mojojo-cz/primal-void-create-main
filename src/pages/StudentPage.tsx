@@ -900,36 +900,38 @@ const StudentPage = () => {
                     }
                   }}
                 >
-                  <CardContent className="p-4">
+                  <CardContent className="p-0">
                     <div className="flex gap-4">
                       {/* Left: Cover Image */}
-                      <div className="w-24 h-24 flex-shrink-0">
+                      <div className="w-24 h-full flex-shrink-0 sm:w-28">
                         <img 
                           src={course.cover_image || `https://placehold.co/400x400/e2e8f0/e2e8f0/png?text=Cover`} 
                           alt={course.title}
-                          className="object-cover w-full h-full rounded-lg"
+                          className="object-cover w-full h-full"
                         />
                       </div>
                       
                       {/* Right: Course Info */}
-                      <div className="flex-1 flex flex-col justify-between min-w-0">
+                      <div className="flex-1 py-3 pr-3 flex flex-col justify-between min-w-0">
                         <div>
                           {/* Course Title */}
-                          <h3 className="font-semibold text-base leading-snug truncate mb-2">
+                          <h3 className="font-semibold text-base leading-snug truncate mb-1.5">
                             {course.title}
                           </h3>
                           
                           {/* Course Description */}
-                          <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                            {course.description}
-                          </p>
+                          <div className="text-sm text-gray-500 min-h-[20px] mb-2">
+                            <p className="truncate">{course.description}</p>
+                          </div>
                         </div>
                         
                         {/* Action Button */}
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-500">
-                            已发布课程
-                          </span>
+                          <div className="text-xs">
+                            <span className={isEnrolled ? "text-blue-600 font-medium" : "text-gray-500"}>
+                              {isEnrolled ? "已加入学习" : "未加入学习"}
+                            </span>
+                          </div>
                           
                           {isEnrolled ? (
                             <AlertDialog>
