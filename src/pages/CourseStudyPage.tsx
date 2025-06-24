@@ -12,6 +12,7 @@ import VideoPlayer from "@/components/VideoPlayer";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { useScrollToTop } from "@/hooks/useScrollToTop";
+import { CourseStudySkeleton } from "@/components/ui/course-study-skeleton";
 import { 
   CACHE_CONFIG, 
   globalVisibilityDetector, 
@@ -372,108 +373,85 @@ const CourseStudyPage = () => {
     }
 
     try {
-      // 获取课程信息
-      const { data: courseData, error: courseError } = await supabase
-        .from('courses')
-        .select('*')
-        .eq('id', courseId)
-        .eq('status', 'published')
-        .single();
+      // 使用优化的数据库函数一次性获取所有数据
+      const { data: studyData, error } = await supabase.rpc(
+        'get_course_study_data',
+        {
+          p_course_id: courseId,
+          p_user_id: user.id
+        }
+      );
 
-      if (courseError) throw courseError;
-
-      // 获取章节信息
-      const { data: chaptersData, error: chaptersError } = await supabase
-        .from('chapters')
-        .select('*')
-        .eq('course_id', courseId)
-        .order('"order"', { ascending: true });
-
-      if (chaptersError) throw chaptersError;
-
-      // 获取考点和视频信息
-      const { data: keyPointsData, error: keyPointsError } = await supabase
-        .from('key_points')
-        .select(`
-          id,
-          title,
-          description,
-          order,
-          chapter_id,
-          video_id,
-          minio_videos(
-            id,
-            title,
-            video_url,
-            minio_object_name,
-            play_url,
-            play_url_expires_at
-          )
-        `)
-        .in('chapter_id', (chaptersData || []).map(ch => ch.id)) // 🔧 修复：只获取当前课程章节的考点
-        .order('"order"', { ascending: true });
-
-      if (keyPointsError) throw keyPointsError;
-
-      // 获取视频播放进度（包含最后播放时间）
-      const { data: progressData, error: progressError } = await supabase
-        .from('video_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('course_id', courseId);
-
-      if (progressError) {
-        console.error('获取播放进度失败:', progressError);
+      if (error) {
+        console.error('获取课程学习数据失败:', error);
+        throw error;
       }
 
-      // 将进度数据映射到考点
+      if (!studyData) {
+        throw new Error('课程数据不存在');
+      }
+
+      const studyDataObj = studyData as any;
+      const courseData = studyDataObj.course;
+      const enrollmentData = studyDataObj.enrollment;
+      const chaptersData = studyDataObj.chapters;
+      const progressData = studyDataObj.progress;
+
+      // 将进度数据转换为Map格式
       const progressMap = new Map<string, VideoProgress>();
-      if (progressData) {
-        progressData.forEach(progress => {
-          if (progress.section_id) {
-            progressMap.set(progress.section_id, {
-              id: progress.id,
-              current_position: progress.current_position || 0,
-              duration: progress.duration || 0,
-              progress_percentage: progress.progress_percentage || 0,
-              is_completed: progress.is_completed || false,
-              section_id: progress.section_id,
-              video_id: progress.video_id || '',
-              last_played_at: progress.last_played_at,
-              completed_at: progress.completed_at
+      if (progressData && typeof progressData === 'object') {
+        Object.entries(progressData).forEach(([sectionId, progress]: [string, any]) => {
+          progressMap.set(sectionId, {
+            id: progress.id,
+            current_position: progress.current_position || 0,
+            duration: progress.duration || 0,
+            progress_percentage: progress.progress_percentage || 0,
+            is_completed: progress.is_completed || false,
+            section_id: progress.section_id,
+            video_id: progress.video_id || '',
+            last_played_at: progress.last_played_at,
+            completed_at: progress.completed_at
+          });
+        });
+      }
+      
+      // 创建章节映射
+      const chapterMap = new Map<string, any>();
+      if (chaptersData && Array.isArray(chaptersData)) {
+        chaptersData.forEach(chapter => {
+          chapterMap.set(chapter.id, chapter);
+        });
+      }
+
+      // 将章节和考点数据转换为sections格式（扁平化显示）
+      const formattedSections: CourseSection[] = [];
+      
+      if (chaptersData && Array.isArray(chaptersData)) {
+        chaptersData.forEach(chapter => {
+          if (chapter.key_points && Array.isArray(chapter.key_points)) {
+            chapter.key_points.forEach((keyPoint: any) => {
+              formattedSections.push({
+                id: keyPoint.id,
+                title: keyPoint.title,
+                description: keyPoint.description,
+                order: keyPoint.order,
+                course_id: courseId,
+                chapter_id: keyPoint.chapter_id,
+                video_id: keyPoint.video_id,
+                video: keyPoint.video ? {
+                  id: keyPoint.video.id,
+                  title: keyPoint.video.title,
+                  video_url: keyPoint.video.video_url,
+                  minio_object_name: keyPoint.video.minio_object_name,
+                  play_url: keyPoint.video.play_url,
+                  play_url_expires_at: keyPoint.video.play_url_expires_at,
+                } : null,
+                progress: progressMap.get(keyPoint.id) || null
+              });
             });
           }
         });
       }
-      
-      // 创建章节映射用于查找课程ID
-      const chapterMap = new Map<string, any>();
-      chaptersData?.forEach(chapter => {
-        chapterMap.set(chapter.id, chapter);
-      });
-
-      // 将考点数据转换为sections格式（扁平化显示）
-      const formattedSections: CourseSection[] = keyPointsData?.map(keyPoint => {
-        const chapter = chapterMap.get(keyPoint.chapter_id!);
-        return {
-          id: keyPoint.id,
-          title: keyPoint.title,
-          description: keyPoint.description,
-          order: keyPoint.order,
-          course_id: chapter?.course_id || courseId, // 从章节获取course_id
-          chapter_id: keyPoint.chapter_id,
-          video_id: keyPoint.video_id,
-          video: keyPoint.minio_videos ? {
-            id: (keyPoint.minio_videos as any).id,
-            title: (keyPoint.minio_videos as any).title,
-            video_url: (keyPoint.minio_videos as any).video_url,
-            minio_object_name: (keyPoint.minio_videos as any).minio_object_name,
-            play_url: (keyPoint.minio_videos as any).play_url,
-            play_url_expires_at: (keyPoint.minio_videos as any).play_url_expires_at,
-          } : null,
-          progress: progressMap.get(keyPoint.id) || null
-        };
-      }) || [];
 
       // 按章节order和考点order排序
       formattedSections.sort((a, b) => {
@@ -488,18 +466,6 @@ const CourseStudyPage = () => {
         // 如果在同一章节内，按考点顺序排序
         return a.order - b.order;
       });
-
-      // 获取学习进度
-      const { data: enrollmentData, error: enrollmentError } = await supabase
-        .from('course_enrollments')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('course_id', courseId)
-        .single();
-
-      if (enrollmentError && enrollmentError.code !== 'PGRST116') {
-        throw enrollmentError;
-      }
 
       // 更新缓存
       dataCache.current = {
@@ -2144,66 +2110,7 @@ const CourseStudyPage = () => {
   };
 
   if (isLoading && dataCache.current.isInitialLoad) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        {/* 头部导航骨架屏 */}
-        <div className="bg-white border-b sticky top-0 z-10">
-          <div className="max-w-6xl mx-auto px-3 py-2 md:px-4 md:py-4">
-            <div className="grid grid-cols-3 items-center">
-              <div className="flex justify-start">
-                <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
-              </div>
-              <div className="flex justify-center">
-                <div className="h-6 bg-gray-200 rounded w-32 animate-pulse"></div>
-              </div>
-              <div className="flex justify-end">
-                <div className="h-4 bg-gray-200 rounded w-8 animate-pulse"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 主要内容骨架屏 */}
-        <div className="max-w-6xl mx-auto px-3 py-4 md:px-4 md:py-6 space-y-6">
-          {/* 快速继续学习卡片骨架屏 */}
-          <div className="border border-gray-200 rounded-xl p-4 bg-white animate-pulse">
-            <div className="space-y-3">
-              <div className="h-5 bg-gray-200 rounded w-3/4"></div>
-              <div className="flex items-center justify-between">
-                <div className="h-4 bg-gray-200 rounded w-16"></div>
-                <div className="h-4 bg-gray-200 rounded w-20"></div>
-              </div>
-              <div className="h-10 bg-gray-200 rounded w-full"></div>
-            </div>
-          </div>
-
-          {/* 章节列表骨架屏 */}
-          <div className="border-0 shadow-sm bg-white rounded-xl">
-            <div className="p-6 pb-4">
-              <div className="h-6 bg-gray-200 rounded w-24 animate-pulse"></div>
-            </div>
-            <div className="px-3 md:px-6 space-y-3">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="border border-gray-200 rounded-xl p-3 md:p-4 animate-pulse">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-5 h-5 bg-gray-200 rounded flex-shrink-0 mt-1"></div>
-                    <div className="flex-1 space-y-2">
-                      <div className="h-5 bg-gray-200 rounded w-4/5"></div>
-                      <div className="h-4 bg-gray-200 rounded w-3/5"></div>
-                      <div className="flex items-center justify-between">
-                        <div className="h-6 bg-gray-200 rounded w-16"></div>
-                        <div className="h-4 bg-gray-200 rounded w-20"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="p-6"></div>
-          </div>
-        </div>
-      </div>
-    );
+    return <CourseStudySkeleton />;
   }
 
   if (!course || !enrollment) {

@@ -508,6 +508,14 @@ export type Database = {
         Args: { username: string }
         Returns: boolean
       }
+      get_course_study_data: {
+        Args: { p_course_id: string; p_user_id: string }
+        Returns: Json
+      }
+      get_student_page_data: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       get_email_by_username: {
         Args: { username_input: string }
         Returns: string

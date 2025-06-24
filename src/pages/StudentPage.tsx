@@ -37,6 +37,7 @@ import {
   debounce,
   OPTIMIZATION_CONFIG
 } from '@/utils/performance';
+import { StudentPageSkeleton } from "@/components/ui/student-page-skeleton";
 import KeyActivation from "@/components/KeyActivation";
 import UpgradePage from "@/pages/UpgradePage";
 
@@ -128,32 +129,52 @@ const StudentPage = () => {
     }
 
     try {
-      // 使用性能监控测量数据获取时间
-      const [coursesResult, learningResult] = await PerformanceMonitor.measure(
-        'student-data-fetch',
-        () => Promise.all([
-          fetchCoursesData(),
-          fetchLearningCoursesData()
-        ])
+      // 使用优化的数据库函数一次性获取所有数据
+      const { data: studentData, error } = await PerformanceMonitor.measure(
+        'student-data-fetch-optimized',
+        () => supabase.rpc('get_student_page_data', {
+          p_user_id: user.id
+        })
       );
+
+      if (error) {
+        console.error('获取学生页面数据失败:', error);
+        throw error;
+      }
+
+      if (!studentData) {
+        throw new Error('学生页面数据不存在');
+      }
+
+      const studentDataObj = studentData as any;
+      const coursesData = studentDataObj.courses || [];
+      const learningCoursesData = studentDataObj.learning_courses || [];
+      const enrolledCourseIdsArray = studentDataObj.enrolled_course_ids || [];
+
+      const enrolledIds = new Set<string>(enrolledCourseIdsArray);
 
       // 更新缓存
       dataCache.current = {
-        courses: coursesResult,
-        learningCourses: learningResult.courses,
+        courses: coursesData,
+        learningCourses: learningCoursesData,
         lastFetch: Date.now(),
         isInitialLoad: false,
         backgroundRefreshing: false
       };
 
       // 更新状态
-      setCourses(coursesResult);
-      setLearningCourses(learningResult.courses);
-      setEnrolledCourseIds(learningResult.enrolledIds);
+      setCourses(coursesData);
+      setLearningCourses(learningCoursesData);
+      setEnrolledCourseIds(enrolledIds);
 
     } catch (error) {
       console.error('智能数据获取失败:', error);
       dataCache.current.backgroundRefreshing = false;
+      toast({
+        variant: "destructive",
+        title: "数据加载失败",
+        description: "无法加载页面数据，请稍后重试"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -755,23 +776,7 @@ const StudentPage = () => {
   const renderContent = () => {
     // 只在真正的初始加载时显示骨架屏
     if (isLoading && dataCache.current.isInitialLoad) {
-      return (
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 p-4 bg-white rounded-xl border animate-pulse">
-              <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0"></div>
-              <div className="flex-1 space-y-3">
-                <div className="h-5 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                <div className="flex items-center justify-between">
-                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-                  <div className="h-8 bg-gray-200 rounded w-20"></div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      );
+      return <StudentPageSkeleton />;
     }
 
     // 学习中页面
