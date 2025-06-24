@@ -27,6 +27,8 @@ const formSchema = z.object({
   password: z.string().min(6, "密码至少需要6个字符"),
   confirmPassword: z.string().min(6, "确认密码至少需要6个字符"),
   phone_number: z.string().regex(/^1[3-9]\d{9}$/, "请输入有效的11位手机号码"),
+  school: z.string().min(2, "学校名称至少需要2个字符").max(100, "学校名称最多100个字符"),
+  major: z.string().max(100, "专业名称最多100个字符").optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "两次输入的密码不一致",
   path: ["confirmPassword"],
@@ -51,6 +53,8 @@ const Register = () => {
       password: "",
       confirmPassword: "",
       phone_number: "",
+      school: "",
+      major: "",
     },
   });
 
@@ -74,6 +78,8 @@ const Register = () => {
         username: values.username,
         full_name: values.full_name,
         phone_number: values.phone_number,
+        school: values.school,
+        major: values.major || null,
         user_type: "registered"
       };
       
@@ -209,6 +215,34 @@ const Register = () => {
                             {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                           </Button>
                         </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="school"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm">学校*</FormLabel>
+                      <FormControl>
+                        <Input className="h-11" placeholder="请输入就读学校" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="major"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm">专业</FormLabel>
+                      <FormControl>
+                        <Input className="h-11" placeholder="请输入专业（可选）" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
