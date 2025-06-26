@@ -15,10 +15,12 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./pages/admin/AdminLayout";
 import CourseManagement from "./pages/admin/NewCourseManagement";
 import VideoManagement from "./pages/admin/VideoManagement";
+import ScheduleManagement from "./pages/admin/ScheduleManagement";
 import AccountManagement from "./pages/admin/AccountManagement";
 import Settings from "./pages/admin/Settings";
 import KeyManagement from "./pages/admin/KeyManagement";
 import StudentPage from "./pages/StudentPage";
+import TeacherPage from "./pages/TeacherPage";
 import CourseStudyPage from "./pages/CourseStudyPage";
 import ColorShowcase from "./pages/ColorShowcase";
 
@@ -52,12 +54,12 @@ const App = () => (
               } 
             />
             
-            {/* 班主任路由 */}
+            {/* 任课老师路由 */}
             <Route 
               path="/teacher" 
               element={
-                <ProtectedRoute allowedUserTypes={["head_teacher", "business_teacher"]}>
-                  <Dashboard />
+                <ProtectedRoute allowedUserTypes={["teacher"]}>
+                  <TeacherPage />
                 </ProtectedRoute>
               } 
             />
@@ -94,6 +96,14 @@ const App = () => (
               <Route index element={<Navigate to="/admin/courses" replace />} />
               <Route path="courses" element={<CourseManagement />} />
               <Route path="videos" element={<VideoManagement />} />
+              <Route 
+                path="schedules" 
+                element={
+                  <ProtectedRoute allowedUserTypes={["admin"]}>
+                    <ScheduleManagement />
+                  </ProtectedRoute>
+                } 
+              />
               <Route path="accounts" element={<AccountManagement />} />
               <Route path="keys" element={<KeyManagement />} />
               <Route path="settings" element={<Settings />} />

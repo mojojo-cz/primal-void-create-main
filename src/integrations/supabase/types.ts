@@ -9,6 +9,238 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      activation_keys: {
+        Row: {
+          activated_at: string | null
+          activated_by_user_id: string | null
+          created_at: string
+          created_by_user_id: string
+          id: string
+          is_used: boolean
+          key: string
+          key_type: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          activated_by_user_id?: string | null
+          created_at?: string
+          created_by_user_id: string
+          id?: string
+          is_used?: boolean
+          key: string
+          key_type: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          activated_by_user_id?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          id?: string
+          is_used?: boolean
+          key?: string
+          key_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_keys_activated_by_user_id_fkey"
+            columns: ["activated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activation_keys_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_members: {
+        Row: {
+          class_id: string
+          created_at: string
+          created_by: string | null
+          enrolled_at: string | null
+          enrollment_status: string | null
+          id: string
+          notes: string | null
+          student_id: string
+          withdrawn_at: string | null
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          created_by?: string | null
+          enrolled_at?: string | null
+          enrollment_status?: string | null
+          id?: string
+          notes?: string | null
+          student_id: string
+          withdrawn_at?: string | null
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          created_by?: string | null
+          enrolled_at?: string | null
+          enrollment_status?: string | null
+          id?: string
+          notes?: string | null
+          student_id?: string
+          withdrawn_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_members_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_members_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          head_teacher_id: string | null
+          id: string
+          max_students: number | null
+          name: string
+          start_date: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          head_teacher_id?: string | null
+          id?: string
+          max_students?: number | null
+          name: string
+          start_date?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          head_teacher_id?: string | null
+          id?: string
+          max_students?: number | null
+          name?: string
+          start_date?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classes_head_teacher_id_fkey"
+            columns: ["head_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chapters: {
+        Row: {
+          course_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapters_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_schedules: {
+        Row: {
+          class_name: string
+          class_time: string
+          course_name: string
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          duration_minutes: number | null
+          id: string
+          status: string | null
+          teacher_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          class_name: string
+          class_time: string
+          course_name: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          status?: string | null
+          teacher_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          class_name?: string
+          class_time?: string
+          course_name?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          status?: string | null
+          teacher_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       course_enrollments: {
         Row: {
           course_id: string | null
@@ -46,44 +278,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "course_enrollments_course_id_fkey"
-            columns: ["course_id"]
-            isOneToOne: false
-            referencedRelation: "courses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      chapters: {
-        Row: {
-          course_id: string | null
-          created_at: string
-          description: string | null
-          id: string
-          order: number
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          course_id?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          order?: number
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          course_id?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          order?: number
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chapters_course_id_fkey"
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
@@ -129,54 +323,6 @@ export type Database = {
           },
           {
             foreignKeyName: "course_sections_video_id_fkey"
-            columns: ["video_id"]
-            isOneToOne: false
-            referencedRelation: "minio_videos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      key_points: {
-        Row: {
-          chapter_id: string | null
-          created_at: string
-          description: string | null
-          id: string
-          order: number
-          title: string
-          updated_at: string
-          video_id: string | null
-        }
-        Insert: {
-          chapter_id?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          order?: number
-          title: string
-          updated_at?: string
-          video_id?: string | null
-        }
-        Update: {
-          chapter_id?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          order?: number
-          title?: string
-          updated_at?: string
-          video_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "key_points_chapter_id_fkey"
-            columns: ["chapter_id"]
-            isOneToOne: false
-            referencedRelation: "chapters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "key_points_video_id_fkey"
             columns: ["video_id"]
             isOneToOne: false
             referencedRelation: "minio_videos"
@@ -231,6 +377,54 @@ export type Database = {
           id?: number
         }
         Relationships: []
+      }
+      key_points: {
+        Row: {
+          chapter_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          order: number
+          title: string
+          updated_at: string
+          video_id: string | null
+        }
+        Insert: {
+          chapter_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order?: number
+          title: string
+          updated_at?: string
+          video_id?: string | null
+        }
+        Update: {
+          chapter_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          order?: number
+          title?: string
+          updated_at?: string
+          video_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "key_points_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "key_points_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "minio_videos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       learning_progress: {
         Row: {
@@ -357,6 +551,130 @@ export type Database = {
         }
         Relationships: []
       }
+      schedules: {
+        Row: {
+          class_id: string
+          course_hours: number | null
+          created_at: string
+          created_by: string | null
+          duration_minutes: number | null
+          end_time: string
+          id: string
+          lesson_description: string | null
+          lesson_title: string
+          location: string | null
+          notes: string | null
+          online_meeting_url: string | null
+          schedule_date: string
+          start_time: string
+          status: string | null
+          subject_id: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          class_id: string
+          course_hours?: number | null
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number | null
+          end_time: string
+          id?: string
+          lesson_description?: string | null
+          lesson_title: string
+          location?: string | null
+          notes?: string | null
+          online_meeting_url?: string | null
+          schedule_date: string
+          start_time: string
+          status?: string | null
+          subject_id: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          class_id?: string
+          course_hours?: number | null
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number | null
+          end_time?: string
+          id?: string
+          lesson_description?: string | null
+          lesson_title?: string
+          location?: string | null
+          notes?: string | null
+          online_meeting_url?: string | null
+          schedule_date?: string
+          start_time?: string
+          status?: string | null
+          subject_id?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subjects: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          credit_hours: number | null
+          description: string | null
+          difficulty_level: string | null
+          id: string
+          name: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_by?: string | null
+          credit_hours?: number | null
+          description?: string | null
+          difficulty_level?: string | null
+          id?: string
+          name: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          credit_hours?: number | null
+          description?: string | null
+          difficulty_level?: string | null
+          id?: string
+          name?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       system_settings: {
         Row: {
           created_at: string | null
@@ -442,7 +760,7 @@ export type Database = {
             foreignKeyName: "video_progress_section_id_fkey"
             columns: ["section_id"]
             isOneToOne: false
-            referencedRelation: "course_sections"
+            referencedRelation: "key_points"
             referencedColumns: ["id"]
           },
           {
@@ -508,12 +826,54 @@ export type Database = {
         Args: { username: string }
         Returns: boolean
       }
-      get_course_study_data: {
-        Args: { p_course_id: string; p_user_id: string }
+      create_class_schedule: {
+        Args: {
+          p_class_name: string
+          p_course_name: string
+          p_teacher_name: string
+          p_class_time: string
+          p_duration_minutes?: number
+          p_description?: string
+        }
         Returns: Json
       }
-      get_student_page_data: {
-        Args: { p_user_id: string }
+      delete_class_schedule: {
+        Args: { p_schedule_id: string }
+        Returns: Json
+      }
+      enroll_student_to_schedule: {
+        Args: { p_student_id: string; p_schedule_id: string }
+        Returns: Json
+      }
+      generate_activation_key: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_admin_class_schedules: {
+        Args: {
+          p_page?: number
+          p_limit?: number
+          p_class_name?: string
+          p_course_name?: string
+          p_teacher_name?: string
+          p_status?: string
+          p_date_from?: string
+          p_date_to?: string
+        }
+        Returns: Json
+      }
+      get_available_schedules_for_student: {
+        Args: {
+          p_student_id?: string
+          p_class_name?: string
+          p_course_name?: string
+          p_date_from?: string
+          p_date_to?: string
+        }
+        Returns: Json
+      }
+      get_course_study_data: {
+        Args: { p_course_id: string; p_user_id: string }
         Returns: Json
       }
       get_email_by_username: {
@@ -524,9 +884,67 @@ export type Database = {
         Args: { username_input: string }
         Returns: string
       }
+      get_schedule_statistics: {
+        Args: { p_date_from?: string; p_date_to?: string }
+        Returns: Json
+      }
+      get_schedule_students: {
+        Args: { p_schedule_id: string; p_enrollment_status?: string }
+        Returns: Json
+      }
+      get_student_page_data: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_student_schedules: {
+        Args: { p_student_id?: string; p_status?: string }
+        Returns: Json
+      }
+      get_user_profile_for_login: {
+        Args: { user_id: string }
+        Returns: {
+          id: string
+          username: string
+          full_name: string
+          user_type: string
+          phone_number: string
+          school: string
+          department: string
+          major: string
+          grade: string
+          access_expires_at: string
+          created_at: string
+          updated_at: string
+        }[]
+      }
       get_user_type: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      reorder_sections_atomic: {
+        Args: { p_course_id: string; p_section_orders: Json }
+        Returns: string
+      }
+      update_class_schedule: {
+        Args: {
+          p_schedule_id: string
+          p_class_name?: string
+          p_course_name?: string
+          p_teacher_name?: string
+          p_class_time?: string
+          p_duration_minutes?: number
+          p_description?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      use_activation_key: {
+        Args: { p_key: string; p_user_id: string }
+        Returns: Json
+      }
+      withdraw_student_from_schedule: {
+        Args: { p_student_id: string; p_schedule_id: string }
+        Returns: Json
       }
     }
     Enums: {

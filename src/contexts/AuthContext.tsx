@@ -33,6 +33,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     switch (userType) {
       case "admin":
         return "/admin/courses";
+      case "teacher":
+        return "/teacher"; // 任课老师跳转到专属页面
       case "head_teacher":
       case "business_teacher":
         return "/admin/accounts";
@@ -147,6 +149,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setProfile(profile);
       
+      // 设置loading为false，表示用户数据已完全加载
+      setLoading(false);
+      
       // 如果在认证页面，执行重定向
       const isAuthPage = location.pathname.startsWith("/auth/");
       const isHomePage = location.pathname === "/";
@@ -244,9 +249,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (session?.user) {
         fetchProfile(session.user.id);
+      } else {
+        // 如果没有会话，直接设置loading为false
+        setLoading(false);
       }
-      
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();

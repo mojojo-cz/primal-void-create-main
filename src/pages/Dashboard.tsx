@@ -24,6 +24,11 @@ const Dashboard = () => {
           // 使用优化的滚动到顶部函数
           scrollToTopOnRouteChange();
           break;
+        case 'teacher':
+          navigate('/teacher', { replace: true });
+          // 使用优化的滚动到顶部函数
+          scrollToTopOnRouteChange();
+          break;
         case 'head_teacher':
         case 'business_teacher':
           navigate('/admin/accounts', { replace: true });

@@ -66,6 +66,8 @@ const UserAvatarDropdown: React.FC<UserAvatarDropdownProps> = ({
     switch (profile?.user_type) {
       case 'admin':
         return '管理员';
+      case 'teacher':
+        return '任课老师';
       case 'head_teacher':
         return '班主任';
       case 'business_teacher':
@@ -116,9 +118,6 @@ const UserAvatarDropdown: React.FC<UserAvatarDropdownProps> = ({
             <div className="flex flex-col space-y-1">
               <p className="text-sm font-medium leading-none">{getUserDisplayName()}</p>
               <p className="text-xs leading-none text-muted-foreground">
-                {profile?.full_name || '未设置姓名'}
-              </p>
-              <p className="text-xs leading-none text-muted-foreground">
                 {getUserTypeLabel()}
               </p>
             </div>
@@ -160,9 +159,6 @@ const UserAvatarDropdown: React.FC<UserAvatarDropdownProps> = ({
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{getUserDisplayName()}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {profile?.full_name || '未设置姓名'}
-            </p>
             <p className="text-xs leading-none text-muted-foreground">
               {getUserTypeLabel()}
             </p>

@@ -13,7 +13,8 @@ import {
   X,
   Database,
   LogOut,
-  Key
+  Key,
+  Calendar
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -93,6 +94,13 @@ const AdminLayout = () => {
         showDashboardLink: false,
         breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 视频管理`
       };
+    } else if (path.includes('/schedules')) {
+      return { 
+        title: '排课管理', 
+        breadcrumb: '排课管理',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 排课管理`
+      };
     } else if (path.includes('/accounts')) {
       return { 
         title: '账号管理', 
@@ -137,6 +145,12 @@ const AdminLayout = () => {
       label: "视频管理", 
       icon: <Video className="h-5 w-5" />,
       allowedForTeachers: false // 班主任和业务老师不可访问
+    },
+    { 
+      to: "/admin/schedules", 
+      label: "排课管理", 
+      icon: <Calendar className="h-5 w-5" />,
+      allowedForTeachers: false // 只有管理员可以访问
     },
     { 
       to: "/admin/keys", 

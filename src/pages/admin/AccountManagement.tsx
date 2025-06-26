@@ -49,6 +49,7 @@ interface Profile {
 const userTypeMap: Record<string, string> = {
   registered: "注册用户",
   student: "正式学员",
+  teacher: "任课老师",
   head_teacher: "班主任",
   business_teacher: "业务老师",
   trial_user: "体验用户",
@@ -59,6 +60,7 @@ const userTypeMap: Record<string, string> = {
 const userTypeColors: Record<string, string> = {
   registered: "text-gray-600",      // 注册用户 - 灰色
   student: "text-blue-600",         // 正式学员 - 蓝色
+  teacher: "text-indigo-600",       // 任课老师 - 靛蓝色
   head_teacher: "text-green-600",   // 班主任 - 绿色
   business_teacher: "text-purple-600", // 业务老师 - 紫色
   trial_user: "text-orange-600",    // 体验用户 - 橙色
@@ -513,8 +515,8 @@ const AccountManagement = () => {
             expiresAt = new Date(now.setMonth(now.getMonth() + 1));
           }
           // 管理员设置体验用户不自动设置过期时间
-        } else if (value === "head_teacher" || value === "business_teacher") {
-          // 管理员设置班主任和业务老师为20年后过期
+        } else if (value === "teacher" || value === "head_teacher" || value === "business_teacher") {
+          // 管理员设置任课老师、班主任和业务老师为20年后过期
           if (isAdmin) {
             expiresAt = new Date(now.setFullYear(now.getFullYear() + 20));
           }
@@ -617,6 +619,7 @@ const AccountManagement = () => {
     if (isAdmin) {
       options.push(
         { value: "student", label: "正式学员" },
+        { value: "teacher", label: "任课老师" },
         { value: "head_teacher", label: "班主任" },
         { value: "business_teacher", label: "业务老师" },
         { value: "trial_user", label: "体验用户" },
@@ -724,8 +727,8 @@ const AccountManagement = () => {
         if (isHeadTeacher || isBusinessTeacher) {
           updateData.access_expires_at = new Date(now.setMonth(now.getMonth() + 1)).toISOString();
         }
-      } else if (newUserType === "head_teacher" || newUserType === "business_teacher") {
-        // 管理员设置班主任和业务老师为20年后过期
+      } else if (newUserType === "teacher" || newUserType === "head_teacher" || newUserType === "business_teacher") {
+        // 管理员设置任课老师、班主任和业务老师为20年后过期
         if (isAdmin) {
           updateData.access_expires_at = new Date(now.setFullYear(now.getFullYear() + 20)).toISOString();
         }
@@ -760,7 +763,18 @@ const AccountManagement = () => {
     return <div className="container mx-auto p-4 md:p-8 text-center">加载用户信息中...</div>;
   }
 
-  if (!user || !profile || (profile.user_type !== 'admin' && profile.user_type !== 'head_teacher' && profile.user_type !== 'business_teacher')) {
+  if (!user || !profile) {
+    return (
+      <div className="container mx-auto p-4 md:p-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">正在验证权限...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (profile.user_type !== 'admin' && profile.user_type !== 'head_teacher' && profile.user_type !== 'business_teacher') {
     return (
       <div className="container mx-auto p-4 md:p-8">
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
@@ -773,9 +787,7 @@ const AccountManagement = () => {
                 权限受限
               </h3>
               <div className="text-sm text-yellow-700 mt-1">
-                {!user 
-                  ? "您需要登录才能访问此页面" 
-                  : "只有管理员、班主任和业务老师才能管理用户账号"}
+                只有管理员、班主任和业务老师才能管理用户账号
               </div>
             </div>
           </div>
@@ -1107,6 +1119,7 @@ const AccountManagement = () => {
                   {isAdmin && (
                     <>
                       <SelectItem value="student">正式学员</SelectItem>
+                      <SelectItem value="teacher">任课老师</SelectItem>
                       <SelectItem value="head_teacher">班主任</SelectItem>
                       <SelectItem value="business_teacher">业务老师</SelectItem>
                       <SelectItem value="trial_user">体验用户</SelectItem>

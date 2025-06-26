@@ -930,7 +930,7 @@ const StudentPage = () => {
                           <div className="text-xs">
                             <span className={isEnrolled ? "text-blue-600 font-medium" : "text-gray-500"}>
                               {isEnrolled ? "已加入学习" : "未加入学习"}
-                            </span>
+                          </span>
                           </div>
                           
                           {isEnrolled ? (

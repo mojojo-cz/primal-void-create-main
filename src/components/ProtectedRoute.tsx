@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,6 +26,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   if (!user) {
     // Redirect to login if not authenticated
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
+  }
+
+  if (user && !profile) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        <div className="ml-4 text-gray-600">正在验证权限...</div>
+      </div>
+    );
   }
 
   // Check for user role access if allowedUserTypes specified

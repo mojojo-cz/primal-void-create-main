@@ -324,12 +324,7 @@ const VideoManagement = () => {
 
   // 播放视频 - 适配MinIO视频（优化版）
   const handlePlayVideo = async (video: Video) => {
-    // 显示加载提示
-    toast({
-      title: "🎬 正在加载视频",
-      description: `准备播放：${video.title}`,
-      duration: 3000
-    });
+
     
     try {
       let playUrl = video.play_url;
