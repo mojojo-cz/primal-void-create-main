@@ -55,6 +55,7 @@ import VideoPlayer from "@/components/VideoPlayer";
 import EnhancedPagination from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
 import VideoUploadToMinIO from "@/components/VideoUploadToMinIO";
+import VideoBatchUploadToMinIO from "@/components/VideoBatchUploadToMinIO";
 
 // 视频类型 - 修改为MinIO视频类型
 interface Video {
@@ -145,6 +146,7 @@ const VideoManagement = () => {
   
   // 对话框状态
   const [uploadDialog, setUploadDialog] = useState(false);
+  const [batchUploadDialog, setBatchUploadDialog] = useState(false);
   const [folderDialog, setFolderDialog] = useState<{ open: boolean; mode: 'add' | 'edit'; folder?: VideoFolder }>({ 
     open: false, 
     mode: 'add', 
@@ -152,6 +154,9 @@ const VideoManagement = () => {
   });
   const [videoDialog, setVideoDialog] = useState<{ open: boolean; url: string; title: string }>({ 
     open: false, url: '', title: '' 
+  });
+  const [editVideoDialog, setEditVideoDialog] = useState<{ open: boolean; video?: Video }>({ 
+    open: false, video: undefined 
   });
   
   // 表单状态
@@ -161,6 +166,12 @@ const VideoManagement = () => {
     color: "blue"
   });
   const [folderSubmitting, setFolderSubmitting] = useState(false);
+  const [editVideoForm, setEditVideoForm] = useState({
+    title: "",
+    description: "",
+    folderId: "default"
+  });
+  const [editVideoSubmitting, setEditVideoSubmitting] = useState(false);
 
   // 获取视频列表
   const fetchVideos = async () => {
@@ -322,6 +333,12 @@ const VideoManagement = () => {
     await fetchVideos();
   };
 
+  // 批量上传完成处理
+  const handleBatchUploadComplete = async () => {
+    setBatchUploadDialog(false);
+    await fetchVideos();
+  };
+
   // 播放视频 - 适配MinIO视频（优化版）
   const handlePlayVideo = async (video: Video) => {
 
@@ -437,6 +454,94 @@ const VideoManagement = () => {
         title: "删除失败",
         description: error.message || "删除视频失败"
       });
+    }
+  };
+
+  // 视频编辑功能
+  const openEditVideoDialog = (video: Video) => {
+    setEditVideoDialog({ open: true, video });
+    
+    // 检测视频所属的文件夹并清理描述
+    let videoFolderId = 'default';
+    let cleanDescription = video.description || "";
+    
+    const content = `${video.title} ${video.description || ''}`.toLowerCase();
+    const customFolder = folders.find(f => !f.is_default && content.includes(f.name.toLowerCase()));
+    
+    if (customFolder) {
+      videoFolderId = customFolder.id;
+      // 移除描述中的文件夹标签，保留纯净的描述内容
+      cleanDescription = cleanDescription.replace(new RegExp(`^${customFolder.name}\\s*`, 'i'), '').trim();
+      // 如果描述就是标题，则清空描述
+      if (cleanDescription === video.title) {
+        cleanDescription = "";
+      }
+    }
+    
+    setEditVideoForm({
+      title: video.title,
+      description: cleanDescription,
+      folderId: videoFolderId
+    });
+  };
+
+  const closeEditVideoDialog = () => {
+    setEditVideoDialog({ open: false, video: undefined });
+    setEditVideoForm({
+      title: "",
+      description: "",
+      folderId: "default"
+    });
+  };
+
+  const handleEditVideoSubmit = async () => {
+    if (!editVideoForm.title.trim()) {
+      toast({
+        variant: "destructive",
+        title: "验证失败",
+        description: "视频标题不能为空"
+      });
+      return;
+    }
+
+    if (!editVideoDialog.video) return;
+
+    setEditVideoSubmitting(true);
+    
+    try {
+      // 根据选择的文件夹调整描述（用于分类）
+      let finalDescription = editVideoForm.description;
+      const selectedFolder = folders.find(f => f.id === editVideoForm.folderId);
+      if (selectedFolder && !selectedFolder.is_default) {
+        // 自定义文件夹：在描述中添加文件夹名称标签
+        finalDescription = `${selectedFolder.name} ${editVideoForm.description || editVideoForm.title}`.trim();
+      }
+
+      const { error } = await supabase
+        .from('minio_videos')
+        .update({
+          title: editVideoForm.title.trim(),
+          description: finalDescription || null
+        })
+        .eq('id', editVideoDialog.video.id);
+
+      if (error) throw error;
+
+      await fetchVideos();
+      closeEditVideoDialog();
+      
+      toast({
+        title: "更新成功",
+        description: `视频"${editVideoForm.title}"已更新`
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "更新失败",
+        description: error.message || "更新视频信息失败"
+      });
+    } finally {
+      setEditVideoSubmitting(false);
     }
   };
 
@@ -712,6 +817,16 @@ const VideoManagement = () => {
                       <Play className="h-4 w-4" />
                       <span className="hidden sm:inline ml-1">播放</span>
                     </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => openEditVideoDialog(video)}
+                      className="hover:bg-orange-100 text-orange-600 hover:text-orange-700"
+                      title="编辑视频"
+                    >
+                      <Edit className="h-4 w-4" />
+                      <span className="hidden sm:inline ml-1">编辑</span>
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button 
@@ -816,6 +931,15 @@ const VideoManagement = () => {
                 >
                   <Play className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
                   播放
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 border-orange-200 h-8 lg:h-9 w-8 lg:w-9 p-0"
+                  title="编辑视频"
+                  onClick={() => openEditVideoDialog(video)}
+                >
+                  <Edit className="h-3 w-3 lg:h-4 lg:w-4" />
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -1003,13 +1127,21 @@ const VideoManagement = () => {
                   </div>
                   
                   {/* 移动端上传按钮 */}
-                  <div className="sm:hidden">
+                  <div className="sm:hidden flex gap-2">
                     <Button 
                       onClick={() => setUploadDialog(true)}
-                      className="w-full"
+                      className="flex-1"
                     >
                       <Upload className="h-4 w-4 mr-2" />
-                      课程视频上传
+                      单个上传
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => setBatchUploadDialog(true)}
+                      className="flex-1"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      批量上传
                     </Button>
                   </div>
                 </div>
@@ -1095,10 +1227,14 @@ const VideoManagement = () => {
                     </div>
                     
                     {/* 桌面端上传按钮 */}
-                    <div className="hidden sm:block">
+                    <div className="hidden sm:flex gap-2">
                       <Button onClick={() => setUploadDialog(true)}>
                         <Upload className="h-4 w-4 mr-2" />
-                        课程视频上传
+                        单个上传
+                      </Button>
+                      <Button variant="outline" onClick={() => setBatchUploadDialog(true)}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        批量上传
                       </Button>
                     </div>
                   </div>
@@ -1123,10 +1259,16 @@ const VideoManagement = () => {
                     {searchTerm ? '尝试使用不同的关键词搜索' : '点击上传按钮添加第一个视频'}
                   </p>
                   {!searchTerm && (
-                    <Button onClick={() => setUploadDialog(true)}>
-                      <Upload className="h-4 w-4 mr-2" />
-                      课程视频上传
-                    </Button>
+                    <div className="flex gap-2 justify-center">
+                      <Button onClick={() => setUploadDialog(true)}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        单个上传
+                      </Button>
+                      <Button variant="outline" onClick={() => setBatchUploadDialog(true)}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        批量上传
+                      </Button>
+                    </div>
                   )}
                 </div>
               ) : (
@@ -1154,7 +1296,7 @@ const VideoManagement = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Upload className="h-4 w-4 sm:h-5 sm:w-5" />
-              上传视频到MinIO
+              单个视频上传到MinIO
               <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
                 预签名URL
               </span>
@@ -1166,6 +1308,31 @@ const VideoManagement = () => {
               folders={folders}
               onUploadComplete={handleUploadComplete}
               onCancel={() => setUploadDialog(false)}
+              defaultFolderId={currentFolder && currentFolder !== 'default' ? currentFolder : 'default'}
+              />
+            </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量上传视频对话框 */}
+      <Dialog open={batchUploadDialog} onOpenChange={setBatchUploadDialog}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Upload className="h-4 w-4 sm:h-5 sm:w-5" />
+              批量视频上传到MinIO
+              <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">
+                并发上传
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="max-h-[calc(90vh-8rem)] overflow-y-auto">
+            <VideoBatchUploadToMinIO
+              folders={folders}
+              onUploadComplete={handleBatchUploadComplete}
+              onCancel={() => setBatchUploadDialog(false)}
+              defaultFolderId={currentFolder && currentFolder !== 'default' ? currentFolder : 'default'}
               />
             </div>
         </DialogContent>
@@ -1183,6 +1350,66 @@ const VideoManagement = () => {
               className="w-full h-full"
             />
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑视频对话框 */}
+      <Dialog open={editVideoDialog.open} onOpenChange={closeEditVideoDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              编辑视频信息
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="videoTitle">视频标题</Label>
+              <Input
+                id="videoTitle"
+                value={editVideoForm.title}
+                onChange={(e) => setEditVideoForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="请输入视频标题"
+              />
+            </div>
+            <div>
+              <Label htmlFor="videoDescription">视频描述</Label>
+              <Textarea
+                id="videoDescription"
+                value={editVideoForm.description}
+                onChange={(e) => setEditVideoForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="请输入视频描述（可选）"
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label htmlFor="videoFolder">视频分类</Label>
+              <Select
+                value={editVideoForm.folderId}
+                onValueChange={(value) => setEditVideoForm(prev => ({ ...prev, folderId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择分类" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">默认分类</SelectItem>
+                  {folders.filter(f => !f.is_default).map(folder => (
+                    <SelectItem key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditVideoDialog} disabled={editVideoSubmitting}>
+              取消
+            </Button>
+            <Button onClick={handleEditVideoSubmit} disabled={editVideoSubmitting}>
+              {editVideoSubmitting ? '更新中...' : '更新'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

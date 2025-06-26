@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ interface VideoUploadToMinIOProps {
   folders: VideoFolder[];
   onUploadComplete: (uploadedVideoId?: string) => void;
   onCancel: () => void;
+  defaultFolderId?: string; // 新增：智能默认分类ID
 }
 
 interface UploadResponse {
@@ -51,13 +52,20 @@ interface UploadProgress {
 const SUPABASE_URL = 'https://sxsyprzckdnfyhadodhj.supabase.co';
 const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/minio-presigned-upload`;
 
-const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUploadComplete, onCancel }) => {
+const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUploadComplete, onCancel, defaultFolderId }) => {
   const [videoTitle, setVideoTitle] = useState('');
   const [videoDescription, setVideoDescription] = useState('');
-  const [selectedFolderId, setSelectedFolderId] = useState('default');
+  const [selectedFolderId, setSelectedFolderId] = useState(defaultFolderId || 'default');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // 监听defaultFolderId变化，动态更新选择的分类
+  useEffect(() => {
+    if (defaultFolderId) {
+      setSelectedFolderId(defaultFolderId);
+    }
+  }, [defaultFolderId]);
 
   // 格式化文件大小
   const formatFileSize = (bytes: number): string => {
@@ -285,21 +293,23 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 文件选择区域 - 固定高度优化 */}
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center min-h-[140px] sm:min-h-[160px] flex flex-col justify-center">
+      <div className={`border-2 border-dashed rounded-lg p-4 sm:p-6 text-center min-h-[140px] sm:min-h-[160px] flex flex-col justify-center transition-colors ${
+        selectedFile ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
+      }`}>
         {!selectedFile ? (
           <>
-        <FileVideo className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-4" />
-        <div className="space-y-1 sm:space-y-2">
-          <p className="text-base sm:text-lg font-medium text-gray-700">选择视频文件</p>
-          <p className="text-xs sm:text-sm text-gray-500">支持最大50GB视频文件</p>
-          <Input
-            type="file"
-            accept="video/*"
-            onChange={handleFileSelect}
-            disabled={uploading}
-            className="max-w-xs mx-auto text-sm"
-          />
-        </div>
+            <FileVideo className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-4" />
+            <div className="space-y-1 sm:space-y-2">
+              <p className="text-base sm:text-lg font-medium text-gray-700">选择视频文件</p>
+              <p className="text-xs sm:text-sm text-gray-500">支持最大50GB视频文件</p>
+              <Input
+                type="file"
+                accept="video/*"
+                onChange={handleFileSelect}
+                disabled={uploading}
+                className="max-w-xs mx-auto text-sm"
+              />
+            </div>
           </>
         ) : (
           <div className="space-y-2 sm:space-y-3">
@@ -307,7 +317,7 @@ const VideoUploadToMinIO: React.FC<VideoUploadToMinIOProps> = ({ folders, onUplo
               <FileVideo className="w-6 h-6 sm:w-8 sm:h-8" />
               <div className="text-center">
                 <p className="font-medium text-sm sm:text-base truncate max-w-[200px] sm:max-w-[300px]">
-                  {selectedFile.name}
+                  ✓ {selectedFile.name}
                 </p>
                 <p className="text-xs sm:text-sm text-blue-600">
                   大小: {formatFileSize(selectedFile.size)}
