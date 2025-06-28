@@ -14,7 +14,8 @@ import {
   Database,
   LogOut,
   Key,
-  Calendar
+  Calendar,
+  GraduationCap
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -80,7 +81,21 @@ const AdminLayout = () => {
   // 获取当前页面信息和面包屑导航
   const getCurrentPageInfo = () => {
     const path = location.pathname;
-    if (path.includes('/courses')) {
+    if (path.includes('/courses/online')) {
+      return { 
+        title: '自制网课管理', 
+        breadcrumb: '自制网课',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 课程管理 / 自制网课`
+      };
+    } else if (path.includes('/courses/offline')) {
+      return { 
+        title: '线下课程管理', 
+        breadcrumb: '线下课程',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 课程管理 / 线下课程`
+      };
+    } else if (path.includes('/courses')) {
       return { 
         title: '课程管理', 
         breadcrumb: '课程管理',
@@ -93,6 +108,13 @@ const AdminLayout = () => {
         breadcrumb: '视频管理',
         showDashboardLink: false,
         breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 视频管理`
+      };
+    } else if (path.includes('/classes')) {
+      return { 
+        title: '班级管理', 
+        breadcrumb: '班级管理',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 班级管理`
       };
     } else if (path.includes('/schedules')) {
       return { 
@@ -145,6 +167,12 @@ const AdminLayout = () => {
       label: "视频管理", 
       icon: <Video className="h-5 w-5" />,
       allowedForTeachers: false // 班主任和业务老师不可访问
+    },
+    { 
+      to: "/admin/classes", 
+      label: "班级管理", 
+      icon: <GraduationCap className="h-5 w-5" />,
+      allowedForTeachers: true // 班主任和业务老师可以访问
     },
     { 
       to: "/admin/schedules", 

@@ -394,6 +394,7 @@ const AccountManagement = () => {
     setResetPasswordDialog({ open: false, profile: null });
     setNewPassword("");
     setConfirmPassword("");
+    setResetPasswordSubmitting(false);
   };
 
   // 验证密码重置表单
@@ -575,8 +576,6 @@ const AccountManagement = () => {
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
-
-
 
   // 检查是否可以修改用户类型
   const canModifyUserType = (targetProfile: Profile) => {
@@ -797,7 +796,7 @@ const AccountManagement = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
+    <div className="p-4 md:p-6 lg:p-8">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">账号管理</h1>

@@ -14,7 +14,10 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLayout from "./pages/admin/AdminLayout";
 import CourseManagement from "./pages/admin/NewCourseManagement";
+import CourseManagementLayout from "./pages/admin/CourseManagementLayout";
+import SubjectManagement from "./pages/admin/SubjectManagement";
 import VideoManagement from "./pages/admin/VideoManagement";
+import ClassManagement from "./pages/admin/ClassManagement";
 import ScheduleManagement from "./pages/admin/ScheduleManagement";
 import AccountManagement from "./pages/admin/AccountManagement";
 import Settings from "./pages/admin/Settings";
@@ -94,8 +97,13 @@ const App = () => (
               } 
             >
               <Route index element={<Navigate to="/admin/courses" replace />} />
-              <Route path="courses" element={<CourseManagement />} />
+              <Route path="courses" element={<CourseManagementLayout />}>
+                <Route index element={<Navigate to="/admin/courses/offline" replace />} />
+                <Route path="offline" element={<SubjectManagement />} />
+                <Route path="online" element={<CourseManagement />} />
+              </Route>
               <Route path="videos" element={<VideoManagement />} />
+              <Route path="classes" element={<ClassManagement />} />
               <Route 
                 path="schedules" 
                 element={

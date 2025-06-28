@@ -28,7 +28,7 @@ const formSchema = z.object({
   confirmPassword: z.string().min(6, "确认密码至少需要6个字符"),
   phone_number: z.string().regex(/^1[3-9]\d{9}$/, "请输入有效的11位手机号码"),
   school: z.string().min(2, "学校名称至少需要2个字符").max(100, "学校名称最多100个字符"),
-  major: z.string().max(100, "专业名称最多100个字符").optional(),
+  major: z.string().min(2, "专业名称至少需要2个字符").max(100, "专业名称最多100个字符"),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "两次输入的密码不一致",
   path: ["confirmPassword"],
@@ -79,7 +79,7 @@ const Register = () => {
         full_name: values.full_name,
         phone_number: values.phone_number,
         school: values.school,
-        major: values.major || null,
+        major: values.major,
         user_type: "registered"
       };
       
@@ -240,9 +240,9 @@ const Register = () => {
                   name="major"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm">专业</FormLabel>
+                      <FormLabel className="text-sm">专业*</FormLabel>
                       <FormControl>
-                        <Input className="h-11" placeholder="请输入专业（可选）" {...field} />
+                        <Input className="h-11" placeholder="请输入专业" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

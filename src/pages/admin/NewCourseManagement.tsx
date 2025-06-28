@@ -7,10 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
-import { Plus, Search, Edit, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import ImageUpload from "@/components/ui/image-upload";
 
 // 考点类型
@@ -56,6 +57,15 @@ interface Video {
   created_at: string;
 }
 
+// 视频文件夹类型
+interface VideoFolder {
+  id: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  color?: string;
+}
+
 const defaultForm: TablesInsert<'courses'> = {
   title: '',
   description: '',
@@ -81,6 +91,8 @@ const NewCourseManagement = () => {
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [videoLibrary, setVideoLibrary] = useState<Video[]>([]);
+  const [videoFolders, setVideoFolders] = useState<VideoFolder[]>([]);
+  const [selectedVideoCategory, setSelectedVideoCategory] = useState<string>('all');
 
   // 课程编辑状态
   const [courseEditDialog, setCourseEditDialog] = useState<{
@@ -218,6 +230,8 @@ const NewCourseManagement = () => {
 
   useEffect(() => {
     fetchCourses();
+    fetchVideoFolders();
+    fetchVideoLibrary();
   }, []);
 
   // 获取视频库
@@ -233,6 +247,67 @@ const NewCourseManagement = () => {
     } catch (error: any) {
       console.error('获取视频库失败:', error);
     }
+  };
+
+  // 获取视频文件夹分类
+  const fetchVideoFolders = async () => {
+    try {
+      // 从本地存储加载文件夹
+      const loadFoldersFromStorage = (): VideoFolder[] => {
+        try {
+          const stored = localStorage.getItem('video_folders');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            const folderIds = parsed.map((f: VideoFolder) => f.id);
+            const defaultFolders = [{
+              id: 'default',
+              name: '默认分类',
+              description: '系统默认分类，用于存放未分类的视频',
+              is_default: true,
+              color: 'gray'
+            }];
+            const missingDefaults = defaultFolders.filter(df => !folderIds.includes(df.id));
+            return [...missingDefaults, ...parsed];
+          }
+        } catch (error) {
+          console.error('加载文件夹失败:', error);
+        }
+        return [{
+          id: 'default',
+          name: '默认分类',
+          description: '系统默认分类，用于存放未分类的视频',
+          is_default: true,
+          color: 'gray'
+        }];
+      };
+      
+      setVideoFolders(loadFoldersFromStorage());
+    } catch (error: any) {
+      console.error('获取视频分类失败:', error);
+    }
+  };
+
+  // 根据分类筛选视频
+  const getFilteredVideosByCategory = (videos: Video[], categoryId: string): Video[] => {
+    if (categoryId === 'all') return videos;
+    
+    const selectedFolder = videoFolders.find(f => f.id === categoryId);
+    if (!selectedFolder) return videos;
+    
+    if (selectedFolder.is_default && selectedFolder.id === 'default') {
+      // 默认分类：返回不属于任何自定义分类的视频
+      return videos.filter(video => {
+        const content = `${video.title} ${video.description || ''}`.toLowerCase();
+        const customFolders = videoFolders.filter(f => !f.is_default);
+        return !customFolders.some(folder => content.includes(folder.name.toLowerCase()));
+      });
+    }
+    
+    // 自定义分类：使用标签匹配
+    return videos.filter(video => {
+      const content = `${video.title} ${video.description || ''}`.toLowerCase();
+      return content.includes(selectedFolder.name.toLowerCase());
+    });
   };
 
   // 表单处理
@@ -522,6 +597,8 @@ const NewCourseManagement = () => {
   const openKeyPointDialog = (mode: 'add' | 'edit', chapterId: string, keyPoint?: KeyPointWithVideo) => {
     setKeyPointDialog({ open: true, mode, chapterId, keyPoint });
     fetchVideoLibrary();
+    fetchVideoFolders();
+    setSelectedVideoCategory('all'); // 重置分类筛选
     
     if (mode === 'edit' && keyPoint) {
       setKeyPointForm({
@@ -557,6 +634,7 @@ const NewCourseManagement = () => {
   const closeKeyPointDialog = () => {
     setKeyPointDialog({ open: false, mode: 'add', chapterId: '', keyPoint: undefined });
     setKeyPointForm({ id: '', title: '', description: '', order: 1, video_id: '', video: null });
+    setSelectedVideoCategory('all'); // 重置分类筛选
   };
 
   // 考点表单处理
@@ -748,186 +826,124 @@ const NewCourseManagement = () => {
   }
 
   return (
-    <div className="admin-page-container">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">课程管理</h1>
-          <p className="text-muted-foreground mt-1">创建和管理课程、章节和考点内容</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="搜索课程..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-64"
-            />
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+                            <CardTitle>自制网课列表</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">创建和管理课程、章节和考点内容</p>
           </div>
-          <Button onClick={() => openCourseEditDialog('add')}>新增课程</Button>
-        </div>
-      </div>
-
-      {/* 课程列表 */}
-      <Accordion type="single" collapsible className="space-y-4">
-        {filteredCourses.map((course) => (
-          <AccordionItem key={course.id} value={course.id} className="border rounded-lg">
-            <AccordionTrigger className="px-4 hover:no-underline">
-              <div className="flex justify-between items-center w-full mr-4">
-                <div className="text-left font-medium flex items-center gap-2">
-                  {course.title}
-                  <Badge className={statusColorMap[course.status] || 'bg-gray-100 text-gray-500'}>
-                    {statusMap[course.status] || course.status}
-                  </Badge>
-                </div>
-                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openCourseEditDialog('edit', course)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button size="sm" variant="destructive" className="h-8 w-8 p-0">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>确认删除</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          确定要删除课程"{course.title}"及其所有章节和考点吗？此操作不可撤销。
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>取消</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteCourse(course.id)}>
-                          确认删除
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-            </AccordionTrigger>
-            
-            <AccordionContent>
-              <div className="px-4 pb-4">
-                <div className="mb-4 text-gray-700">{course.description}</div>
-                
-                {/* 章节列表 */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium">章节</h3>
-                    <Button 
-                      size="sm" 
-                      onClick={() => openChapterDialog('add', course.id)}
-                      className="gap-1"
-                    >
-                      <Plus className="h-4 w-4" />
-                      添加章节
-                    </Button>
-                  </div>
-                  
-                  {course.chapters.length === 0 ? (
-                    <div className="text-muted-foreground text-center py-8">
-                      暂无章节，点击"添加章节"开始创建
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {course.chapters.map((chapter) => (
-                        <Card key={chapter.id} className="border-l-4 border-l-blue-500">
-                          <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <CardTitle className="text-base">{chapter.title}</CardTitle>
-                                {chapter.description && (
-                                  <p className="text-sm text-gray-600 mt-1">{chapter.description}</p>
-                                )}
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openChapterDialog('edit', course.id, chapter)}
-                                >
-                                  <Edit className="h-3 w-3" />
-                                </Button>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button size="sm" variant="destructive">
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>确认删除</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        确定要删除章节"{chapter.title}"及其所有考点吗？此操作不可撤销。
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>取消</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDeleteChapter(chapter.id)}>
-                                        确认删除
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </div>
-                            </div>
-                          </CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="搜索课程..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button onClick={() => openCourseEditDialog('add')}>
+              <Plus className="mr-2 h-4 w-4" />
+              新增课程
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-8">加载中...</div>
+          ) : (
+            <div className="space-y-4">
+              {filteredCourses.map((course) => (
+                <Accordion type="single" collapsible className="space-y-4" key={course.id}>
+                  <AccordionItem value={course.id} className="border rounded-lg">
+                    <AccordionTrigger className="px-4 hover:no-underline">
+                      <div className="flex justify-between items-center w-full mr-4">
+                        <div className="text-left font-medium flex items-center gap-2">
+                          {course.title}
+                          <Badge className={statusColorMap[course.status] || 'bg-gray-100 text-gray-500'}>
+                            {statusMap[course.status] || course.status}
+                          </Badge>
+                        </div>
+                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openCourseEditDialog('edit', course)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="destructive" className="h-8 w-8 p-0">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  确定要删除课程"{course.title}"及其所有章节和考点吗？此操作不可撤销。
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>取消</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteCourse(course.id)}>
+                                  确认删除
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    
+                    <AccordionContent>
+                      <div className="px-4 pb-4">
+                        <div className="mb-4 text-gray-700">{course.description}</div>
+                        
+                        {/* 章节列表 */}
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-medium">章节</h3>
+                            <Button 
+                              size="sm" 
+                              onClick={() => openChapterDialog('add', course.id)}
+                              className="gap-1"
+                            >
+                              <Plus className="h-4 w-4" />
+                              添加章节
+                            </Button>
+                          </div>
                           
-                          <CardContent className="pt-0">
-                            {/* 考点列表 */}
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-center">
-                                <h4 className="text-sm font-medium text-gray-700">考点</h4>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => openKeyPointDialog('add', chapter.id)}
-                                  className="gap-1 text-xs"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                  添加考点
-                                </Button>
-                              </div>
-                              
-                              {chapter.keyPoints.length === 0 ? (
-                                <div className="text-sm text-muted-foreground text-center py-4">
-                                  暂无考点，点击"添加考点"开始创建
-                                </div>
-                              ) : (
-                                <div className="space-y-2">
-                                  {chapter.keyPoints.map((keyPoint) => (
-                                    <div key={keyPoint.id} className="flex items-center justify-between p-3 bg-gray-50 rounded border">
-                                      <div className="flex-1">
-                                        <div className="font-medium text-sm">{keyPoint.title}</div>
-                                        {keyPoint.description && (
-                                          <div className="text-xs text-gray-600 mt-1">{keyPoint.description}</div>
-                                        )}
-                                        {keyPoint.video && (
-                                          <div className="text-xs text-blue-600 mt-1">
-                                            📹 {keyPoint.video.title}
-                                          </div>
+                          {course.chapters.length === 0 ? (
+                            <div className="text-muted-foreground text-center py-8">
+                              暂无章节，点击"添加章节"开始创建
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {course.chapters.map((chapter) => (
+                                <Card key={chapter.id} className="border-l-4 border-l-blue-500">
+                                  <CardHeader className="pb-2">
+                                    <div className="flex justify-between items-start">
+                                      <div>
+                                        <CardTitle className="text-base">{chapter.title}</CardTitle>
+                                        {chapter.description && (
+                                          <p className="text-sm text-gray-600 mt-1">{chapter.description}</p>
                                         )}
                                       </div>
-                                      <div className="flex gap-1 ml-2">
+                                      <div className="flex gap-2">
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          className="h-7 w-7 p-0"
-                                          onClick={() => openKeyPointDialog('edit', chapter.id, keyPoint)}
+                                          onClick={() => openChapterDialog('edit', course.id, chapter)}
                                         >
                                           <Edit className="h-3 w-3" />
                                         </Button>
                                         <AlertDialog>
                                           <AlertDialogTrigger asChild>
-                                            <Button size="sm" variant="destructive" className="h-7 w-7 p-0">
+                                            <Button size="sm" variant="destructive">
                                               <Trash2 className="h-3 w-3" />
                                             </Button>
                                           </AlertDialogTrigger>
@@ -935,12 +951,12 @@ const NewCourseManagement = () => {
                                             <AlertDialogHeader>
                                               <AlertDialogTitle>确认删除</AlertDialogTitle>
                                               <AlertDialogDescription>
-                                                确定要删除考点"{keyPoint.title}"吗？此操作不可撤销。
+                                                确定要删除章节"{chapter.title}"及其所有考点吗？此操作不可撤销。
                                               </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>
                                               <AlertDialogCancel>取消</AlertDialogCancel>
-                                              <AlertDialogAction onClick={() => handleDeleteKeyPoint(keyPoint.id)}>
+                                              <AlertDialogAction onClick={() => handleDeleteChapter(chapter.id)}>
                                                 确认删除
                                               </AlertDialogAction>
                                             </AlertDialogFooter>
@@ -948,24 +964,97 @@ const NewCourseManagement = () => {
                                         </AlertDialog>
                                       </div>
                                     </div>
-                                  ))}
-                                </div>
-                              )}
+                                  </CardHeader>
+                                  
+                                  <CardContent className="pt-0">
+                                    {/* 考点列表 */}
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between items-center">
+                                        <h4 className="text-sm font-medium text-gray-700">考点</h4>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          onClick={() => openKeyPointDialog('add', chapter.id)}
+                                          className="gap-1 text-xs"
+                                        >
+                                          <Plus className="h-3 w-3" />
+                                          添加考点
+                                        </Button>
+                                      </div>
+                                      
+                                      {chapter.keyPoints.length === 0 ? (
+                                        <div className="text-sm text-muted-foreground text-center py-4">
+                                          暂无考点，点击"添加考点"开始创建
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          {chapter.keyPoints.map((keyPoint) => (
+                                            <div key={keyPoint.id} className="flex items-center justify-between p-3 bg-gray-50 rounded border">
+                                              <div className="flex-1">
+                                                <div className="font-medium text-sm">{keyPoint.title}</div>
+                                                {keyPoint.description && (
+                                                  <div className="text-xs text-gray-600 mt-1">{keyPoint.description}</div>
+                                                )}
+                                                {keyPoint.video && (
+                                                  <div className="text-xs text-blue-600 mt-1">
+                                                    📹 {keyPoint.video.title}
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <div className="flex gap-1 ml-2">
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="h-7 w-7 p-0"
+                                                  onClick={() => openKeyPointDialog('edit', chapter.id, keyPoint)}
+                                                >
+                                                  <Edit className="h-3 w-3" />
+                                                </Button>
+                                                <AlertDialog>
+                                                  <AlertDialogTrigger asChild>
+                                                    <Button size="sm" variant="destructive" className="h-7 w-7 p-0">
+                                                      <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                  </AlertDialogTrigger>
+                                                  <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                      <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                                      <AlertDialogDescription>
+                                                        确定要删除考点"{keyPoint.title}"吗？此操作不可撤销。
+                                                      </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                      <AlertDialogCancel>取消</AlertDialogCancel>
+                                                      <AlertDialogAction onClick={() => handleDeleteKeyPoint(keyPoint.id)}>
+                                                        确认删除
+                                                      </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                  </AlertDialogContent>
+                                                </AlertDialog>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              ))}
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
-
-      {/* 课程编辑弹窗 */}
-      <Dialog open={courseEditDialog.open} onOpenChange={closeCourseEditDialog}>
+                          )}
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* 课程编辑对话框 */}
+      <Dialog open={courseEditDialog.open} onOpenChange={(isOpen) => !isOpen && closeCourseEditDialog()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{courseEditDialog.mode === 'add' ? '新增课程' : '编辑课程'}</DialogTitle>
@@ -1080,23 +1169,86 @@ const NewCourseManagement = () => {
             <div>
               <label className="block mb-2 font-medium">关联视频 *</label>
               {videoLibrary.length > 0 ? (
-                <div className="space-y-2">
-                  <select 
-                    className="w-full border rounded px-2 py-1 text-sm bg-white"
-                    value={keyPointForm.video_id || ''}
-                    onChange={(e) => handleKeyPointVideoSelect(e.target.value)}
-                    required
-                  >
-                    <option value="">请选择视频</option>
-                    {videoLibrary.map(video => (
-                      <option key={video.id} value={video.id}>
-                        {video.title}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500">
-                    选择视频后将自动填充考点标题
-                  </p>
+                <div className="space-y-3">
+                  {/* 分类筛选 */}
+                  <div>
+                    <label className="block mb-1 text-sm text-gray-600 flex items-center gap-1">
+                      <Filter className="h-3 w-3" />
+                      按分类筛选
+                    </label>
+                    <Select value={selectedVideoCategory} onValueChange={setSelectedVideoCategory}>
+                      <SelectTrigger className="w-full text-sm bg-gray-50">
+                        <SelectValue placeholder="选择分类筛选" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部分类</SelectItem>
+                        {videoFolders.map(folder => {
+                          const categoryVideos = getFilteredVideosByCategory(videoLibrary, folder.id);
+                          return (
+                            <SelectItem key={folder.id} value={folder.id}>
+                              {folder.name} ({categoryVideos.length})
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* 视频选择 */}
+                  <div>
+                    <label className="block mb-1 text-sm text-gray-600">选择视频</label>
+                    <Select 
+                      value={keyPointForm.video_id || ''}
+                      onValueChange={handleKeyPointVideoSelect}
+                    >
+                      <SelectTrigger className="w-full text-sm">
+                        <SelectValue placeholder="请选择视频" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getFilteredVideosByCategory(videoLibrary, selectedVideoCategory).length === 0 ? (
+                          <SelectItem value="" disabled>
+                            当前分类暂无视频
+                          </SelectItem>
+                        ) : (
+                          getFilteredVideosByCategory(videoLibrary, selectedVideoCategory).map(video => {
+                            // 获取视频所属分类
+                            const videoCategory = videoFolders.find(folder => {
+                              if (folder.is_default && folder.id === 'default') {
+                                const content = `${video.title} ${video.description || ''}`.toLowerCase();
+                                const customFolders = videoFolders.filter(f => !f.is_default);
+                                return !customFolders.some(f => content.includes(f.name.toLowerCase()));
+                              } else if (!folder.is_default) {
+                                const content = `${video.title} ${video.description || ''}`.toLowerCase();
+                                return content.includes(folder.name.toLowerCase());
+                              }
+                              return false;
+                            })?.name || '未分类';
+                            
+                            return (
+                              <SelectItem key={video.id} value={video.id} className="text-sm">
+                                <div className="flex flex-col items-start">
+                                  <span className="font-medium">{video.title}</span>
+                                  {selectedVideoCategory === 'all' && (
+                                    <span className="text-xs text-gray-500">[{videoCategory}]</span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-start justify-between mt-1">
+                      <p className="text-xs text-gray-500">
+                        选择视频后将自动填充考点标题
+                      </p>
+                      {selectedVideoCategory !== 'all' && (
+                        <p className="text-xs text-blue-600 font-medium">
+                          筛选中：{videoFolders.find(f => f.id === selectedVideoCategory)?.name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="text-sm text-gray-500 p-2 border rounded">
