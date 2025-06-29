@@ -639,18 +639,63 @@ const ClassManagement = () => {
       return;
     }
 
+    const classId = addStudentDialog.classId;
+    const studentsToAdd = selectedStudents;
+    
+    // 获取将要添加的学员详细信息，用于乐观更新
+    const selectedStudentDetails = availableStudents.filter(student => 
+      studentsToAdd.includes(student.id)
+    );
+
     setSubmitting(true);
+
+    // 🚀 乐观更新策略：立即更新UI，提升用户体验
+    // 1. 立即关闭对话框
+    closeAddStudentDialog();
+    
+    // 2. 立即显示成功提示
+    toast({
+      title: "添加成功",
+      description: `正在添加 ${studentsToAdd.length} 名学员到班级...`
+    });
+
+    // 3. 立即更新班级成员列表（乐观更新）
+    const optimisticMembers: ClassMember[] = selectedStudentDetails.map(student => ({
+      member_id: `temp_${student.id}_${Date.now()}`, // 临时ID
+      student_id: student.id,
+      enrollment_status: "enrolled",
+      enrolled_at: new Date().toISOString(),
+      student: student
+    }));
+
+    // 立即更新本地状态
+    setClassMembers(prev => ({
+      ...prev,
+      [classId]: [...(prev[classId] || []), ...optimisticMembers]
+    }));
+
+    // 立即更新班级列表中的学员数量
+    setClasses(prev => prev.map(classItem => {
+      if (classItem.id === classId) {
+        return {
+          ...classItem,
+          student_count: (classItem.student_count || 0) + studentsToAdd.length
+        };
+      }
+      return classItem;
+    }));
+
     try {
-      // 分别处理新学员和重新加入的学员
+      // 🔄 后台执行实际的数据库操作
       let newStudents = 0;
       let rejoinedStudents = 0;
 
-      for (const studentId of selectedStudents) {
+      for (const studentId of studentsToAdd) {
         // 检查该学员是否曾经在班级中
         const { data: existingRecord, error: checkError } = await supabase
           .from("class_members")
           .select("id, enrollment_status")
-          .eq("class_id", addStudentDialog.classId)
+          .eq("class_id", classId)
           .eq("student_id", studentId)
           .single();
 
@@ -663,8 +708,8 @@ const ClassManagement = () => {
           const { error: updateError } = await supabase
             .from("class_members")
             .update({
-              enrollment_status: "enrolled",
-              enrolled_at: new Date().toISOString()
+        enrollment_status: "enrolled",
+        enrolled_at: new Date().toISOString()
             })
             .eq("id", existingRecord.id);
 
@@ -673,12 +718,12 @@ const ClassManagement = () => {
         } else {
           // 如果记录不存在，创建新记录
           const { error: insertError } = await supabase
-            .from("class_members")
+        .from("class_members")
             .insert({
-        class_id: addStudentDialog.classId,
-        student_id: studentId,
-        enrollment_status: "enrolled",
-        enrolled_at: new Date().toISOString()
+              class_id: classId,
+              student_id: studentId,
+              enrollment_status: "enrolled",
+              enrolled_at: new Date().toISOString()
             });
 
           if (insertError) throw insertError;
@@ -686,6 +731,7 @@ const ClassManagement = () => {
         }
       }
 
+      // 🔄 后台同步完成后，更新最终提示信息
       let message = "";
       if (newStudents > 0 && rejoinedStudents > 0) {
         message = `成功添加 ${newStudents} 名新学员，${rejoinedStudents} 名学员重新加入班级`;
@@ -695,32 +741,43 @@ const ClassManagement = () => {
         message = `${rejoinedStudents} 名学员重新加入班级`;
       }
 
+      // 静默更新最终状态（获取真实的成员数据以确保数据一致性）
+      await refreshClassMembers(classId);
+      
+      // 更新成功提示
       toast({
-        title: "添加成功",
+        title: "同步完成",
         description: message
       });
 
-      closeAddStudentDialog();
+    } catch (error: any) {
+      console.error("添加学员失败:", error);
       
-      // 局部刷新：只刷新相关班级的成员列表和学员数量
-      await refreshClassMembers(addStudentDialog.classId);
+      // ❌ 发生错误时回滚乐观更新
+      // 1. 回滚成员列表
+      setClassMembers(prev => ({
+        ...prev,
+        [classId]: (prev[classId] || []).filter(member => 
+          !studentsToAdd.includes(member.student_id)
+        )
+      }));
       
-      // 更新班级列表中的学员数量（局部更新）
+      // 2. 回滚学员数量
       setClasses(prev => prev.map(classItem => {
-        if (classItem.id === addStudentDialog.classId) {
+        if (classItem.id === classId) {
           return {
             ...classItem,
-            student_count: (classItem.student_count || 0) + (newStudents + rejoinedStudents)
+            student_count: Math.max(0, (classItem.student_count || 0) - studentsToAdd.length)
           };
         }
         return classItem;
       }));
-    } catch (error: any) {
-      console.error("添加学员失败:", error);
+
+      // 3. 显示错误提示
       toast({
         variant: "destructive",
         title: "添加失败",
-        description: error.message || "添加学员时发生错误"
+        description: error.message || "添加学员时发生错误，请重试"
       });
     } finally {
       setSubmitting(false);
@@ -838,10 +895,10 @@ const ClassManagement = () => {
                   <RotateCcw className="h-4 w-4" />
                   刷新数据
                 </Button>
-                <Button onClick={() => setCreateDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  新建班级
-                </Button>
+              <Button onClick={() => setCreateDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                新建班级
+              </Button>
               </div>
             </div>
 

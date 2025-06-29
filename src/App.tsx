@@ -18,6 +18,7 @@ import CourseManagementLayout from "./pages/admin/CourseManagementLayout";
 import SubjectManagement from "./pages/admin/SubjectManagement";
 import VideoManagement from "./pages/admin/VideoManagement";
 import ClassManagement from "./pages/admin/ClassManagement";
+import VenueManagement from "./pages/admin/VenueManagement";
 import ScheduleManagement from "./pages/admin/ScheduleManagement";
 import AccountManagement from "./pages/admin/AccountManagement";
 import Settings from "./pages/admin/Settings";
@@ -104,6 +105,14 @@ const App = () => (
               </Route>
               <Route path="videos" element={<VideoManagement />} />
               <Route path="classes" element={<ClassManagement />} />
+              <Route 
+                path="venues" 
+                element={
+                  <ProtectedRoute allowedUserTypes={["admin"]}>
+                    <VenueManagement />
+                  </ProtectedRoute>
+                } 
+              />
               <Route 
                 path="schedules" 
                 element={

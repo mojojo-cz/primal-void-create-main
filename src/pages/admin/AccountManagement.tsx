@@ -505,17 +505,15 @@ const AccountManagement = () => {
             expiresAt = new Date(now.setFullYear(now.getFullYear() + 3));
           }
         } else if (value === "registered") {
-          // 班主任和业务老师设置注册用户为1个月后过期
-          if (isHeadTeacher || isBusinessTeacher) {
+          // 管理员、班主任和业务老师设置注册用户为1个月后过期
+          if (isAdmin || isHeadTeacher || isBusinessTeacher) {
             expiresAt = new Date(now.setMonth(now.getMonth() + 1));
           }
-          // 管理员设置注册用户不自动设置过期时间
         } else if (value === "trial_user") {
-          // 班主任和业务老师设置体验用户为1个月后过期
-          if (isHeadTeacher || isBusinessTeacher) {
+          // 管理员、班主任和业务老师设置体验用户为1个月后过期
+          if (isAdmin || isHeadTeacher || isBusinessTeacher) {
             expiresAt = new Date(now.setMonth(now.getMonth() + 1));
           }
-          // 管理员设置体验用户不自动设置过期时间
         } else if (value === "teacher" || value === "head_teacher" || value === "business_teacher") {
           // 管理员设置任课老师、班主任和业务老师为20年后过期
           if (isAdmin) {
@@ -717,13 +715,13 @@ const AccountManagement = () => {
           updateData.access_expires_at = new Date(now.setFullYear(now.getFullYear() + 3)).toISOString();
         }
       } else if (newUserType === "registered") {
-        // 班主任和业务老师设置注册用户为1个月后过期
-        if (isHeadTeacher || isBusinessTeacher) {
+        // 管理员、班主任和业务老师设置注册用户为1个月后过期
+        if (isAdmin || isHeadTeacher || isBusinessTeacher) {
           updateData.access_expires_at = new Date(now.setMonth(now.getMonth() + 1)).toISOString();
         }
       } else if (newUserType === "trial_user") {
-        // 班主任和业务老师设置体验用户为1个月后过期
-        if (isHeadTeacher || isBusinessTeacher) {
+        // 管理员、班主任和业务老师设置体验用户为1个月后过期
+        if (isAdmin || isHeadTeacher || isBusinessTeacher) {
           updateData.access_expires_at = new Date(now.setMonth(now.getMonth() + 1)).toISOString();
         }
       } else if (newUserType === "teacher" || newUserType === "head_teacher" || newUserType === "business_teacher") {

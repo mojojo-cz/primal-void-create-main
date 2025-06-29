@@ -15,7 +15,8 @@ import {
   LogOut,
   Key,
   Calendar,
-  GraduationCap
+  GraduationCap,
+  MapPin
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -116,6 +117,13 @@ const AdminLayout = () => {
         showDashboardLink: false,
         breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 班级管理`
       };
+    } else if (path.includes('/venues')) {
+      return { 
+        title: '场地管理', 
+        breadcrumb: '场地管理',
+        showDashboardLink: false,
+        breadcrumbPath: `${isTeacherRole ? '教师控制台' : '管理控制台'} / 场地管理`
+      };
     } else if (path.includes('/schedules')) {
       return { 
         title: '排课管理', 
@@ -173,6 +181,12 @@ const AdminLayout = () => {
       label: "班级管理", 
       icon: <GraduationCap className="h-5 w-5" />,
       allowedForTeachers: true // 班主任和业务老师可以访问
+    },
+    { 
+      to: "/admin/venues", 
+      label: "场地管理", 
+      icon: <MapPin className="h-5 w-5" />,
+      allowedForTeachers: false // 只有管理员可以访问
     },
     { 
       to: "/admin/schedules", 

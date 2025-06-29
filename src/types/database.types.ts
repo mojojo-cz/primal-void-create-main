@@ -9,6 +9,310 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      activation_keys: {
+        Row: {
+          activated_at: string | null
+          activated_by_user_id: string | null
+          created_at: string
+          created_by_user_id: string
+          id: string
+          is_used: boolean
+          key: string
+          key_type: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          activated_by_user_id?: string | null
+          created_at?: string
+          created_by_user_id: string
+          id?: string
+          is_used?: boolean
+          key: string
+          key_type: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          activated_by_user_id?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          id?: string
+          is_used?: boolean
+          key?: string
+          key_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subjects: {
+        Row: {
+          id: string
+          name: string
+          category: string
+          description: string | null
+          difficulty_level: string
+          credit_hours: number
+          status: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          category: string
+          description?: string | null
+          difficulty_level?: string
+          credit_hours?: number
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          category?: string
+          description?: string | null
+          difficulty_level?: string
+          credit_hours?: number
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      classes: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          start_date: string | null
+          end_date: string | null
+          max_students: number
+          head_teacher_id: string | null
+          status: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          start_date?: string | null
+          end_date?: string | null
+          max_students?: number
+          head_teacher_id?: string | null
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          start_date?: string | null
+          end_date?: string | null
+          max_students?: number
+          head_teacher_id?: string | null
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classes_head_teacher_id_fkey"
+            columns: ["head_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      class_members: {
+        Row: {
+          id: string
+          class_id: string
+          student_id: string
+          enrollment_status: string
+          enrolled_at: string
+          withdrawn_at: string | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          class_id: string
+          student_id: string
+          enrollment_status?: string
+          enrolled_at?: string
+          withdrawn_at?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          class_id?: string
+          student_id?: string
+          enrollment_status?: string
+          enrolled_at?: string
+          withdrawn_at?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_members_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_members_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      venues: {
+        Row: {
+          id: string
+          name: string
+          type: string
+          capacity: number | null
+          details: string | null
+          status: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          type: string
+          capacity?: number | null
+          details?: string | null
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          type?: string
+          capacity?: number | null
+          details?: string | null
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      schedules: {
+        Row: {
+          id: string
+          class_id: string
+          subject_id: string
+          teacher_id: string
+          venue_id: string | null
+          schedule_date: string
+          start_time: string
+          end_time: string
+          duration_minutes: number | null
+          lesson_title: string
+          lesson_description: string | null
+          online_meeting_url: string | null
+          course_hours: number
+          status: string
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          class_id: string
+          subject_id: string
+          teacher_id: string
+          venue_id?: string | null
+          schedule_date: string
+          start_time: string
+          end_time: string
+          duration_minutes?: number | null
+          lesson_title: string
+          lesson_description?: string | null
+          online_meeting_url?: string | null
+          course_hours?: number
+          status?: string
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          class_id?: string
+          subject_id?: string
+          teacher_id?: string
+          venue_id?: string | null
+          schedule_date?: string
+          start_time?: string
+          end_time?: string
+          duration_minutes?: number | null
+          lesson_title?: string
+          lesson_description?: string | null
+          online_meeting_url?: string | null
+          course_hours?: number
+          status?: string
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       course_enrollments: {
         Row: {
           course_id: string | null
@@ -489,3 +793,27 @@ export type MinIOVideoUpdate = TablesUpdate<'minio_videos'>
 export type CourseEnrollment = Tables<'course_enrollments'>
 export type CourseEnrollmentInsert = TablesInsert<'course_enrollments'>
 export type CourseEnrollmentUpdate = TablesUpdate<'course_enrollments'> 
+
+export type Subject = Tables<'subjects'>
+export type SubjectInsert = TablesInsert<'subjects'>
+export type SubjectUpdate = TablesUpdate<'subjects'>
+
+export type Class = Tables<'classes'>
+export type ClassInsert = TablesInsert<'classes'>
+export type ClassUpdate = TablesUpdate<'classes'>
+
+export type ClassMember = Tables<'class_members'>
+export type ClassMemberInsert = TablesInsert<'class_members'>
+export type ClassMemberUpdate = TablesUpdate<'class_members'>
+
+export type Venue = Tables<'venues'>
+export type VenueInsert = TablesInsert<'venues'>
+export type VenueUpdate = TablesUpdate<'venues'>
+
+export type Schedule = Tables<'schedules'>
+export type ScheduleInsert = TablesInsert<'schedules'>
+export type ScheduleUpdate = TablesUpdate<'schedules'>
+
+export type ActivationKey = Tables<'activation_keys'>
+export type ActivationKeyInsert = TablesInsert<'activation_keys'>
+export type ActivationKeyUpdate = TablesUpdate<'activation_keys'> 
