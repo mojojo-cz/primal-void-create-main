@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能排课工作台 - 删除同步修复报告</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #dc2626;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .problem-section {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .problem-title {
+            color: #dc2626;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .solution-section {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .solution-title {
+            color: #16a34a;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .code-block {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .before-after {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .before, .after {
+            padding: 15px;
+            border-radius: 6px;
+        }
+        .before {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+        }
+        .after {
+            background: #d1fae5;
+            border: 1px solid #a7f3d0;
+        }
+        .label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .before .label {
+            color: #dc2626;
+        }
+        .after .label {
+            color: #059669;
+        }
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .check-mark {
+            color: #16a34a;
+            font-weight: bold;
+        }
+        .step {
+            background: #eff6ff;
+            border: 1px solid #dbeafe;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .step-title {
+            color: #1e40af;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .workflow {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .workflow-title {
+            color: #374151;
+            font-weight: 600;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        ul li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 智能排课工作台 - 删除同步修复报告</h1>
+        
+        <div class="problem-section">
+            <div class="problem-title">❌ 问题描述</div>
+            <p><strong>用户反馈：</strong>选择已有课程，在预览微调区删除课程并保存后，数据库并没有更新最新数据。</p>
+            
+            <div class="workflow">
+                <div class="workflow-title">问题复现步骤：</div>
+                <ol>
+                    <li>打开智能排课工作台</li>
+                    <li>选择一个已有的课表计划</li>
+                    <li>系统加载该课表下的已有课程到预览区</li>
+                    <li>在预览微调区删除一些课程</li>
+                    <li>点击保存</li>
+                    <li><span class="highlight">结果：删除的课程仍然存在于数据库中</span></li>
+                </ol>
+            </div>
+
+            <div class="step">
+                <div class="step-title">根本原因分析：</div>
+                <ul>
+                    <li>删除操作只从前端预览列表中移除了课程</li>
+                    <li>没有记录哪些已有课程被删除</li>
+                    <li>保存时只处理了新增和更新，忽略了删除操作</li>
+                    <li>代码中有注释"这里可以添加删除逻辑"但没有实现</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="solution-section">
+            <div class="solution-title">✅ 解决方案</div>
+            <p>实现完整的删除同步机制，确保前端删除操作能正确同步到数据库。</p>
+            
+            <div class="step">
+                <div class="step-title">步骤1：添加删除状态跟踪</div>
+                <div class="before-after">
+                    <div class="before">
+                        <div class="label">修改前</div>
+                        <div class="code-block">
+// 只有预览列表状态
+const [previewSchedules, setPreviewSchedules] = 
+  useState&lt;PreviewScheduleItem[]&gt;([]);
+                        </div>
+                    </div>
+                    <div class="after">
+                        <div class="label">修改后</div>
+                        <div class="code-block">
+// 预览列表状态
+const [previewSchedules, setPreviewSchedules] = 
+  useState&lt;PreviewScheduleItem[]&gt;([]);
+// 删除的已有课程ID列表
+const [deletedScheduleIds, setDeletedScheduleIds] = 
+  useState&lt;string[]&gt;([]);
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-title">步骤2：增强删除函数</div>
+                <div class="before-after">
+                    <div class="before">
+                        <div class="label">修改前</div>
+                        <div class="code-block">
+const removeFromPreview = (id: string) => {
+  setPreviewSchedules(prev => 
+    prev.filter(item => item.id !== id)
+  );
+};
+                        </div>
+                    </div>
+                    <div class="after">
+                        <div class="label">修改后</div>
+                        <div class="code-block">
+const removeFromPreview = (id: string) => {
+  // 找到要删除的课程
+  const scheduleToRemove = previewSchedules.find(
+    item => item.id === id
+  );
+  
+  // 如果是已有课程，记录其ID用于后续删除
+  if (scheduleToRemove && scheduleToRemove.isNew === false) {
+    setDeletedScheduleIds(prev => [...prev, id]);
+  }
+  
+  // 从预览列表中移除
+  setPreviewSchedules(prev => 
+    prev.filter(item => item.id !== id)
+  );
+};
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-title">步骤3：完善保存逻辑</div>
+                <div class="before-after">
+                    <div class="before">
+                        <div class="label">修改前</div>
+                        <div class="code-block">
+// 分别处理新增和更新的排课
+const newSchedules = previewSchedules.filter(
+  item => item.isNew !== false
+);
+const updatedSchedules = previewSchedules.filter(
+  item => item.isNew === false && item.isEdited
+);
+const deletedScheduleIds: string[] = []; 
+// 这里可以添加删除逻辑
+
+// 处理删除的排课（如果有的话）
+for (const scheduleId of deletedScheduleIds) {
+  // 删除逻辑但没有successCount++
+}
+                        </div>
+                    </div>
+                    <div class="after">
+                        <div class="label">修改后</div>
+                        <div class="code-block">
+// 分别处理新增和更新的排课
+const newSchedules = previewSchedules.filter(
+  item => item.isNew !== false
+);
+const updatedSchedules = previewSchedules.filter(
+  item => item.isNew === false && item.isEdited
+);
+// 使用状态中记录的删除课程ID列表
+
+// 处理删除的排课
+for (const scheduleId of deletedScheduleIds) {
+  try {
+    const { error: deleteError } = await supabase
+      .from('schedules')
+      .delete()
+      .eq('id', scheduleId);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+    successCount++; // 记录成功删除
+  } catch (error) {
+    console.error(`删除排课失败:`, error);
+    errorCount++;
+  }
+}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-title">步骤4：优化成功提示</div>
+                <div class="before-after">
+                    <div class="before">
+                        <div class="label">修改前</div>
+                        <div class="code-block">
+toast({
+  title: "保存成功",
+  description: `成功${actionText}了 ${successCount} 节课`
+});
+                        </div>
+                    </div>
+                    <div class="after">
+                        <div class="label">修改后</div>
+                        <div class="code-block">
+const operationSummary = [];
+if (newSchedules.length > 0) 
+  operationSummary.push(`新增 ${newSchedules.length} 节`);
+if (updatedSchedules.length > 0) 
+  operationSummary.push(`更新 ${updatedSchedules.length} 节`);
+if (deletedScheduleIds.length > 0) 
+  operationSummary.push(`删除 ${deletedScheduleIds.length} 节`);
+
+toast({
+  title: "保存成功",
+  description: `成功${actionText}课程：${operationSummary.join('，')}`
+});
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-title">步骤5：状态清理</div>
+                <p>在重置工作台和选择新课表时清空删除列表：</p>
+                <div class="code-block">
+// 在 resetWorkbench() 和 handlePlanSelect() 中添加
+setDeletedScheduleIds([]);
+                </div>
+            </div>
+        </div>
+
+        <div class="solution-section">
+            <div class="solution-title">🎯 修复效果</div>
+            
+            <div class="workflow">
+                <div class="workflow-title">修复后的完整工作流程：</div>
+                <ol>
+                    <li><span class="check-mark">✓</span> 选择已有课表 → 加载课程到预览区（isNew: false）</li>
+                    <li><span class="check-mark">✓</span> 删除课程 → 记录已有课程ID到deletedScheduleIds</li>
+                    <li><span class="check-mark">✓</span> 编辑课程 → 标记为已编辑（isEdited: true）</li>
+                    <li><span class="check-mark">✓</span> 添加新课程 → 标记为新增（isNew: true）</li>
+                    <li><span class="check-mark">✓</span> 保存操作 → 分别处理新增、更新、删除三种操作</li>
+                    <li><span class="check-mark">✓</span> 数据库同步 → 所有操作都正确同步到数据库</li>
+                </ol>
+            </div>
+
+            <div class="step">
+                <div class="step-title">核心改进：</div>
+                <ul>
+                    <li><span class="check-mark">✓</span> <strong>删除跟踪</strong>：新增deletedScheduleIds状态跟踪被删除的已有课程</li>
+                    <li><span class="check-mark">✓</span> <strong>智能识别</strong>：根据isNew字段区分新课程和已有课程</li>
+                    <li><span class="check-mark">✓</span> <strong>完整同步</strong>：保存时处理新增、更新、删除三种操作</li>
+                    <li><span class="check-mark">✓</span> <strong>状态管理</strong>：在适当时机清理删除列表，避免状态污染</li>
+                    <li><span class="check-mark">✓</span> <strong>用户反馈</strong>：详细的操作结果提示，包含具体的操作数量</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="solution-section">
+            <div class="solution-title">🔄 测试验证</div>
+            <p>请按以下步骤测试修复效果：</p>
+            <ol>
+                <li>选择一个包含多节课程的已有课表</li>
+                <li>在预览微调区删除几节课程</li>
+                <li>编辑几节课程的信息</li>
+                <li>添加几节新课程</li>
+                <li>点击保存</li>
+                <li>检查数据库 - 删除的课程应该已被移除</li>
+                <li>检查成功提示 - 应显示"新增X节，更新Y节，删除Z节"</li>
+            </ol>
+        </div>
+
+        <div class="workflow">
+            <div class="workflow-title">技术细节总结：</div>
+            <ul>
+                <li><strong>文件修改</strong>：src/components/SmartScheduleWorkbench.tsx</li>
+                <li><strong>新增状态</strong>：deletedScheduleIds: string[]</li>
+                <li><strong>修改函数</strong>：removeFromPreview, handleSavePlan, resetWorkbench, handlePlanSelect</li>
+                <li><strong>数据库操作</strong>：DELETE FROM schedules WHERE id = ?</li>
+                <li><strong>向后兼容</strong>：完全兼容现有功能，只增强删除同步</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html> 

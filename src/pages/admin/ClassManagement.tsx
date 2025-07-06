@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -106,10 +107,18 @@ interface Teacher {
 }
 
 const ClassManagement = () => {
+  // 获取认证信息和用户权限
+  const { user, profile } = useAuth();
+  
   const [classes, setClasses] = useState<Class[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // 权限检查
+  const isAdmin = profile?.user_type === "admin";
+  const isHeadTeacher = profile?.user_type === "head_teacher";
+  const hasAccess = isAdmin || isHeadTeacher;
   
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
@@ -174,7 +183,7 @@ const ClassManagement = () => {
       if (error) throw error;
       
       // 直接将RPC结果转换为Class类型，无需额外的数据处理
-      const classes: Class[] = (data || []).map(item => ({
+      let classes: Class[] = (data || []).map(item => ({
         id: item.id,
         name: item.name,
         description: item.description,
@@ -192,6 +201,11 @@ const ClassManagement = () => {
         end_date: item.end_date,
         max_students: item.max_students
       }));
+      
+      // 如果是班主任，只显示被指定到自己的班级
+      if (isHeadTeacher && profile?.id) {
+        classes = classes.filter(classItem => classItem.head_teacher_id === profile.id);
+      }
       
       // 更新缓存
       setClassesCache({ data: classes, timestamp: now });
@@ -345,9 +359,11 @@ const ClassManagement = () => {
   };
 
   useEffect(() => {
-    fetchClasses();
-    fetchTeachers();
-  }, []);
+    if (hasAccess) {
+      fetchClasses();
+      fetchTeachers();
+    }
+  }, [hasAccess]);
 
   // 优化后的切换班级展开状态 - 立即响应UI，异步加载数据
   const toggleClassExpansion = (classId: string) => {
@@ -875,6 +891,30 @@ const ClassManagement = () => {
     });
   };
 
+  // 权限检查
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">正在验证权限...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <GraduationCap className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">权限不足</h2>
+          <p className="text-muted-foreground">只有管理员和班主任可以访问班级管理</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full p-4 md:p-6 lg:p-8">
       <Card>
@@ -884,6 +924,11 @@ const ClassManagement = () => {
               <CardTitle className="flex items-center gap-2">
                 <GraduationCap className="h-5 w-5" />
                 班级管理
+                {isHeadTeacher && (
+                  <span className="text-sm text-muted-foreground font-normal">
+                    (班主任视图 - 仅显示指定给您的班级)
+                  </span>
+                )}
               </CardTitle>
               <div className="flex items-center gap-2">
                 <Button 
@@ -895,10 +940,13 @@ const ClassManagement = () => {
                   <RotateCcw className="h-4 w-4" />
                   刷新数据
                 </Button>
-              <Button onClick={() => setCreateDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                新建班级
-              </Button>
+                {/* 只有管理员可以创建班级 */}
+                {isAdmin && (
+                  <Button onClick={() => setCreateDialog(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    新建班级
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1009,26 +1057,31 @@ const ClassManagement = () => {
                                 <UserPlus className="h-4 w-4" />
                                 <span className="hidden sm:inline ml-1">添加学员</span>
                               </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost"
-                                onClick={() => openEditDialog(classItem)}
-                                className="hover:bg-orange-100 text-orange-600 hover:text-orange-700"
-                              >
-                                <Edit className="h-4 w-4" />
-                                <span className="hidden sm:inline ml-1">编辑</span>
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost"
-                                    className="hover:bg-red-100 text-red-600 hover:text-red-700"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    <span className="hidden sm:inline ml-1">删除</span>
-                                  </Button>
-                                </AlertDialogTrigger>
+                              {/* 只有管理员可以编辑班级 */}
+                              {isAdmin && (
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => openEditDialog(classItem)}
+                                  className="hover:bg-orange-100 text-orange-600 hover:text-orange-700"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                  <span className="hidden sm:inline ml-1">编辑</span>
+                                </Button>
+                              )}
+                              {/* 只有管理员可以删除班级 */}
+                              {isAdmin && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button 
+                                      size="sm" 
+                                      variant="ghost"
+                                      className="hover:bg-red-100 text-red-600 hover:text-red-700"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      <span className="hidden sm:inline ml-1">删除</span>
+                                    </Button>
+                                  </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>确认删除</AlertDialogTitle>
@@ -1048,6 +1101,7 @@ const ClassManagement = () => {
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

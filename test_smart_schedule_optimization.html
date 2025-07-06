@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能排课UI优化测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+        .test-section h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        .optimization-item {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 8px 0;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+        }
+        .optimization-item strong {
+            color: #007bff;
+        }
+        .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.testing {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .checklist li:before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 智能排课UI优化测试报告</h1>
+        <p><strong>优化目标：</strong>让用户无需查阅说明书就能明白如何进行排课，提升用户交互的流畅性</p>
+        
+        <div class="test-section">
+            <h3>🔧 已完成的优化项目 <span class="status completed">已完成</span></h3>
+            
+            <div class="optimization-item">
+                <strong>1. 动态对话框标题</strong>
+                <p>✅ 根据用户操作状态动态显示：</p>
+                <ul>
+                    <li>编辑现有课表时：显示 "编辑 '课表名称'"</li>
+                    <li>创建新课表时：显示 "创建新课表并排课"</li>
+                    <li>初始状态：显示 "智能排课工作台"</li>
+                </ul>
+            </div>
+
+            <div class="optimization-item">
+                <strong>2. 优化关闭确认提示</strong>
+                <p>✅ 更友好的提示信息：</p>
+                <ul>
+                    <li>标题：从"确认关闭" → "您有未保存的排课"</li>
+                    <li>描述：更详细地说明数据丢失的后果</li>
+                </ul>
+            </div>
+
+            <div class="optimization-item">
+                <strong>3. 第一步：设置课表计划</strong>
+                <p>✅ 强化"课表计划"概念：</p>
+                <ul>
+                    <li>标题：从"创建/编辑课表" → "第一步：设置课表计划"</li>
+                    <li>说明：增加"将一系列课程归纳到一个独立的计划中，方便管理和复用"</li>
+                    <li>选择器：更明确的placeholder和选项文案</li>
+                    <li>教室字段：明确为"默认上课地点"并增加说明</li>
+                </ul>
+            </div>
+
+            <div class="optimization-item">
+                <strong>4. 第二步：指定参与学员</strong>
+                <p>✅ 明确区分学员类型：</p>
+                <ul>
+                    <li>标题：从"选择班级学员" → "第二步：指定参与学员"</li>
+                    <li>班级：明确为"主要班级"</li>
+                    <li>插班学员：增加"(可选)"标识和作用域说明</li>
+                </ul>
+            </div>
+
+            <div class="optimization-item">
+                <strong>5. 第三步：添加课程到预览列表</strong>
+                <p>✅ 强化"预览"概念：</p>
+                <ul>
+                    <li>标题：从"生成排课" → "第三步：添加课程到预览列表"</li>
+                    <li>说明：增加"使用下方工具生成单次或周期性课程，它们将出现在右侧预览区"</li>
+                    <li>按钮：单次模式显示"添加到预览列表"，批量模式显示"生成并添加到预览"</li>
+                    <li>周期选择：更明确的标签"选择每周的哪几天上课"</li>
+                </ul>
+            </div>
+
+            <div class="optimization-item">
+                <strong>6. 右侧预览区优化</strong>
+                <p>✅ 更清晰的预览体验：</p>
+                <ul>
+                    <li>标题：从"课程预览" → "排课预览区"</li>
+                    <li>计数：从"X 节课" → "共 X 节待创建课程"</li>
+                    <li>空状态：增加引导性描述</li>
+                    <li>操作提示：简化为"拖拽课程来调整顺序"</li>
+                </ul>
+            </div>
+
+            <div class="optimization-item">
+                <strong>7. 最终操作区优化</strong>
+                <p>✅ 更强的确认感：</p>
+                <ul>
+                    <li>保存按钮：动态显示"确认并创建 X 节课"或"确认并更新 X 节课"</li>
+                    <li>确认信息：明确说明"点击后，预览列表中的所有课程将被保存到 'XX' 课表中"</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 功能测试清单 <span class="status testing">测试中</span></h3>
+            <ul class="checklist">
+                <li>对话框标题在不同状态下正确显示</li>
+                <li>关闭确认对话框文案友好准确</li>
+                <li>第一步的课表概念清晰易懂</li>
+                <li>第二步的学员类型区分明确</li>
+                <li>第三步的预览概念突出</li>
+                <li>预览区空状态引导有效</li>
+                <li>最终操作区确认信息明确</li>
+                <li>所有文案符合中文表达习惯</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 用户体验目标验证</h3>
+            <p><strong>核心目标：</strong>用户无需说明书即可完成排课</p>
+            
+            <div class="optimization-item">
+                <strong>流程清晰度</strong>
+                <p>✅ 三步走流程明确：设置课表计划 → 指定参与学员 → 添加课程到预览列表</p>
+            </div>
+
+            <div class="optimization-item">
+                <strong>概念理解度</strong>
+                <p>✅ 关键概念都有清晰说明：课表计划、插班学员、预览列表等</p>
+            </div>
+
+            <div class="optimization-item">
+                <strong>操作确定性</strong>
+                <p>✅ 每个操作的结果都有明确说明，减少用户疑虑</p>
+            </div>
+
+            <div class="optimization-item">
+                <strong>错误预防</strong>
+                <p>✅ 关闭确认、保存确认等关键操作都有友好提示</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 测试建议</h3>
+            <p>建议进行以下测试来验证优化效果：</p>
+            <ol>
+                <li><strong>新用户测试：</strong>让从未使用过的用户尝试完成一次完整的排课流程</li>
+                <li><strong>任务完成度：</strong>观察用户是否能在无指导情况下完成排课</li>
+                <li><strong>疑问点记录：</strong>记录用户在操作过程中的疑问和卡点</li>
+                <li><strong>文案理解度：</strong>验证关键术语和说明是否容易理解</li>
+                <li><strong>操作流畅性：</strong>检查整个流程是否符合用户心理模型</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3>🚀 访问测试</h3>
+            <p>开发服务器应该正在运行，请访问：</p>
+            <p><strong><a href="http://localhost:5173" target="_blank">http://localhost:5173</a></strong></p>
+            <p>登录后进入"排课管理"页面，点击"智能排课"按钮开始测试。</p>
+        </div>
+    </div>
+
+    <script>
+        // 简单的交互增强
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('智能排课UI优化测试页面已加载');
+            console.log('优化项目数量:', document.querySelectorAll('.optimization-item').length);
+            console.log('测试清单项目数量:', document.querySelectorAll('.checklist li').length);
+        });
+    </script>
+</body>
+</html> 

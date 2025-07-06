@@ -10,9 +10,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import VideoPlayer from "@/components/VideoPlayer";
 import { getGlobalSettings } from "@/utils/systemSettings";
-import { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+
 import { useScrollToTop } from "@/hooks/useScrollToTop";
 import { CourseStudySkeleton } from "@/components/ui/course-study-skeleton";
+import { toSafeISOString } from '@/utils/timezone';
 import { 
   CACHE_CONFIG, 
   globalVisibilityDetector, 
@@ -152,7 +153,7 @@ const CourseStudyPage = () => {
       const { error } = await supabase
         .from('course_enrollments')
         .update({
-          last_accessed_at: new Date().toISOString()
+          last_accessed_at: toSafeISOString(new Date())
         })
         .eq('id', enrollment.id);
 
@@ -161,7 +162,7 @@ const CourseStudyPage = () => {
       // 更新本地状态
       setEnrollment(prev => prev ? {
         ...prev,
-        last_accessed_at: new Date().toISOString()
+        last_accessed_at: toSafeISOString(new Date())
       } : null);
 
     } catch (error: any) {
@@ -924,7 +925,7 @@ const CourseStudyPage = () => {
             duration: section.progress.duration,
             progress_percentage: 0,
             is_completed: false,
-            last_played_at: new Date().toISOString(),
+            last_played_at: toSafeISOString(new Date()),
             completed_at: null
           }, {
             onConflict: 'user_id,section_id'
@@ -941,7 +942,7 @@ const CourseStudyPage = () => {
               current_position: 0,
               progress_percentage: 0,
               is_completed: false,
-              last_played_at: new Date().toISOString(),
+              last_played_at: toSafeISOString(new Date()),
               completed_at: null
             } : null
           } : s
@@ -1045,7 +1046,7 @@ const CourseStudyPage = () => {
         .update({
           progress: newProgress,
           status: newStatus,
-          last_accessed_at: new Date().toISOString()
+          last_accessed_at: toSafeISOString(new Date())
         })
         .eq('id', enrollment.id);
 
@@ -1056,7 +1057,7 @@ const CourseStudyPage = () => {
         ...prev,
         progress: newProgress,
         status: newStatus as 'not_started' | 'learning' | 'completed' | 'paused',
-        last_accessed_at: new Date().toISOString()
+        last_accessed_at: toSafeISOString(new Date())
       } : null);
 
 

@@ -56,6 +56,7 @@ import EnhancedPagination from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
 import VideoUploadToMinIO from "@/components/VideoUploadToMinIO";
 import VideoBatchUploadToMinIO from "@/components/VideoBatchUploadToMinIO";
+import { formatDateForDisplay, formatDateTimeForDisplay } from "@/utils/timezone";
 
 // 视频类型 - 修改为MinIO视频类型
 interface Video {
@@ -752,7 +753,7 @@ const VideoManagement = () => {
                       </div>
                       <div className="text-xs text-muted-foreground md:hidden mt-1 flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        <span>{new Date(video.created_at).toLocaleDateString('zh-CN')}</span>
+                        <span>{formatDateForDisplay(video.created_at)}</span>
                       </div>
                     </div>
                   </div>
@@ -800,8 +801,8 @@ const VideoManagement = () => {
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     <Calendar className="h-4 w-4 flex-shrink-0" />
                     <div className="flex flex-col">
-                      <span>{new Date(video.created_at).toLocaleDateString('zh-CN')}</span>
-                      <span className="text-xs">{new Date(video.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span>{formatDateForDisplay(video.created_at)}</span>
+                      <span className="text-xs">{formatDateTimeForDisplay(video.created_at)}</span>
                     </div>
                   </div>
                 </TableCell>
@@ -918,9 +919,9 @@ const VideoManagement = () => {
               <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{new Date(video.created_at).toLocaleDateString('zh-CN')}</span>
+                  <span className="truncate">{formatDateForDisplay(video.created_at)}</span>
                 </div>
-                <span className="flex-shrink-0 hidden sm:block">{new Date(video.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="flex-shrink-0 hidden sm:block">{formatDateTimeForDisplay(video.created_at)}</span>
               </div>
               <div className="flex items-center gap-2 pt-2 border-t">
                 <Button 

@@ -9,6 +9,12 @@ import { toast } from "@/components/ui/use-toast";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { scrollToTopAfterLoad } from "@/utils/scrollToTop";
+import { 
+  formatDateForDisplay, 
+  formatTimeForDisplay, 
+  getCurrentWeekRange as getWeekRange,
+  formatForDateInput
+} from "@/utils/timezone";
 
 interface Schedule {
   id: string;
@@ -54,15 +60,13 @@ const TeacherPage = () => {
 
   // 获取当前周的日期范围
   const getCurrentWeekRange = () => {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = 周日, 1 = 周一, ...
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const { monday: baseMonday, sunday: baseSunday } = getWeekRange();
     
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + daysToMonday + (currentWeek * 7));
+    const monday = new Date(baseMonday);
+    monday.setDate(monday.getDate() + (currentWeek * 7));
     
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
+    const sunday = new Date(baseSunday);
+    sunday.setDate(sunday.getDate() + (currentWeek * 7));
     
     return { monday, sunday };
   };
@@ -84,8 +88,8 @@ const TeacherPage = () => {
           subjects!inner(name)
         `)
         .eq('teacher_id', profile.id)
-        .gte('schedule_date', monday.toISOString().split('T')[0])
-        .lte('schedule_date', sunday.toISOString().split('T')[0])
+        .gte('schedule_date', formatForDateInput(monday))
+        .lte('schedule_date', formatForDateInput(sunday))
         .order('schedule_date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -115,16 +119,12 @@ const TeacherPage = () => {
 
   // 格式化时间
   const formatTime = (time: string) => {
-    return time.substring(0, 5); // HH:MM
+    return formatTimeForDisplay(time);
   };
 
   // 格式化日期
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      weekday: 'short'
-    });
+    return formatDateForDisplay(date, true); // 包含星期几
   };
 
   // 获取状态标签
@@ -156,7 +156,7 @@ const TeacherPage = () => {
   // 获取日期范围文本
   const getDateRangeText = () => {
     const { monday, sunday } = getCurrentWeekRange();
-    return `${monday.toLocaleDateString('zh-CN')} - ${sunday.toLocaleDateString('zh-CN')}`;
+    return `${formatDateForDisplay(monday)} - ${formatDateForDisplay(sunday)}`;
   };
 
   // 刷新课表

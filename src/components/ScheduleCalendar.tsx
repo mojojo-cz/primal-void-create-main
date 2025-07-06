@@ -8,10 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, List, Grid3X3, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-// 导入CSS样式
-import '@fullcalendar/core/main.css';
-import '@fullcalendar/daygrid/main.css';
-import '@fullcalendar/timegrid/main.css';
+// FullCalendar样式将通过内联样式处理
 
 interface ScheduleWithDetails {
   id: string;
@@ -32,6 +29,9 @@ interface ScheduleWithDetails {
   teacher_name: string;
   teacher_full_name?: string;
   venue_name?: string;
+  // 新增计划相关字段
+  plan_name?: string;
+  participants_count?: number;
 }
 
 interface ScheduleCalendarProps {
@@ -40,6 +40,10 @@ interface ScheduleCalendarProps {
   onDateClick?: (date: Date) => void;
   onEventDrop?: (info: any) => void;
   loading?: boolean;
+  planColorMap?: { [key: string]: string };
+  schedulePlans?: any[];
+  filterPlan?: string;
+  onPlanFilterChange?: (plan: string) => void;
 }
 
 const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
@@ -47,7 +51,11 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
   onEventClick,
   onDateClick,
   onEventDrop,
-  loading = false
+  loading = false,
+  planColorMap = {},
+  schedulePlans = [],
+  filterPlan = "all",
+  onPlanFilterChange
 }) => {
   const calendarRef = useRef<FullCalendar>(null);
   const [currentView, setCurrentView] = React.useState('dayGridMonth');
@@ -58,35 +66,43 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
       const startDateTime = `${schedule.schedule_date}T${schedule.start_time}`;
       const endDateTime = `${schedule.schedule_date}T${schedule.end_time}`;
       
-      // 根据状态确定颜色
-      const getEventColor = (status: string) => {
-        switch (status) {
+      // 根据课表确定颜色，如果没有计划颜色则根据状态确定
+      const getPlanColor = () => {
+        if (schedule.plan_name && planColorMap[schedule.plan_name]) {
+          return planColorMap[schedule.plan_name];
+        }
+        // 回退到状态颜色
+        switch (schedule.status) {
           case 'scheduled': return '#3b82f6'; // 蓝色
           case 'in_progress': return '#10b981'; // 绿色
           case 'completed': return '#6b7280'; // 灰色
           case 'cancelled': return '#ef4444'; // 红色
-          default: return '#3b82f6';
+          default: return planColorMap['其他排课'] || '#6b7280';
         }
       };
+
+      const eventColor = getPlanColor();
 
       return {
         id: schedule.id,
         title: schedule.lesson_title,
         start: startDateTime,
         end: endDateTime,
-        backgroundColor: getEventColor(schedule.status),
-        borderColor: getEventColor(schedule.status),
+        backgroundColor: eventColor,
+        borderColor: eventColor,
         extendedProps: {
           schedule: schedule,
           className: schedule.class_name,
           subjectName: schedule.subject_name,
           teacherName: schedule.teacher_full_name || schedule.teacher_name,
           venueName: schedule.venue_name || '在线课程',
-          status: schedule.status
+          status: schedule.status,
+          planName: schedule.plan_name || '未分配计划',
+          participantsCount: schedule.participants_count || 0
         }
       };
     });
-  }, [schedules]);
+  }, [schedules, planColorMap]);
 
   // 处理事件点击
   const handleEventClick = useCallback((info: any) => {
@@ -198,9 +214,42 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
           </div>
         </div>
 
-        {/* 状态图例 */}
-        <div className="flex flex-wrap items-center gap-4 pt-2 border-t">
-          <span className="text-sm font-medium">状态图例：</span>
+        {/* 课表筛选器和图例 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t">
+          {/* 课表筛选器 */}
+          {onPlanFilterChange && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">筛选计划：</span>
+                             <select 
+                 value={filterPlan} 
+                 onChange={(e) => onPlanFilterChange(e.target.value)}
+                 className="text-sm border rounded px-2 py-1 bg-background"
+               >
+                 <option value="all">全部计划</option>
+                 {schedulePlans.map((plan) => (
+                   <option key={plan.id} value={plan.id}>
+                     {plan.name}
+                   </option>
+                 ))}
+               </select>
+            </div>
+          )}
+          
+          {/* 课表颜色图例 */}
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="text-sm font-medium">计划图例：</span>
+            {schedulePlans.length > 0 ? (
+              schedulePlans.slice(0, 5).map((plan) => (
+                <div key={plan.id} className="flex items-center gap-1">
+                  <div 
+                    className="w-3 h-3 rounded" 
+                    style={{ backgroundColor: planColorMap[plan.id] || '#6b7280' }}
+                  ></div>
+                  <span className="text-xs truncate max-w-20">{plan.name}</span>
+                </div>
+              ))
+            ) : (
+              <>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded bg-blue-500"></div>
             <span className="text-xs">已安排</span>
@@ -213,9 +262,11 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
             <div className="w-3 h-3 rounded bg-gray-500"></div>
             <span className="text-xs">已完成</span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded bg-red-500"></div>
-            <span className="text-xs">已取消</span>
+              </>
+            )}
+            {schedulePlans.length > 5 && (
+              <span className="text-xs text-muted-foreground">等{schedulePlans.length}个计划</span>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -270,51 +321,114 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
                 );
               }}
               eventMouseEnter={(info) => {
-                // 可以在这里添加悬停提示
-                info.el.title = `${info.event.title}\n班级: ${info.event.extendedProps.className}\n教师: ${info.event.extendedProps.teacherName}\n地点: ${info.event.extendedProps.venueName}`;
+                // 增强的悬停提示信息
+                const props = info.event.extendedProps;
+                const participantText = props.participantsCount > 0 
+                  ? `${props.className} + ${props.participantsCount}名额外学员`
+                  : props.className;
+                
+                info.el.title = [
+                  `课程: ${info.event.title}`,
+                  `所属计划: ${props.planName}`,
+                  `参与方: ${participantText}`,
+                  `教师: ${props.teacherName}`,
+                  `地点: ${props.venueName}`,
+                  `状态: ${props.status}`,
+                  '',
+                  '点击查看详情 | 拖拽调整时间'
+                ].join('\n');
               }}
             />
           </div>
         )}
       </CardContent>
 
-      {/* 自定义样式 */}
-      <style jsx>{`
-        .calendar-container {
-          --fc-border-color: #e5e7eb;
-          --fc-button-text-color: #374151;
-          --fc-button-bg-color: #f9fafb;
-          --fc-button-border-color: #d1d5db;
-          --fc-button-hover-bg-color: #f3f4f6;
-          --fc-button-active-bg-color: #e5e7eb;
-          --fc-today-bg-color: #fef3c7;
-          --fc-event-text-color: #ffffff;
-        }
-        
-        .calendar-container .fc-event {
-          border-radius: 4px;
-          border: none;
-          font-size: 12px;
-          cursor: pointer;
-        }
-        
-        .calendar-container .fc-event:hover {
-          opacity: 0.9;
-        }
-        
-        .calendar-container .fc-day-today {
-          background-color: var(--fc-today-bg-color) !important;
-        }
-        
-        .calendar-container .fc-col-header-cell {
-          background-color: #f9fafb;
-          border-color: var(--fc-border-color);
-        }
-        
-        .calendar-container .fc-scrollgrid {
-          border-color: var(--fc-border-color);
-        }
-      `}</style>
+      {/* FullCalendar自定义样式 */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .calendar-container .fc {
+            font-family: inherit;
+            font-size: 14px;
+          }
+          
+          .calendar-container .fc-theme-standard .fc-scrollgrid {
+            border: 1px solid #e5e7eb;
+          }
+          
+          .calendar-container .fc-theme-standard .fc-scrollgrid td,
+          .calendar-container .fc-theme-standard .fc-scrollgrid th {
+            border-color: #e5e7eb;
+          }
+          
+          .calendar-container .fc-col-header-cell {
+            background-color: #f9fafb;
+            padding: 8px;
+            font-weight: 600;
+            color: #374151;
+          }
+          
+          .calendar-container .fc-daygrid-day {
+            background-color: #ffffff;
+          }
+          
+          .calendar-container .fc-day-today {
+            background-color: #fef3c7 !important;
+          }
+          
+          .calendar-container .fc-daygrid-event {
+            border-radius: 4px;
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            margin: 1px;
+            padding: 2px 4px;
+          }
+          
+          .calendar-container .fc-daygrid-event:hover {
+            opacity: 0.9;
+          }
+          
+          .calendar-container .fc-timegrid-event {
+            border-radius: 4px;
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+          }
+          
+          .calendar-container .fc-timegrid-event:hover {
+            opacity: 0.9;
+          }
+          
+          .calendar-container .fc-event-title {
+            color: white;
+            font-weight: 500;
+          }
+          
+          .calendar-container .fc-daygrid-day-number {
+            color: #374151;
+            font-weight: 500;
+            padding: 4px;
+          }
+          
+          .calendar-container .fc-timegrid-slot-label {
+            color: #6b7280;
+            font-size: 12px;
+          }
+          
+          .calendar-container .fc-timegrid-axis {
+            border-color: #e5e7eb;
+          }
+          
+          .calendar-container .fc-timegrid-divider {
+            border-color: #e5e7eb;
+          }
+          
+          .calendar-container .fc-more-link {
+            color: #3b82f6;
+            font-size: 11px;
+          }
+        `
+      }} />
     </Card>
   );
 };

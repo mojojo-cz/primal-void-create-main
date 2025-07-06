@@ -18,6 +18,7 @@ import { EnhancedPagination } from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
 import { copyKeyToClipboard } from "@/utils/clipboard";
 import "@/styles/clipboard.css";
+import { formatDateTimeForDisplay } from "@/utils/timezone";
 
 // 激活密钥类型
 interface ActivationKey {
@@ -174,7 +175,7 @@ const KeyManagement = () => {
   // 格式化日期时间
   const formatDateTime = (dateString: string | null) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleString('zh-CN');
+    return formatDateTimeForDisplay(dateString);
   };
 
   // 获取激活者显示名称

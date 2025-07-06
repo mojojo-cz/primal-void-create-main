@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能排课工作台API测试</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            line-height: 1.6;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .loading { background-color: #fff3cd; border-color: #ffeaa7; }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 3px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+        pre { 
+            background: #f8f9fa; 
+            padding: 10px; 
+            border-radius: 3px; 
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 智能排课工作台 API 连接测试</h1>
+    
+    <div class="test-section">
+        <h3>📋 环境配置检查</h3>
+        <div id="envCheck">检查中...</div>
+    </div>
+
+    <div class="test-section">
+        <h3>🏢 测试基础数据加载</h3>
+        <button onclick="testBaseData()">测试基础数据加载</button>
+        <div id="baseDataResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📅 测试课表计划列表</h3>
+        <button onclick="testSchedulePlans()">获取课表计划列表</button>
+        <div id="schedulePlansResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>✨ 测试创建课表计划</h3>
+        <button onclick="testCreatePlan()">创建测试计划</button>
+        <div id="createPlanResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📚 测试批量排课创建</h3>
+        <button onclick="testBatchSchedules()">测试批量排课</button>
+        <div id="batchSchedulesResult"></div>
+    </div>
+
+    <script>
+        // 初始化 Supabase 客户端
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // 需要替换为实际URL
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // 需要替换为实际密钥
+        
+        let supabase;
+        
+        // 检查环境配置
+        function checkEnvironment() {
+            const envCheck = document.getElementById('envCheck');
+            
+            if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY') {
+                envCheck.innerHTML = `
+                    <div class="error">
+                        <strong>❌ 环境配置缺失</strong><br>
+                        请在此文件中设置正确的 SUPABASE_URL 和 SUPABASE_ANON_KEY
+                    </div>
+                `;
+                return false;
+            }
+            
+            try {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                envCheck.innerHTML = `
+                    <div class="success">
+                        <strong>✅ 环境配置正常</strong><br>
+                        Supabase 客户端初始化成功
+                    </div>
+                `;
+                return true;
+            } catch (error) {
+                envCheck.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Supabase 初始化失败</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+                return false;
+            }
+        }
+
+        // 测试基础数据加载
+        async function testBaseData() {
+            const resultDiv = document.getElementById('baseDataResult');
+            resultDiv.innerHTML = '<div class="loading">⏳ 正在加载基础数据...</div>';
+            
+            try {
+                // 测试班级数据
+                const { data: classes, error: classesError } = await supabase
+                    .from('classes')
+                    .select('id, name, description')
+                    .eq('status', 'active')
+                    .limit(5);
+                
+                if (classesError) throw classesError;
+
+                // 测试科目数据
+                const { data: subjects, error: subjectsError } = await supabase
+                    .from('subjects')
+                    .select('id, name, category')
+                    .eq('status', 'active')
+                    .limit(5);
+                
+                if (subjectsError) throw subjectsError;
+
+                // 测试教师数据
+                const { data: teachers, error: teachersError } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, username')
+                    .eq('user_type', 'teacher')
+                    .limit(5);
+                
+                if (teachersError) throw teachersError;
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <strong>✅ 基础数据加载成功</strong><br>
+                        班级: ${classes?.length || 0} 个<br>
+                        科目: ${subjects?.length || 0} 个<br>
+                        教师: ${teachers?.length || 0} 个<br>
+                        <details>
+                            <summary>查看详细数据</summary>
+                            <pre>${JSON.stringify({ classes, subjects, teachers }, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ 基础数据加载失败</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 测试课表计划列表
+        async function testSchedulePlans() {
+            const resultDiv = document.getElementById('schedulePlansResult');
+            resultDiv.innerHTML = '<div class="loading">⏳ 正在获取课表计划...</div>';
+            
+            try {
+                const { data, error } = await supabase.rpc('get_schedule_plans_with_stats', {
+                    p_limit: 10,
+                    p_offset: 0,
+                    p_status: 'active'
+                });
+
+                if (error) throw error;
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <strong>✅ 课表计划获取成功</strong><br>
+                        找到 ${data?.length || 0} 个活跃计划<br>
+                        <details>
+                            <summary>查看详细数据</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ 课表计划获取失败</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 测试创建课表计划
+        async function testCreatePlan() {
+            const resultDiv = document.getElementById('createPlanResult');
+            resultDiv.innerHTML = '<div class="loading">⏳ 正在创建测试计划...</div>';
+            
+            try {
+                // 首先获取基础数据用于创建
+                const { data: classes } = await supabase
+                    .from('classes').select('id').limit(1);
+                const { data: subjects } = await supabase
+                    .from('subjects').select('id').limit(1);
+                const { data: teachers } = await supabase
+                    .from('profiles').select('id').eq('user_type', 'teacher').limit(1);
+
+                if (!classes?.[0] || !subjects?.[0] || !teachers?.[0]) {
+                    throw new Error('缺少基础数据：需要至少有一个班级、科目和教师');
+                }
+
+                const testPlanData = {
+                    p_plan_name: `测试计划_${Date.now()}`,
+                    p_plan_description: '这是一个API测试创建的课表计划',
+                    p_class_id: classes[0].id,
+                    p_subject_id: subjects[0].id,
+                    p_teacher_id: teachers[0].id,
+                    p_start_date: '2025-02-01',
+                    p_end_date: '2025-06-30',
+                    p_additional_student_ids: []
+                };
+
+                const { data, error } = await supabase.rpc('create_schedule_plan_with_participants', testPlanData);
+
+                if (error) throw error;
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <strong>✅ 课表计划创建成功</strong><br>
+                        计划ID: ${data.plan_id}<br>
+                        <details>
+                            <summary>查看详细数据</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ 课表计划创建失败</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 测试批量排课创建
+        async function testBatchSchedules() {
+            const resultDiv = document.getElementById('batchSchedulesResult');
+            resultDiv.innerHTML = '<div class="loading">⏳ 正在测试批量排课...</div>';
+            
+            try {
+                // 首先获取一个存在的计划
+                const { data: plans } = await supabase.rpc('get_schedule_plans_with_stats', {
+                    p_limit: 1,
+                    p_status: 'active'
+                });
+
+                if (!plans?.[0]) {
+                    throw new Error('没有找到活跃的课表计划，请先创建一个计划');
+                }
+
+                const planId = plans[0].id;
+                const testSchedules = [
+                    {
+                        schedule_date: '2025-02-10',
+                        start_time: '09:00:00',
+                        end_time: '10:30:00',
+                        lesson_title: 'API测试课程1',
+                        lesson_description: '这是通过API测试创建的课程',
+                        location: '测试教室A',
+                        status: 'scheduled',
+                        notes: null
+                    },
+                    {
+                        schedule_date: '2025-02-12',
+                        start_time: '14:00:00',
+                        end_time: '15:30:00',
+                        lesson_title: 'API测试课程2',
+                        lesson_description: '这是通过API测试创建的第二节课程',
+                        location: '测试教室B',
+                        status: 'scheduled',
+                        notes: null
+                    }
+                ];
+
+                const { data, error } = await supabase.rpc('create_plan_schedules_batch', {
+                    p_plan_id: planId,
+                    p_schedules: testSchedules
+                });
+
+                if (error) throw error;
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <strong>✅ 批量排课创建成功</strong><br>
+                        成功: ${data.success_count} 节课<br>
+                        失败: ${data.error_count} 节课<br>
+                        <details>
+                            <summary>查看详细结果</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ 批量排课创建失败</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 页面加载时检查环境
+        window.onload = function() {
+            checkEnvironment();
+        };
+    </script>
+</body>
+</html> 

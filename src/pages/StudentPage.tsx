@@ -9,7 +9,7 @@ import { getGlobalSettings } from "@/utils/systemSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Tables, TablesInsert } from "@/integrations/supabase/types";
+
 import { useScrollToTop } from "@/hooks/useScrollToTop";
 import {
   AlertDialog,
@@ -40,6 +40,7 @@ import {
 import { StudentPageSkeleton } from "@/components/ui/student-page-skeleton";
 import KeyActivation from "@/components/KeyActivation";
 import UpgradePage from "@/pages/UpgradePage";
+import { formatDateForDisplay, toSafeISOString } from '@/utils/timezone';
 
 type ActiveTab = "learning" | "courses" | "profile" | "upgrade";
 
@@ -398,13 +399,13 @@ const StudentPage = () => {
     try {
       setEnrollingCourseId(courseId);
 
-      const enrollmentData: TablesInsert<'course_enrollments'> = {
+      const enrollmentData = {
         user_id: user.id,
         course_id: courseId,
-        status: 'not_started', // 改为未开始状态
+        status: 'not_started' as const, // 改为未开始状态
         progress: 0,
-        enrolled_at: new Date().toISOString(),
-        last_accessed_at: new Date().toISOString()
+        enrolled_at: toSafeISOString(new Date()),
+        last_accessed_at: toSafeISOString(new Date())
       };
 
       const { error } = await supabase
@@ -456,7 +457,7 @@ const StudentPage = () => {
 
       const updateData: any = {
         status: newStatus,
-        last_accessed_at: new Date().toISOString()
+        last_accessed_at: toSafeISOString(new Date())
       };
 
       // 如果是从未开始变为学习中，进度设为1%
@@ -535,7 +536,7 @@ const StudentPage = () => {
         .update({
           status: 'not_started',
           progress: 0,
-          last_accessed_at: new Date().toISOString()
+          last_accessed_at: toSafeISOString(new Date())
         })
         .eq('id', course.id)
         .eq('user_id', user.id);
@@ -1108,13 +1109,13 @@ const StudentPage = () => {
                     <div className="flex items-center justify-between py-2 border-b border-border/40">
                       <span className="text-sm text-muted-foreground">注册时间</span>
                       <span className="text-sm font-medium">
-                        {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('zh-CN') : '-'}
+                        {profile?.created_at ? formatDateForDisplay(profile.created_at) : '-'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between py-2 border-b border-border/40">
                       <span className="text-sm text-muted-foreground">权限过期时间</span>
                       <span className="text-sm font-medium">
-                        {profile?.access_expires_at ? new Date(profile.access_expires_at).toLocaleDateString('zh-CN') : '-'}
+                        {profile?.access_expires_at ? formatDateForDisplay(profile.access_expires_at) : '-'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between py-2">
@@ -1134,7 +1135,7 @@ const StudentPage = () => {
                     <div className="flex items-center justify-between py-2 border-b border-border/40">
                       <span className="text-sm text-muted-foreground">最后更新</span>
                       <span className="text-sm font-medium">
-                        {profile?.updated_at ? new Date(profile.updated_at).toLocaleDateString('zh-CN') : '-'}
+                        {profile?.updated_at ? formatDateForDisplay(profile.updated_at) : '-'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between py-2">
@@ -1200,7 +1201,7 @@ const StudentPage = () => {
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium truncate">{course.course_title}</div>
                             <div className="text-xs text-muted-foreground">
-                              {new Date(course.last_accessed_at).toLocaleDateString('zh-CN')} • 
+                              {formatDateForDisplay(course.last_accessed_at)} • 
                               {getCourseStatusText(course.status, course.progress)}
                             </div>
                           </div>

@@ -42,11 +42,13 @@ import {
   Users,
   Settings,
   Filter,
-  RotateCcw
+  RotateCcw,
+  Calendar
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import EnhancedPagination from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
+import { formatDateForDisplay } from '@/utils/timezone';
 
 // 场地类型定义
 type VenueType = 'classroom' | 'conference_room';
@@ -540,7 +542,7 @@ const VenueManagement = () => {
                             )}
                           </TableCell>
                           <TableCell className="text-sm text-gray-500">
-                            {new Date(venue.created_at).toLocaleDateString()}
+                            {formatDateForDisplay(venue.created_at)}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">

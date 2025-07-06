@@ -228,6 +228,7 @@ export type Database = {
           subject_id: string
           teacher_id: string
           venue_id: string | null
+          plan_id: string | null
           schedule_date: string
           start_time: string
           end_time: string
@@ -248,6 +249,7 @@ export type Database = {
           subject_id: string
           teacher_id: string
           venue_id?: string | null
+          plan_id?: string | null
           schedule_date: string
           start_time: string
           end_time: string
@@ -268,6 +270,7 @@ export type Database = {
           subject_id?: string
           teacher_id?: string
           venue_id?: string | null
+          plan_id?: string | null
           schedule_date?: string
           start_time?: string
           end_time?: string
@@ -309,6 +312,178 @@ export type Database = {
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      schedule_plans: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          class_id: string
+          subject_id: string
+          teacher_id: string
+          start_date: string | null
+          end_date: string | null
+          status: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          class_id: string
+          subject_id: string
+          teacher_id: string
+          start_date?: string | null
+          end_date?: string | null
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          class_id?: string
+          subject_id?: string
+          teacher_id?: string
+          start_date?: string | null
+          end_date?: string | null
+          status?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_plans_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_plans_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_plans_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      plan_participants: {
+        Row: {
+          id: string
+          plan_id: string
+          student_id: string
+          status: string
+          participation_type: string
+          joined_at: string
+          withdrawn_at: string | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          plan_id: string
+          student_id: string
+          status?: string
+          participation_type?: string
+          joined_at?: string
+          withdrawn_at?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          plan_id?: string
+          student_id?: string
+          status?: string
+          participation_type?: string
+          joined_at?: string
+          withdrawn_at?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_participants_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_participants_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      schedule_participants: {
+        Row: {
+          id: string
+          schedule_id: string
+          student_id: string
+          participation_action: string
+          status: string
+          participation_type: string
+          notes: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          schedule_id: string
+          student_id: string
+          participation_action: string
+          status?: string
+          participation_type?: string
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          schedule_id?: string
+          student_id?: string
+          participation_action?: string
+          status?: string
+          participation_type?: string
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_participants_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_participants_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
         ]
@@ -813,6 +988,18 @@ export type VenueUpdate = TablesUpdate<'venues'>
 export type Schedule = Tables<'schedules'>
 export type ScheduleInsert = TablesInsert<'schedules'>
 export type ScheduleUpdate = TablesUpdate<'schedules'>
+
+export type SchedulePlan = Tables<'schedule_plans'>
+export type SchedulePlanInsert = TablesInsert<'schedule_plans'>
+export type SchedulePlanUpdate = TablesUpdate<'schedule_plans'>
+
+export type PlanParticipant = Tables<'plan_participants'>
+export type PlanParticipantInsert = TablesInsert<'plan_participants'>
+export type PlanParticipantUpdate = TablesUpdate<'plan_participants'>
+
+export type ScheduleParticipant = Tables<'schedule_participants'>
+export type ScheduleParticipantInsert = TablesInsert<'schedule_participants'>
+export type ScheduleParticipantUpdate = TablesUpdate<'schedule_participants'>
 
 export type ActivationKey = Tables<'activation_keys'>
 export type ActivationKeyInsert = TablesInsert<'activation_keys'>

@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Key, Sparkles, Gift } from "lucide-react";
+import { formatDateForDisplay } from '@/utils/timezone';
 
 interface KeyActivationProps {
   onActivationSuccess?: () => void;
@@ -83,7 +84,7 @@ const KeyActivation = ({ onActivationSuccess }: KeyActivationProps) => {
           setTimeout(() => {
             toast({
               title: upgradeMessage,
-              description: `有效期至：${new Date(data.expires_at).toLocaleDateString('zh-CN')}`
+              description: `有效期至：${formatDateForDisplay(data.expires_at)}`
             });
           }, 1000);
         }

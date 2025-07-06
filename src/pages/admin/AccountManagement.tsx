@@ -29,6 +29,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import EnhancedPagination from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
+import { 
+  formatDateForDisplay, 
+  formatForDateTimeInput,
+  toSafeISOString 
+} from "@/utils/timezone";
 
 // 用户类型
 interface Profile {
@@ -525,7 +530,7 @@ const AccountManagement = () => {
           ...prev,
           [name]: value,
           // 如果有设置过期时间，则更新过期时间
-          ...(expiresAt ? { access_expires_at: expiresAt.toISOString() } : {})
+          ...(expiresAt ? { access_expires_at: toSafeISOString(expiresAt) } : {})
         };
       }
       
@@ -539,17 +544,7 @@ const AccountManagement = () => {
 
   // 改进日期时间处理 
   const formatDateForInput = (dateString?: string): string => {
-    if (!dateString) return "";
-    try {
-      // 尝试解析日期并转换为本地时间输入格式
-      const date = new Date(dateString);
-      // 检查日期是否有效
-      if (isNaN(date.getTime())) return "";
-      return date.toISOString().slice(0, 16);
-    } catch (e) {
-      console.error("日期解析错误:", e);
-      return "";
-    }
+    return formatForDateTimeInput(dateString);
   };
 
   // 处理每页显示数量变化
@@ -915,7 +910,7 @@ const AccountManagement = () => {
                       </td>
                       <td className="py-3 px-4">
                         {profile.access_expires_at ? 
-                          new Date(profile.access_expires_at).toLocaleDateString('zh-CN') : 
+                          formatDateForDisplay(profile.access_expires_at) : 
                           "-"}
                       </td>
                       <td className="py-3 px-4 text-right">

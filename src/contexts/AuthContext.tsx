@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { loadSystemSettingsFromDB, checkDatabaseAccess } from "@/services/systemSettingsService";
 import { setGlobalSettings, loadSystemSettings, applySystemSettings } from "@/utils/systemSettings";
 import { scrollToTopOnRouteChange } from "@/utils/scrollToTop";
+import { formatDateForDisplay } from '@/utils/timezone';
 
 interface AuthContextProps {
   session: Session | null;
@@ -91,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 显示过期提示并跳转到登录页
     setTimeout(() => {
       // 使用原生alert确保用户看到提示
-      alert(`账号已过期！\n\n您的账号有效期至：${new Date(profile.access_expires_at).toLocaleDateString('zh-CN')}\n请联系管理员续费或重新开通权限。`);
+      alert(`账号已过期！\n\n您的账号有效期至：${formatDateForDisplay(profile.access_expires_at)}\n请联系管理员续费或重新开通权限。`);
       window.location.replace("/auth/login");
     }, 100);
   };
@@ -331,7 +332,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log("[AUTH] 登录时发现账号已过期");
             // 强制登出过期账号
             await supabase.auth.signOut();
-            throw new Error(`账号已过期！有效期至：${new Date(profile.access_expires_at).toLocaleDateString('zh-CN')}，请联系管理员续费。`);
+            throw new Error(`账号已过期！有效期至：${formatDateForDisplay(profile.access_expires_at)}，请联系管理员续费。`);
           }
           
           setProfile(profile);
