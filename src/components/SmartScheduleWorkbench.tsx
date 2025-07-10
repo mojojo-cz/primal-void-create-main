@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   AlertDialog, 
@@ -158,6 +158,9 @@ export default function SmartScheduleWorkbench({
   // 删除的已有课程ID列表
   const [deletedScheduleIds, setDeletedScheduleIds] = useState<string[]>([]);
   
+  // 用于防止删除操作中的状态竞争
+  const conflictCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // 新计划表单状态
   const [newPlanForm, setNewPlanForm] = useState({
     name: '',
@@ -301,6 +304,15 @@ export default function SmartScheduleWorkbench({
     }
   }, [selectedClass]);
 
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (conflictCheckTimeoutRef.current) {
+        clearTimeout(conflictCheckTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const loadBaseData = async () => {
     try {
       setLoading(true);
@@ -399,11 +411,11 @@ export default function SmartScheduleWorkbench({
 
       if (error) throw error;
 
-      const students = (data || []).map((member: any) => ({
-        id: member.student_id,
-        full_name: member.profiles?.full_name || '',
-        username: member.profiles?.username || ''
-      }));
+             const students = (data || []).map((member: any) => ({
+         id: member.student_id,
+         full_name: member.profiles?.full_name || '',
+         username: member.profiles?.username || ''
+       }));
 
       setAvailableStudents(students);
       
@@ -556,7 +568,7 @@ export default function SmartScheduleWorkbench({
   // 加载课表的完整信息（用于编辑模式）
   const loadPlanCompleteInfo = async (plan: SchedulePlanWithStats) => {
     try {
-      setLoading(true);
+    setLoading(true);
       
       // 1. 填充基本信息
       setSelectedClass(plan.class_id || '');
@@ -566,7 +578,7 @@ export default function SmartScheduleWorkbench({
         name: plan.name,
         venue_id: plan.venue_id || ''
       });
-
+      
       // 2. 加载学员信息
       await Promise.all([
         loadPlanSchedules(plan.id, plan),
@@ -1190,7 +1202,7 @@ export default function SmartScheduleWorkbench({
     if (newSchedules.length > 0) {
       const updatedPreview = [...previewSchedules, ...newSchedules];
       setPreviewSchedules(updatedPreview);
-      
+    
       // 乐观更新：在后台进行冲突检测
       setTimeout(async () => {
         try {
@@ -1202,15 +1214,16 @@ export default function SmartScheduleWorkbench({
       }, 0);
     }
     
-    // 保留日期范围，只清空周期选择
-    setWeeklyDays([]);
+    // 保留日期范围和周期选择，方便用户继续添加相同配置的课程
 
     return newSchedules.length;
   };
 
   const removeFromPreview = (id: string) => {
+    // 使用函数式更新，确保基于最新状态进行删除操作
+    setPreviewSchedules(currentSchedules => {
     // 找到要删除的课程
-    const scheduleToRemove = previewSchedules.find(item => item.id === id);
+      const scheduleToRemove = currentSchedules.find(item => item.id === id);
     
     // 如果是已有课程（不是新创建的），记录其ID用于后续删除
     if (scheduleToRemove && scheduleToRemove.isNew === false) {
@@ -1218,20 +1231,35 @@ export default function SmartScheduleWorkbench({
     }
     
     // 从预览列表中移除
-    const updatedPreview = previewSchedules.filter(item => item.id !== id);
-    setPreviewSchedules(updatedPreview);
+      const updatedPreview = currentSchedules.filter(item => item.id !== id);
+      
+      // 清除之前的定时器，防止重复的冲突检测
+      if (conflictCheckTimeoutRef.current) {
+        clearTimeout(conflictCheckTimeoutRef.current);
+      }
     
-    // 删除后重新检测冲突（可能移除了冲突课程，其他课程的冲突状态需要更新）
+      // 删除后重新检测冲突（使用防抖机制）
     if (updatedPreview.length > 0) {
-      setTimeout(async () => {
+        conflictCheckTimeoutRef.current = setTimeout(async () => {
         try {
           const checkedPreview = await runConflictChecks(updatedPreview);
-          setPreviewSchedules(checkedPreview);
+            // 使用函数式更新确保基于最新状态
+            setPreviewSchedules(currentPreview => {
+              // 只有当前预览列表长度与检测时的长度一致时才更新
+              // 这样可以避免在连续删除过程中的状态不一致
+              if (currentPreview.length === checkedPreview.length) {
+                return checkedPreview;
+              }
+              return currentPreview;
+            });
         } catch (error) {
           console.error('删除后冲突检测失败:', error);
         }
-      }, 0);
+        }, 300); // 300ms 防抖延迟
     }
+      
+      return updatedPreview;
+    });
   };
 
   // 复制课程功能
@@ -1290,7 +1318,7 @@ export default function SmartScheduleWorkbench({
     if (currentTitle === '未设置本节课主题' || currentTitle === '未设置主题') {
       setEditingTitleValue('');
     } else {
-      setEditingTitleValue(currentTitle);
+    setEditingTitleValue(currentTitle);
     }
   };
 
@@ -1307,9 +1335,9 @@ export default function SmartScheduleWorkbench({
     } else {
       // 否则，更新为新主题
       await editPreviewItem(scheduleId, { 
-        lesson_title: trimmedTitle,
-        isEdited: true
-      });
+      lesson_title: trimmedTitle,
+      isEdited: true
+    });
     }
     
     // 无论结果如何，都关闭编辑状态
@@ -1473,10 +1501,16 @@ export default function SmartScheduleWorkbench({
         description: `成功${actionText}课程：${operationSummary.join('，')}${errorCount > 0 ? `，失败 ${errorCount} 节` : ''}`
       });
       
-      // 关闭工作台并通知父组件刷新
-      onScheduleCreated?.();
+      // 立即关闭工作台，提升用户体验
       onOpenChange(false);
+      
+      // 异步执行重置和数据刷新，不阻塞对话框关闭
+      requestAnimationFrame(() => {
       resetWorkbench();
+        setTimeout(() => {
+          onScheduleCreated?.();
+        }, 0);
+      });
       
     } catch (error) {
       console.error('保存计划失败:', error);
@@ -1924,8 +1958,8 @@ export default function SmartScheduleWorkbench({
                 className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
               >
                 <span className={`line-clamp-1 ${teacherId ? "" : "text-muted-foreground"}`}>
-                  {teacherId
-                    ? baseData.teachers.find((teacher) => teacher.id === teacherId)?.full_name
+                {teacherId
+                  ? baseData.teachers.find((teacher) => teacher.id === teacherId)?.full_name
                     : "选择该节课任课老师"}
                 </span>
                 <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -2089,11 +2123,11 @@ export default function SmartScheduleWorkbench({
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 className={startTime >= endTime ? "border-red-500" : ""}
-              />
+        />
               {startTime >= endTime && (
                 <p className="text-xs text-red-500 mt-1">开始时间不能晚于结束时间</p>
               )}
-            </div>
+      </div>
             <div>
               <Label htmlFor="batch-end-time">结束时间 *</Label>
               <Input
@@ -2163,7 +2197,7 @@ export default function SmartScheduleWorkbench({
     const teacher = baseData.teachers.find(t => t.id === schedule.teacher_id);
 
     const hasConflicts = schedule.teacher_conflict_info || schedule.venue_conflict_info;
-
+    
     return (
       <div 
         className={cn(
@@ -2175,7 +2209,7 @@ export default function SmartScheduleWorkbench({
         {/* 序号 */}
         <div className="text-xs font-medium text-gray-400 w-5 text-center">
           #{index + 1}
-        </div>
+            </div>
 
         {/* 课程信息主体 (弹性占据空间) */}
         <div className="flex-1 min-w-0 space-y-1">
@@ -2214,7 +2248,7 @@ export default function SmartScheduleWorkbench({
                             {schedule.teacher_conflict_info.plan_name && (
                               <span className="text-gray-500"> ({schedule.teacher_conflict_info.plan_name})</span>
                             )}
-                          </div>
+                </div>
                         </div>
                       )}
                       {schedule.venue_conflict_info && (
@@ -2233,43 +2267,43 @@ export default function SmartScheduleWorkbench({
                 </Tooltip>
               </TooltipProvider>
             )}
-          </div>
+              </div>
 
           {/* 第二行：主题 */}
           <div className="flex items-center">
-            {editingTitleId === schedule.id ? (
-              <Input
+                {editingTitleId === schedule.id ? (
+                    <Input
                 key={schedule.id}
                 defaultValue={editingTitleValue}
                 placeholder="请输入本节课主题..."
                 className="text-sm h-7 flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
                     e.preventDefault();
                     saveEditingTitle(schedule.id, (e.target as HTMLInputElement).value);
                   }
                   if (e.key === 'Escape') {
-                    cancelEditingTitle();
-                  }
-                }}
+                          cancelEditingTitle();
+                        }
+                      }}
                 onBlur={(e) => {
                   saveEditingTitle(schedule.id, e.target.value);
                 }}
-                autoFocus
-              />
-            ) : (
-              <div 
+                      autoFocus
+                    />
+                ) : (
+                  <div 
                 className={`flex-1 text-sm font-medium truncate cursor-pointer hover:text-blue-600 ${
                   (schedule.lesson_title === '未设置本节课主题' || !schedule.lesson_title) ? 'text-gray-400 italic' : 'text-gray-900'
-                }`}
-                onClick={() => startEditingTitle(schedule.id, schedule.lesson_title)}
+                    }`}
+                    onClick={() => startEditingTitle(schedule.id, schedule.lesson_title)}
                 title="点击设置本节课主题"
-              >
+                  >
                 {schedule.lesson_title || '未设置本节课主题'}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+              </div>
 
         {/* 教室标签 (与删除按钮同一层级) */}
         <div className="flex items-center gap-2">
@@ -2288,7 +2322,7 @@ export default function SmartScheduleWorkbench({
               <div className="flex items-center gap-1.5">
                 <MapPin className="h-3 w-3 text-gray-500" />
                 <SelectValue placeholder="选择教室" />
-              </div>
+                </div>
             </SelectTrigger>
             <SelectContent align="end">
               {baseData.venues.map(venue => (
@@ -2298,22 +2332,22 @@ export default function SmartScheduleWorkbench({
               ))}
             </SelectContent>
           </Select>
-        </div>
-        
+            </div>
+            
         {/* 操作按钮组 (固定宽度) */}
         <div className="flex items-center">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="sm" onClick={onRemoveClick} className="h-8 w-8 p-0 text-gray-500 hover:text-red-600">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <Trash2 className="h-4 w-4" />
+              </Button>
               </TooltipTrigger>
               <TooltipContent><p>删除课程</p></TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        </div>
-      </div>
+            </div>
+          </div>
     );
   };
 
@@ -2327,42 +2361,42 @@ export default function SmartScheduleWorkbench({
     });
 
     return (
-      <Card className="flex flex-col h-full">
-        <CardHeader className="pb-3 flex-shrink-0">
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
+    <Card className="flex flex-col h-full">
+             <CardHeader className="pb-3 flex-shrink-0">
+         <CardTitle className="flex items-center justify-between">
+           <div className="flex items-center gap-2">
+             <BookOpen className="h-5 w-5" />
               <span>预览微调</span>
-            </div>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+           </div>
+           <Badge variant="secondary" className="bg-blue-100 text-blue-800">
               共 {previewSchedules.length} 节待创建课程
-            </Badge>
-          </CardTitle>
-        </CardHeader>
+           </Badge>
+         </CardTitle>
+       </CardHeader>
         <CardContent className="flex-1 overflow-y-auto p-3 min-h-0">
-          {previewSchedules.length === 0 ? (
-            <div className="flex items-center justify-center text-gray-500 py-12">
-              <div className="text-center">
-                <BookOpen className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+        {previewSchedules.length === 0 ? (
+          <div className="flex items-center justify-center text-gray-500 py-12">
+            <div className="text-center">
+              <BookOpen className="h-16 w-16 mx-auto mb-4 text-gray-300" />
                 <p className="text-lg font-medium mb-2">预览微调</p>
                 <p className="text-sm text-gray-400">您在左侧添加的课程将在这里显示，按上课日期自动排序。</p>
-              </div>
             </div>
-          ) : (
+          </div>
+                 ) : (
             <div className="space-y-0">
               {sortedSchedules.map((schedule, index) => (
                 <ScheduleItem
-                  key={schedule.id}
-                  schedule={schedule}
-                  index={index}
-                  onRemoveClick={() => removeFromPreview(schedule.id)}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
+                     key={schedule.id}
+                     schedule={schedule}
+                     index={index}
+                     onRemoveClick={() => removeFromPreview(schedule.id)}
+                   />
+                 ))}
+               </div>
+         )}
+      </CardContent>
+    </Card>
+  );
   };
 
   // 渲染最终操作区

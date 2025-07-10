@@ -360,8 +360,8 @@ const ClassManagement = () => {
 
   useEffect(() => {
     if (hasAccess) {
-      fetchClasses();
-      fetchTeachers();
+    fetchClasses();
+    fetchTeachers();
     }
   }, [hasAccess]);
 
@@ -942,10 +942,10 @@ const ClassManagement = () => {
                 </Button>
                 {/* 只有管理员可以创建班级 */}
                 {isAdmin && (
-                  <Button onClick={() => setCreateDialog(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    新建班级
-                  </Button>
+              <Button onClick={() => setCreateDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                新建班级
+              </Button>
                 )}
               </div>
             </div>
@@ -1059,29 +1059,29 @@ const ClassManagement = () => {
                               </Button>
                               {/* 只有管理员可以编辑班级 */}
                               {isAdmin && (
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost"
-                                  onClick={() => openEditDialog(classItem)}
-                                  className="hover:bg-orange-100 text-orange-600 hover:text-orange-700"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                  <span className="hidden sm:inline ml-1">编辑</span>
-                                </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={() => openEditDialog(classItem)}
+                                className="hover:bg-orange-100 text-orange-600 hover:text-orange-700"
+                              >
+                                <Edit className="h-4 w-4" />
+                                <span className="hidden sm:inline ml-1">编辑</span>
+                              </Button>
                               )}
                               {/* 只有管理员可以删除班级 */}
                               {isAdmin && (
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button 
-                                      size="sm" 
-                                      variant="ghost"
-                                      className="hover:bg-red-100 text-red-600 hover:text-red-700"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                      <span className="hidden sm:inline ml-1">删除</span>
-                                    </Button>
-                                  </AlertDialogTrigger>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost"
+                                    className="hover:bg-red-100 text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    <span className="hidden sm:inline ml-1">删除</span>
+                                  </Button>
+                                </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>确认删除</AlertDialogTitle>
