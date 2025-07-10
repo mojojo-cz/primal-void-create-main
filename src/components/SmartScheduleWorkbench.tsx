@@ -1079,8 +1079,7 @@ export default function SmartScheduleWorkbench({
       };
 
       const updatedPreview = [...previewSchedules, newItem];
-      const checkedPreview = await runConflictChecks(updatedPreview);
-      setPreviewSchedules(checkedPreview);
+      setPreviewSchedules(updatedPreview);
       
       // 成功反馈
       toast({
@@ -1088,6 +1087,16 @@ export default function SmartScheduleWorkbench({
         description: `课程已添加到预览列表，请设置课程主题`,
         duration: 2000
       });
+      
+      // 乐观更新：在后台进行冲突检测
+      setTimeout(async () => {
+        try {
+          const checkedPreview = await runConflictChecks(updatedPreview);
+          setPreviewSchedules(checkedPreview);
+        } catch (error) {
+          console.error('后台冲突检测失败:', error);
+        }
+      }, 0);
       
       // 保留上课日期，方便用户在同一天添加多个时间段的课程
       
@@ -1180,8 +1189,17 @@ export default function SmartScheduleWorkbench({
 
     if (newSchedules.length > 0) {
       const updatedPreview = [...previewSchedules, ...newSchedules];
-      const checkedPreview = await runConflictChecks(updatedPreview);
-      setPreviewSchedules(checkedPreview);
+      setPreviewSchedules(updatedPreview);
+      
+      // 乐观更新：在后台进行冲突检测
+      setTimeout(async () => {
+        try {
+          const checkedPreview = await runConflictChecks(updatedPreview);
+          setPreviewSchedules(checkedPreview);
+        } catch (error) {
+          console.error('后台冲突检测失败:', error);
+        }
+      }, 0);
     }
     
     // 保留日期范围，只清空周期选择
@@ -1200,7 +1218,20 @@ export default function SmartScheduleWorkbench({
     }
     
     // 从预览列表中移除
-    setPreviewSchedules(prev => prev.filter(item => item.id !== id));
+    const updatedPreview = previewSchedules.filter(item => item.id !== id);
+    setPreviewSchedules(updatedPreview);
+    
+    // 删除后重新检测冲突（可能移除了冲突课程，其他课程的冲突状态需要更新）
+    if (updatedPreview.length > 0) {
+      setTimeout(async () => {
+        try {
+          const checkedPreview = await runConflictChecks(updatedPreview);
+          setPreviewSchedules(checkedPreview);
+        } catch (error) {
+          console.error('删除后冲突检测失败:', error);
+        }
+      }, 0);
+    }
   };
 
   // 复制课程功能
@@ -1313,7 +1344,7 @@ export default function SmartScheduleWorkbench({
       return;
     }
 
-    // 检查是否存在冲突
+    // 检查预览列表中是否存在冲突
     const hasConflicts = previewSchedules.some(schedule => 
       schedule.teacher_conflict_info || schedule.venue_conflict_info
     );
@@ -2096,6 +2127,27 @@ export default function SmartScheduleWorkbench({
     </div>
   );
 
+  // 获取时段标识和样式（上午/下午/晚上）
+  const getTimePeriodInfo = (startTime: string): { text: string; className: string } => {
+    const hour = parseInt(startTime.split(':')[0]);
+    if (hour < 12) {
+      return {
+        text: '上午',
+        className: 'text-orange-600 bg-orange-50 border-orange-200'
+      };
+    } else if (hour < 17) {
+      return {
+        text: '下午',
+        className: 'text-blue-600 bg-blue-50 border-blue-200'
+      };
+    } else {
+      return {
+        text: '晚上',
+        className: 'text-purple-600 bg-purple-50 border-purple-200'
+      };
+    }
+  };
+
   // 极致紧凑的课程项组件 (信息流布局)
   const ScheduleItem = ({ 
     schedule, 
@@ -2132,6 +2184,9 @@ export default function SmartScheduleWorkbench({
             <span className="text-xs font-semibold text-gray-800 whitespace-nowrap">
               {new Date(schedule.schedule_date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
               <span className="ml-1 font-normal text-gray-500">{new Date(schedule.schedule_date).toLocaleDateString('zh-CN', { weekday: 'short' })}</span>
+            </span>
+            <span className={`text-xs font-medium whitespace-nowrap px-2 py-0.5 rounded-md border ${getTimePeriodInfo(schedule.start_time).className}`}>
+              {getTimePeriodInfo(schedule.start_time).text}
             </span>
             <span className="text-xs text-gray-500 whitespace-nowrap">{schedule.start_time} - {schedule.end_time}</span>
             <span className="text-xs text-gray-800 truncate" title={subject?.name || '未知课程'}>
