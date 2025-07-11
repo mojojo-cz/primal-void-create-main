@@ -667,6 +667,186 @@ const ScheduleManagement = () => {
     }
   };
 
+  // 乐观更新排课列表
+  const optimisticUpdateSchedules = (createdSchedules: {
+    newSchedules: any[];
+    updatedSchedules: any[];
+    deletedScheduleIds: string[];
+  }) => {
+    setSchedules(prevSchedules => {
+      let updatedSchedules = [...prevSchedules];
+
+      // 处理删除的排课
+      if (createdSchedules.deletedScheduleIds.length > 0) {
+        updatedSchedules = updatedSchedules.filter(
+          schedule => !createdSchedules.deletedScheduleIds.includes(schedule.id)
+        );
+      }
+
+      // 处理更新的排课
+      createdSchedules.updatedSchedules.forEach(updatedSchedule => {
+        const index = updatedSchedules.findIndex(s => s.id === updatedSchedule.id);
+        if (index !== -1) {
+          updatedSchedules[index] = {
+            ...updatedSchedules[index],
+            ...updatedSchedule,
+            // 保留一些必要的字段
+            duration_minutes: calculateDurationMinutes(updatedSchedule.start_time, updatedSchedule.end_time),
+            status: updatedSchedule.status || 'scheduled',
+            course_hours: updatedSchedule.course_hours || 1,
+            created_at: updatedSchedules[index].created_at,
+            updated_at: new Date().toISOString(),
+            created_by: updatedSchedules[index].created_by,
+            notes: updatedSchedule.notes || '',
+            lesson_description: updatedSchedule.lesson_description || '',
+            online_meeting_url: updatedSchedule.online_meeting_url || '',
+            participants_count: updatedSchedule.participants_count || 0
+          };
+        }
+      });
+
+      // 处理新增的排课 - 添加到列表开头（最新的排课显示在前面）
+      const newSchedulesToAdd = createdSchedules.newSchedules.map(newSchedule => ({
+        ...newSchedule,
+        // 补充必要的字段
+        duration_minutes: calculateDurationMinutes(newSchedule.start_time, newSchedule.end_time),
+        status: 'scheduled' as const,
+        course_hours: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: '', // 这里可以从用户上下文获取
+        notes: '',
+        lesson_description: '',
+        online_meeting_url: '',
+        teacher_full_name: newSchedule.teacher_name,
+        participants_count: 0
+      }));
+
+      // 将新排课添加到列表开头并按日期时间排序
+      const allSchedules = [...newSchedulesToAdd, ...updatedSchedules];
+      return allSchedules.sort((a, b) => {
+        const dateA = new Date(`${a.schedule_date}T${a.start_time}`);
+        const dateB = new Date(`${b.schedule_date}T${b.start_time}`);
+        return dateB.getTime() - dateA.getTime(); // 最新的在前
+      });
+    });
+
+    // 更新课程总数统计
+    setTotalCount(prevTotal => {
+      let newTotal = prevTotal;
+      // 减去删除的排课数量
+      newTotal -= createdSchedules.deletedScheduleIds.length;
+      // 加上新增的排课数量
+      newTotal += createdSchedules.newSchedules.length;
+      // 更新的排课不影响总数
+      return Math.max(0, newTotal); // 确保不为负数
+    });
+
+    // 显示成功提示
+    const summary = [];
+    if (createdSchedules.newSchedules.length > 0) {
+      summary.push(`新增 ${createdSchedules.newSchedules.length} 节课`);
+    }
+    if (createdSchedules.updatedSchedules.length > 0) {
+      summary.push(`更新 ${createdSchedules.updatedSchedules.length} 节课`);
+    }
+    if (createdSchedules.deletedScheduleIds.length > 0) {
+      summary.push(`删除 ${createdSchedules.deletedScheduleIds.length} 节课`);
+    }
+
+    if (summary.length > 0) {
+      toast({
+        title: "课表更新成功",
+        description: `已完成：${summary.join('，')}`
+      });
+    }
+
+    // 后台异步刷新真实数据，确保数据一致性
+    setTimeout(() => {
+      refreshSchedulesData();
+    }, 2000); // 2秒后刷新，给服务器处理时间
+  };
+
+  // 后台刷新数据（用于乐观更新后的数据同步）
+  const refreshSchedulesData = async () => {
+    try {
+      // 静默刷新，不显示loading状态
+      const { data, error } = await supabase
+        .rpc('get_schedules_with_details', {
+          p_limit: schedules.length + 10, // 比当前列表稍多一些
+          p_offset: 0,
+          p_search_term: searchTerm || null,
+          p_class_id: filterClass !== "all" ? filterClass : null,
+          p_subject_id: filterSubject !== "all" ? filterSubject : null,
+          p_teacher_id: filterTeacher !== "all" ? filterTeacher : null,
+          p_venue_id: filterVenue !== "all" && filterVenue !== "online" ? filterVenue : null,
+          p_plan_id: filterPlan !== "all" ? filterPlan : null,
+          p_date_from: null,
+          p_date_to: null
+        });
+
+      if (error) throw error;
+
+      const formattedSchedules: ScheduleWithDetails[] = (data || []).map(schedule => ({
+        id: schedule.id,
+        class_id: schedule.class_id,
+        subject_id: schedule.subject_id,
+        teacher_id: schedule.teacher_id,
+        venue_id: schedule.venue_id,
+        plan_id: schedule.plan_id || null,
+        schedule_date: schedule.schedule_date,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        duration_minutes: schedule.duration_minutes,
+        lesson_title: schedule.lesson_title,
+        lesson_description: schedule.lesson_description,
+        online_meeting_url: schedule.online_meeting_url,
+        course_hours: schedule.course_hours,
+        status: schedule.status,
+        notes: schedule.notes || '',
+        created_by: schedule.created_by,
+        created_at: schedule.created_at,
+        updated_at: schedule.updated_at,
+        class_name: schedule.class_name || '未知班级',
+        subject_name: schedule.subject_name || '未知课程',
+        teacher_name: schedule.teacher_name || '未知教师',
+        teacher_full_name: schedule.teacher_full_name || schedule.teacher_name || '未知教师',
+        venue_name: schedule.venue_name || '',
+        plan_name: schedule.plan_name || undefined,
+        participants_count: schedule.participants_count || 0
+      }));
+
+      // 处理在线课程筛选
+      let filteredSchedules = formattedSchedules;
+      if (filterVenue === "online") {
+        filteredSchedules = formattedSchedules.filter(schedule => !schedule.venue_id);
+      }
+
+      // 悄悄更新数据，替换临时ID的记录
+      setSchedules(prevSchedules => {
+        const realSchedules = filteredSchedules.slice(0, prevSchedules.length);
+        // 如果数据长度匹配，直接替换；否则保持原样
+        return realSchedules.length >= prevSchedules.length ? realSchedules : prevSchedules;
+      });
+
+      // 同时更新准确的课程总数（从服务器获取）
+      if (data && data.length > 0 && data[0].total_count !== undefined) {
+        setTotalCount(data[0].total_count);
+      }
+
+    } catch (error) {
+      console.error('后台刷新数据失败:', error);
+      // 静默失败，不影响用户体验
+    }
+  };
+
+  // 计算课程时长（分钟）
+  const calculateDurationMinutes = (startTime: string, endTime: string): number => {
+    const start = new Date(`1970-01-01T${startTime}`);
+    const end = new Date(`1970-01-01T${endTime}`);
+    return Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+  };
+
   // 获取课程总数
   const fetchScheduleCount = async () => {
     try {
@@ -1775,9 +1955,14 @@ const ScheduleManagement = () => {
       <SmartScheduleWorkbench
         open={smartWorkbenchDialog}
         onOpenChange={setSmartWorkbenchDialog}
-        onScheduleCreated={() => {
-          // 刷新排课列表
-          fetchInitialSchedules();
+        onScheduleCreated={(createdSchedules) => {
+          if (createdSchedules) {
+            // 乐观更新：直接更新本地状态
+            optimisticUpdateSchedules(createdSchedules);
+          } else {
+            // 降级方案：重新获取数据
+            fetchInitialSchedules();
+          }
         }}
       />
     </div>

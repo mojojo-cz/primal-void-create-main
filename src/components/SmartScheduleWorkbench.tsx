@@ -76,10 +76,34 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
+// 简化的排课数据类型，用于回调
+interface CreatedScheduleData {
+  id: string;
+  schedule_date: string;
+  start_time: string;
+  end_time: string;
+  lesson_title: string;
+  class_id: string;
+  subject_id: string;
+  teacher_id: string;
+  venue_id?: string | null;
+  plan_id?: string | null;
+  // 显示用的关联数据
+  class_name: string;
+  subject_name: string;
+  teacher_name: string;
+  venue_name?: string;
+  plan_name?: string;
+}
+
 interface SmartScheduleWorkbenchProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onScheduleCreated?: () => void;
+  onScheduleCreated?: (createdSchedules?: {
+    newSchedules: CreatedScheduleData[];
+    updatedSchedules: CreatedScheduleData[];
+    deletedScheduleIds: string[];
+  }) => void;
 }
 
 // 预览课程项类型
@@ -1506,9 +1530,11 @@ export default function SmartScheduleWorkbench({
       
       // 异步执行重置和数据刷新，不阻塞对话框关闭
       requestAnimationFrame(() => {
-      resetWorkbench();
+        resetWorkbench();
         setTimeout(() => {
-          onScheduleCreated?.();
+          // 构造回调数据进行乐观更新
+          const callbackData = constructCallbackData(newSchedules, updatedSchedules);
+          onScheduleCreated?.(callbackData);
         }, 0);
       });
       
@@ -1522,6 +1548,39 @@ export default function SmartScheduleWorkbench({
     } finally {
       setLoading(false);
     }
+  };
+
+  // 构造回调数据用于乐观更新
+  const constructCallbackData = (
+    newSchedules: PreviewScheduleItem[], 
+    updatedSchedules: PreviewScheduleItem[]
+  ) => {
+    const convertToCreatedScheduleData = (schedules: PreviewScheduleItem[], isNew: boolean = false): CreatedScheduleData[] => {
+      return schedules.map(schedule => ({
+        id: isNew ? `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : schedule.id, // 为新排课生成临时ID
+        schedule_date: schedule.schedule_date,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        lesson_title: schedule.lesson_title,
+        class_id: selectedClass,
+        subject_id: selectedSubjectId,
+        teacher_id: teacherId,
+        venue_id: schedule.venue_id || null,
+        plan_id: selectedPlan?.id || null,
+        // 关联数据
+        class_name: baseData.classes.find(c => c.id === selectedClass)?.name || '',
+        subject_name: baseData.subjects.find(s => s.id === selectedSubjectId)?.name || '',
+        teacher_name: baseData.teachers.find(t => t.id === teacherId)?.full_name || '',
+        venue_name: schedule.location || baseData.venues.find(v => v.id === schedule.venue_id)?.name || '',
+        plan_name: selectedPlan?.name || undefined
+      }));
+    };
+
+    return {
+      newSchedules: convertToCreatedScheduleData(newSchedules, true), // 标记为新排课，使用临时ID
+      updatedSchedules: convertToCreatedScheduleData(updatedSchedules, false),
+      deletedScheduleIds: deletedScheduleIds
+    };
   };
 
   // 重置工作台
