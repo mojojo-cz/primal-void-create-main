@@ -183,6 +183,7 @@ interface OptimizedScheduleItemProps {
   isLastInGroup?: boolean;
   onDelete: (schedule: ScheduleWithDetails) => void;
   onUpdateTitle: (scheduleId: string, newTitle: string) => Promise<void>;
+  onUpdateNotes: (scheduleId: string, newNotes: string) => Promise<void>;
   formatTime: (time: string) => string;
   venues: DatabaseVenue[];
   onUpdateVenue: (scheduleId: string, venueId: string | null, venueName: string) => void;
@@ -195,12 +196,15 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
   isLastInGroup = false,
   onDelete,
   onUpdateTitle,
+  onUpdateNotes,
   formatTime,
   venues,
   onUpdateVenue
 }) => {
   const [editingTitle, setEditingTitle] = React.useState(false);
   const [editingTitleValue, setEditingTitleValue] = React.useState(schedule.lesson_title);
+  const [editingNotes, setEditingNotes] = React.useState(false);
+  const [editingNotesValue, setEditingNotesValue] = React.useState(schedule.notes || '');
 
   const startEditingTitle = () => {
     setEditingTitle(true);
@@ -221,6 +225,28 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
   const cancelEditingTitle = () => {
     setEditingTitle(false);
     setEditingTitleValue(schedule.lesson_title);
+  };
+
+  const startEditingNotes = () => {
+    setEditingNotes(true);
+    setEditingNotesValue(schedule.notes || '');
+  };
+
+  const saveEditingNotes = async (newNotes: string) => {
+    const trimmedNotes = newNotes.trim();
+    if (trimmedNotes !== (schedule.notes || '')) {
+      try {
+        await onUpdateNotes(schedule.id, trimmedNotes);
+      } catch (error) {
+        // 错误已在onUpdateNotes中处理
+      }
+    }
+    setEditingNotes(false);
+  };
+
+  const cancelEditingNotes = () => {
+    setEditingNotes(false);
+    setEditingNotesValue(schedule.notes || '');
   };
 
   return (
@@ -304,8 +330,34 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
 
       {/* 备注 */}
       <div className="flex-1 p-3 text-sm text-gray-600 min-w-0 truncate" title={schedule.notes || ''}>
-        {schedule.notes || (
-          <span className="text-gray-400 italic">无备注</span>
+        {editingNotes ? (
+          <textarea
+            value={editingNotesValue}
+            onChange={(e) => setEditingNotesValue(e.target.value)}
+            placeholder="请输入备注..."
+            className="text-sm w-full px-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows={3}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                saveEditingNotes(editingNotesValue);
+              } else if (e.key === 'Escape') {
+                cancelEditingNotes();
+              }
+            }}
+            onBlur={() => saveEditingNotes(editingNotesValue)}
+            autoFocus
+          />
+        ) : (
+          <button
+            onClick={startEditingNotes}
+            className="text-sm text-left w-full hover:text-blue-600 transition-colors truncate"
+            title={`${schedule.notes || '点击设置备注'} (点击编辑)`}
+          >
+            {schedule.notes || (
+              <span className="text-gray-400 italic">点击设置备注</span>
+            )}
+          </button>
         )}
       </div>
 
@@ -897,7 +949,7 @@ const ScheduleManagement = () => {
 
       if (error) throw error;
 
-      // 更新本地状态
+      // 乐观更新本地状态
       setSchedules(prevSchedules => 
         prevSchedules.map(s => 
           s.id === scheduleId ? { ...s, lesson_title: newTitle } : s
@@ -919,6 +971,38 @@ const ScheduleManagement = () => {
     }
   };
 
+  // 更新课程备注
+  const handleUpdateScheduleNotes = async (scheduleId: string, newNotes: string) => {
+    try {
+      const { error } = await supabase
+        .from('schedules')
+        .update({ notes: newNotes })
+        .eq('id', scheduleId);
+
+      if (error) throw error;
+
+      // 乐观更新本地状态
+      setSchedules(prevSchedules => 
+        prevSchedules.map(s => 
+          s.id === scheduleId ? { ...s, notes: newNotes } : s
+        )
+      );
+
+      toast({
+        title: "更新成功",
+        description: "备注已更新"
+      });
+
+    } catch (error: any) {
+      console.error('更新课程备注失败:', error);
+      toast({
+        variant: "destructive",
+        title: "更新失败",
+        description: error.message || "无法更新课程备注"
+      });
+    }
+  };
+
   // 删除课程
   const openDeleteDialog = (schedule: ScheduleWithDetails) => {
     setDeleteDialog({ open: true, schedule });
@@ -935,10 +1019,13 @@ const ScheduleManagement = () => {
 
       if (error) throw error;
 
-      // 更新本地状态
+      // 乐观更新：立即从列表中移除并更新统计
       setSchedules(prevSchedules => 
         prevSchedules.filter(s => s.id !== deleteDialog.schedule!.id)
       );
+
+      // 乐观更新：减少课程总数
+      setTotalCount(prevCount => Math.max(0, prevCount - 1));
 
       toast({
         title: "删除成功",
@@ -947,8 +1034,7 @@ const ScheduleManagement = () => {
 
       setDeleteDialog({ open: false, schedule: null });
 
-      // 重新获取数据
-      fetchInitialSchedules();
+      // 无需重新获取数据，乐观更新已完成
 
     } catch (error: any) {
       console.error('删除课程失败:', error);
@@ -957,6 +1043,9 @@ const ScheduleManagement = () => {
         title: "删除失败",
         description: error.message || "无法删除课程"
       });
+      
+      // 错误时恢复状态 - 重新获取数据确保一致性
+      fetchInitialSchedules();
     }
   };
 
@@ -1053,13 +1142,28 @@ const ScheduleManagement = () => {
 
       if (error) throw error;
 
+      // 乐观更新本地状态
+      setSchedules(prevSchedules => 
+        prevSchedules.map(s => 
+          s.id === editDialog.schedule!.id ? {
+            ...s,
+            ...scheduleData,
+            // 更新关联数据
+            class_name: classes.find(c => c.id === scheduleData.class_id)?.name || s.class_name,
+            subject_name: subjects.find(sub => sub.id === scheduleData.subject_id)?.name || s.subject_name,
+            teacher_name: teachers.find(t => t.id === scheduleData.teacher_id)?.username || s.teacher_name,
+            teacher_full_name: teachers.find(t => t.id === scheduleData.teacher_id)?.full_name || s.teacher_full_name,
+            venue_name: scheduleData.venue_id ? venues.find(v => v.id === scheduleData.venue_id)?.name : '',
+          } : s
+        )
+      );
+
       toast({
         title: "更新成功",
         description: "课程信息已成功更新"
       });
 
       setEditDialog({ open: false, schedule: null });
-      fetchInitialSchedules();
 
     } catch (error: any) {
       console.error('更新课程失败:', error);
@@ -1636,6 +1740,7 @@ const ScheduleManagement = () => {
                                       isLastInGroup={index === dateGroup.schedules.length - 1}
                                       onDelete={openDeleteDialog}
                                       onUpdateTitle={handleUpdateScheduleTitle}
+                                      onUpdateNotes={handleUpdateScheduleNotes}
                                       formatTime={formatTime}
                                       venues={venues}
                                       onUpdateVenue={(scheduleId, venueId, venueName) => {
