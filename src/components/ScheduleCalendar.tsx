@@ -44,6 +44,7 @@ interface ScheduleCalendarProps {
   schedulePlans?: any[];
   filterPlan?: string;
   onPlanFilterChange?: (plan: string) => void;
+  readonly?: boolean; // 新增：只读模式
 }
 
 const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
@@ -55,7 +56,8 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
   planColorMap = {},
   schedulePlans = [],
   filterPlan = "all",
-  onPlanFilterChange
+  onPlanFilterChange,
+  readonly = false
 }) => {
   const calendarRef = useRef<FullCalendar>(null);
   const [currentView, setCurrentView] = React.useState('dayGridMonth');
@@ -85,7 +87,7 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
 
       return {
         id: schedule.id,
-        title: schedule.lesson_title,
+        title: schedule.subject_name, // 显示课程科目而不是课程主题
         start: startDateTime,
         end: endDateTime,
         backgroundColor: eventColor,
@@ -94,6 +96,7 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
           schedule: schedule,
           className: schedule.class_name,
           subjectName: schedule.subject_name,
+          lessonTitle: schedule.lesson_title,
           teacherName: schedule.teacher_full_name || schedule.teacher_name,
           venueName: schedule.venue_name || '在线课程',
           status: schedule.status,
@@ -106,17 +109,17 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
 
   // 处理事件点击
   const handleEventClick = useCallback((info: any) => {
-    if (onEventClick) {
+    if (!readonly && onEventClick) {
       onEventClick(info.event.extendedProps.schedule);
     }
-  }, [onEventClick]);
+  }, [readonly, onEventClick]);
 
   // 处理日期点击
   const handleDateClick = useCallback((info: any) => {
-    if (onDateClick) {
+    if (!readonly && onDateClick) {
       onDateClick(new Date(info.date));
     }
-  }, [onDateClick]);
+  }, [readonly, onDateClick]);
 
   // 处理事件拖拽
   const handleEventDrop = useCallback((info: any) => {
@@ -287,13 +290,11 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
               initialView={currentView}
               headerToolbar={false} // 禁用默认头部，使用自定义头部
               events={events}
-              eventClick={handleEventClick}
-              dateClick={handleDateClick}
-              eventDrop={handleEventDrop}
-              editable={true}
-              droppable={true}
-              selectable={true}
-              selectMirror={true}
+              eventClick={readonly ? undefined : handleEventClick} // 只读模式下禁用事件点击
+              dateClick={readonly ? undefined : handleDateClick} // 只读模式下禁用日期点击
+              editable={false} // 禁用编辑功能
+              droppable={false} // 禁用拖拽
+              selectable={false} // 禁用选择
               dayMaxEvents={true}
               weekends={true}
               locale="zh-cn"
@@ -321,22 +322,27 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
                 );
               }}
               eventMouseEnter={(info) => {
-                // 增强的悬停提示信息
+                // 悬停提示信息
                 const props = info.event.extendedProps;
                 const participantText = props.participantsCount > 0 
                   ? `${props.className} + ${props.participantsCount}名额外学员`
                   : props.className;
                 
-                info.el.title = [
+                const tooltipLines = [
                   `课程: ${info.event.title}`,
-                  `所属计划: ${props.planName}`,
-                  `参与方: ${participantText}`,
-                  `教师: ${props.teacherName}`,
-                  `地点: ${props.venueName}`,
-                  `状态: ${props.status}`,
-                  '',
-                  '点击查看详情 | 拖拽调整时间'
-                ].join('\n');
+                  `本节课主题: ${props.lessonTitle || '未设置'}`,
+                  `所属课表: ${props.planName}`,
+                  `学员: ${participantText}`,
+                  `任课老师: ${props.teacherName}`,
+                  `地点: ${props.venueName}`
+                ];
+                
+                // 只读模式下不显示交互提示
+                if (!readonly) {
+                  tooltipLines.push('', '点击查看详情');
+                }
+                
+                info.el.title = tooltipLines.join('\n');
               }}
             />
           </div>

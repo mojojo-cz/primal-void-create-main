@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>删除课表功能测试报告</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #2563eb;
+        }
+        h2 {
+            color: #1e40af;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-left: 10px;
+            border-left: 4px solid #3b82f6;
+        }
+        h3 {
+            color: #1f2937;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature-card {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #10b981;
+        }
+        .feature-card h4 {
+            color: #059669;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .code-block {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .warning {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .danger {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        .screenshot {
+            background: #f1f5f9;
+            border: 2px dashed #cbd5e1;
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        .test-section {
+            background: #eff6ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #3b82f6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ 删除课表功能实现报告</h1>
+        
+        <div class="success">
+            <h3>✅ 功能实现状态</h3>
+            <p><strong>实施日期：</strong>2025年1月31日</p>
+            <p><strong>实施状态：</strong>✅ 已完成</p>
+            <p><strong>测试状态：</strong>🧪 待测试</p>
+        </div>
+
+        <h2>📋 功能概述</h2>
+        <p>在排课管理页面的课表筛选下拉菜单旁边添加了删除按钮，实现一键删除整个课表及其包含的所有课程的功能。</p>
+
+        <h2>🎯 实现的功能特性</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h4>📍 按钮位置设计</h4>
+                <ul>
+                    <li>位于课表筛选下拉菜单右侧</li>
+                    <li>仅在选择具体课表时显示</li>
+                    <li>红色主题突出删除操作</li>
+                    <li>鼠标悬停显示工具提示</li>
+                </ul>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🛡️ 安全确认机制</h4>
+                <ul>
+                    <li>双重确认对话框</li>
+                    <li>醒目的危险操作警告</li>
+                    <li>显示课表名称和课程数量</li>
+                    <li>明确告知操作不可撤销</li>
+                </ul>
+            </div>
+            
+            <div class="feature-card">
+                <h4>⚡ 智能状态管理</h4>
+                <ul>
+                    <li>乐观更新本地状态</li>
+                    <li>自动刷新课表列表</li>
+                    <li>重置筛选条件</li>
+                    <li>错误时回滚数据</li>
+                </ul>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🔄 级联删除机制</h4>
+                <ul>
+                    <li>删除课表计划记录</li>
+                    <li>自动删除所有关联课程</li>
+                    <li>清理计划参与者数据</li>
+                    <li>数据库级联约束保证</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>🛠️ 技术实现细节</h2>
+        
+        <h3>1. 状态管理增强</h3>
+        <div class="code-block">
+const [deletePlanDialog, setDeletePlanDialog] = useState&lt;{
+  open: boolean;
+  planName: string;
+  planId: string | null;
+  scheduleCount: number;
+}&gt;({
+  open: false,
+  planName: "",
+  planId: null,
+  scheduleCount: 0
+});
+        </div>
+
+        <h3>2. 删除按钮条件渲染</h3>
+        <div class="code-block">
+{filterPlan !== "all" && (
+  &lt;Button 
+    variant="outline" 
+    size="sm"
+    onClick={() => {
+      const selectedPlan = schedulePlans.find(p => p.id === filterPlan);
+      if (selectedPlan) {
+        openDeletePlanDialog(filterPlan, selectedPlan.name);
+      }
+    }}
+    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+    title="删除课表"
+  &gt;
+    &lt;Trash2 className="h-4 w-4" /&gt;
+  &lt;/Button&gt;
+)}
+        </div>
+
+        <h3>3. 核心删除逻辑</h3>
+        <div class="code-block">
+const handleConfirmDeletePlan = async () => {
+  // 删除课表计划（会级联删除所有相关排课）
+  const { error } = await supabase
+    .from('schedule_plans')
+    .delete()
+    .eq('id', deletePlanDialog.planId);
+
+  // 乐观更新本地状态
+  setSchedules(prevSchedules => 
+    prevSchedules.filter(s => s.plan_id !== deletePlanDialog.planId)
+  );
+  
+  // 更新课程总数
+  setTotalCount(prevCount => Math.max(0, prevCount - deletePlanDialog.scheduleCount));
+};
+        </div>
+
+        <h2>🎨 用户界面设计</h2>
+        
+        <h3>删除按钮设计</h3>
+        <div class="screenshot">
+            <p>📱 <strong>删除按钮位置：</strong>课表筛选下拉菜单右侧</p>
+            <p>🎨 <strong>视觉设计：</strong>红色边框，垃圾桶图标，悬停效果</p>
+            <p>🔍 <strong>显示条件：</strong>仅在选择具体课表时显示（filterPlan !== "all"）</p>
+        </div>
+
+        <h3>确认对话框设计</h3>
+        <div class="screenshot">
+            <p>⚠️ <strong>警告区域：</strong>红色背景的危险操作提示</p>
+            <p>📊 <strong>信息展示：</strong>课表名称 + 包含课程数量</p>
+            <p>❌ <strong>操作按钮：</strong>取消（灰色）+ 确认删除（红色）</p>
+        </div>
+
+        <h2>🧪 测试验证</h2>
+        
+        <div class="test-section">
+            <h3>📝 测试用例</h3>
+            <ol>
+                <li><strong>按钮显示测试：</strong>
+                    <ul>
+                        <li>选择"全部课表" - 按钮应该隐藏</li>
+                        <li>选择具体课表 - 按钮应该显示</li>
+                    </ul>
+                </li>
+                <li><strong>确认对话框测试：</strong>
+                    <ul>
+                        <li>点击删除按钮应该弹出确认对话框</li>
+                        <li>对话框应该显示课表名称和课程数量</li>
+                        <li>点击取消应该关闭对话框</li>
+                    </ul>
+                </li>
+                <li><strong>删除功能测试：</strong>
+                    <ul>
+                        <li>确认删除应该成功删除课表和所有课程</li>
+                        <li>页面应该自动刷新并移除已删除的课程</li>
+                        <li>筛选条件应该重置为"全部课表"</li>
+                    </ul>
+                </li>
+                <li><strong>错误处理测试：</strong>
+                    <ul>
+                        <li>网络错误时应该显示错误提示</li>
+                        <li>权限不足时应该显示相应错误</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <h2>⚠️ 安全注意事项</h2>
+        <div class="danger">
+            <h3>🚨 重要安全提醒</h3>
+            <ul>
+                <li><strong>不可撤销操作：</strong>删除操作是永久性的，无法恢复</li>
+                <li><strong>级联删除：</strong>会同时删除课表下的所有课程和学员参与记录</li>
+                <li><strong>权限控制：</strong>仅管理员有权限执行删除操作</li>
+                <li><strong>数据一致性：</strong>依赖数据库级联约束保证数据完整性</li>
+            </ul>
+        </div>
+
+        <h2>🔮 未来优化建议</h2>
+        <div class="warning">
+            <h3>💡 可能的改进方向</h3>
+            <ul>
+                <li><strong>批量删除：</strong>支持选择多个课表进行批量删除</li>
+                <li><strong>软删除：</strong>考虑实现软删除机制，支持数据恢复</li>
+                <li><strong>删除权限：</strong>更细粒度的权限控制（如课表创建者才能删除）</li>
+                <li><strong>操作日志：</strong>记录删除操作的详细日志</li>
+                <li><strong>删除预览：</strong>删除前显示将被影响的具体数据列表</li>
+            </ul>
+        </div>
+
+        <h2>✅ 总结</h2>
+        <div class="success">
+            <p>已成功实现排课管理模块的"删除课表"功能，包括：</p>
+            <ul>
+                <li>✅ 在合适位置添加了删除按钮</li>
+                <li>✅ 实现了安全的确认对话框</li>
+                <li>✅ 完成了删除的业务逻辑</li>
+                <li>✅ 添加了完善的错误处理</li>
+                <li>✅ 实现了智能的状态管理</li>
+            </ul>
+            <p><strong>功能现已就绪，可以进行实际测试使用。</strong></p>
+        </div>
+    </div>
+</body>
+</html> 

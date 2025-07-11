@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScheduleSkeleton } from "@/components/ui/schedule-skeleton";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { useStickyTableHeader } from "@/hooks/useStickyHeader";
-import { Calendar, Plus, Filter, Edit, Trash2, Search, Clock, MapPin, Users, BookOpen, AlertCircle, RefreshCw, X, RotateCcw, Grid3X3, List, Zap, FileText, User, ChevronDown } from "lucide-react";
+import { Calendar, Plus, Filter, Edit, Trash2, Search, Clock, MapPin, Users, BookOpen, AlertCircle, RefreshCw, X, RotateCcw, Grid3X3, List, Zap, FileText, User, ChevronDown, AlertTriangle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -475,6 +475,17 @@ const ScheduleManagement = () => {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; schedule: ScheduleWithDetails | null }>({ 
     open: false, 
     schedule: null 
+  });
+  const [deletePlanDialog, setDeletePlanDialog] = useState<{ 
+    open: boolean; 
+    planName: string; 
+    planId: string | null; 
+    scheduleCount: number 
+  }>({
+    open: false,
+    planName: "",
+    planId: null,
+    scheduleCount: 0
   });
   
   // 表单状态
@@ -1049,6 +1060,78 @@ const ScheduleManagement = () => {
     }
   };
 
+  // 打开删除课表对话框
+  const openDeletePlanDialog = (planId: string, planName: string) => {
+    if (planId === "all" || !planId) return;
+    
+    // 计算该课表下的课程数量
+    const planSchedules = schedules.filter(schedule => schedule.plan_id === planId);
+    
+    setDeletePlanDialog({ 
+      open: true, 
+      planName, 
+      planId,
+      scheduleCount: planSchedules.length 
+    });
+  };
+
+  // 确认删除课表
+  const handleConfirmDeletePlan = async () => {
+    if (!deletePlanDialog.planId) return;
+    
+    try {
+      // 删除课表计划（会级联删除所有相关排课）
+      const { error } = await supabase
+        .from('schedule_plans')
+        .delete()
+        .eq('id', deletePlanDialog.planId);
+
+      if (error) throw error;
+
+      // 乐观更新：立即从列表中移除该课表下的所有排课
+      setSchedules(prevSchedules => 
+        prevSchedules.filter(s => s.plan_id !== deletePlanDialog.planId)
+      );
+
+      // 乐观更新：减少课程总数
+      setTotalCount(prevCount => Math.max(0, prevCount - deletePlanDialog.scheduleCount));
+
+      // 重新获取课表列表
+      const { data: plansData, error: plansError } = await supabase.rpc('get_schedule_plans_with_stats', {
+        p_limit: 1000,
+        p_offset: 0,
+        p_status: 'active'
+      });
+
+      if (!plansError && plansData) {
+        setSchedulePlans(plansData);
+      }
+
+      // 如果当前筛选的就是被删除的课表，重置筛选
+      if (filterPlan === deletePlanDialog.planId) {
+        setFilterPlan("all");
+      }
+
+      toast({
+        title: "删除成功",
+        description: `课表"${deletePlanDialog.planName}"及其包含的 ${deletePlanDialog.scheduleCount} 节课程已删除`
+      });
+
+      setDeletePlanDialog({ open: false, planName: "", planId: null, scheduleCount: 0 });
+
+    } catch (error: any) {
+      console.error('删除课表失败:', error);
+      toast({
+        variant: "destructive",
+        title: "删除失败",
+        description: error.message || "无法删除课表"
+      });
+      
+      // 错误时恢复状态 - 重新获取数据确保一致性
+      fetchInitialSchedules();
+    }
+  };
+
   // 日期验证函数
   const validateScheduleDate = (date: string): string | null => {
     if (!date) return "请选择上课日期";
@@ -1470,22 +1553,41 @@ const ScheduleManagement = () => {
 
                   <div className="space-y-2">
                     <Label>课表筛选</Label>
-                    <Select value={filterPlan} onValueChange={setFilterPlan}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择课表" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">全部课表</SelectItem>
-                        {schedulePlans.map((plan) => (
-                          <SelectItem key={plan.id} value={plan.id}>
-                            <div className="flex items-center gap-2">
-                              <FileText className="h-4 w-4" />
-                              {plan.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-2">
+                      <Select value={filterPlan} onValueChange={setFilterPlan}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="选择课表" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">全部课表</SelectItem>
+                          {schedulePlans.map((plan) => (
+                            <SelectItem key={plan.id} value={plan.id}>
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4" />
+                                {plan.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {/* 删除课表按钮 */}
+                      {filterPlan !== "all" && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            const selectedPlan = schedulePlans.find(p => p.id === filterPlan);
+                            if (selectedPlan) {
+                              openDeletePlanDialog(filterPlan, selectedPlan.name);
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                          title="删除课表"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -1619,6 +1721,7 @@ const ScheduleManagement = () => {
               schedulePlans={schedulePlans}
               filterPlan={filterPlan}
               onPlanFilterChange={setFilterPlan}
+              readonly={true} // 设置为只读模式
             />
           ) : loading ? (
             <div className="flex justify-center items-center py-8">
@@ -2051,6 +2154,50 @@ const ScheduleManagement = () => {
             >
               <Trash2 className="h-4 w-4 mr-2" />
               确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 删除课表确认对话框 */}
+      <AlertDialog open={deletePlanDialog.open} onOpenChange={(open) => setDeletePlanDialog({ open, planName: "", planId: null, scheduleCount: 0 })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              确认删除课表
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-red-700">
+                    <p className="font-medium">⚠️ 危险操作警告</p>
+                    <p className="text-sm mt-1">此操作将永久删除整个课表及其包含的所有课程，且无法恢复！</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <p>您确定要删除以下课表吗？</p>
+                <div className="bg-gray-50 p-3 rounded-md space-y-2 text-sm">
+                  <div><strong>课表名称：</strong>{deletePlanDialog.planName}</div>
+                  <div><strong>包含课程：</strong>{deletePlanDialog.scheduleCount} 节课</div>
+                  <div className="text-red-600 font-medium">删除后将同时删除所有 {deletePlanDialog.scheduleCount} 节课程</div>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletePlanDialog({ open: false, planName: "", planId: null, scheduleCount: 0 })}>
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeletePlan}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              确认删除课表
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

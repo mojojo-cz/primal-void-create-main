@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日历悬停提示信息优化验证</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2563eb;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .status.success {
+            background-color: #f0fdf4;
+            border-color: #22c55e;
+            color: #15803d;
+        }
+        .status.info {
+            background-color: #eff6ff;
+            border-color: #3b82f6;
+            color: #1d4ed8;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 20px 0;
+        }
+        .tooltip-demo {
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            position: relative;
+        }
+        .tooltip-demo.before {
+            border-color: #fbbf24;
+            background-color: #fffbeb;
+        }
+        .tooltip-demo.after {
+            border-color: #22c55e;
+            background-color: #f0fdf4;
+        }
+        .tooltip-content {
+            background: #1f2937;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            line-height: 1.5;
+            font-family: 'Monaco', 'Consolas', monospace;
+            white-space: pre-line;
+        }
+        .calendar-event-demo {
+            background: #3b82f6;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin: 15px auto;
+            max-width: 150px;
+            text-align: center;
+            cursor: pointer;
+        }
+        .changes-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .changes-table th,
+        .changes-table td {
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            text-align: left;
+        }
+        .changes-table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+        }
+        .changes-table .before-text {
+            color: #dc2626;
+            text-decoration: line-through;
+        }
+        .changes-table .after-text {
+            color: #16a34a;
+            font-weight: 600;
+        }
+        .highlight {
+            background-color: #fef3c7;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💬 日历悬停提示信息优化验证</h1>
+        
+        <div class="status success">
+            <h3>✅ 优化完成</h3>
+            <p>已成功优化日历视图的悬停提示信息，使用更贴合实际场景的用词，提升用户理解度。</p>
+        </div>
+
+        <div class="test-section">
+            <h2>📝 文案优化详情</h2>
+            
+            <table class="changes-table">
+                <thead>
+                    <tr>
+                        <th>序号</th>
+                        <th>优化前</th>
+                        <th>优化后</th>
+                        <th>优化说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td class="before-text">科目</td>
+                        <td class="after-text">课程</td>
+                        <td>更贴合实际教学场景的称呼</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td class="before-text">课程主题</td>
+                        <td class="after-text">本节课主题</td>
+                        <td>更精确地描述单节课的内容</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td class="before-text">所属计划</td>
+                        <td class="after-text">所属课表</td>
+                        <td>与系统术语保持一致</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td class="before-text">教师</td>
+                        <td class="after-text">任课老师</td>
+                        <td>更符合教育行业习惯用语</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td class="before-text">参与方</td>
+                        <td class="after-text">学员</td>
+                        <td>更直观明确的表达</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td class="before-text">状态</td>
+                        <td class="after-text"><span class="highlight">已移除</span></td>
+                        <td>简化信息，减少技术性词汇</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="test-section">
+            <h2>🎨 提示信息对比展示</h2>
+            
+            <div class="comparison-grid">
+                <div class="tooltip-demo before">
+                    <h3 style="text-align: center; margin-top: 0;">优化前</h3>
+                    <div class="calendar-event-demo">线性代数</div>
+                    <div class="tooltip-content">科目: 线性代数
+课程主题: 矩阵的运算
+所属计划: 2025数学高考冲刺班
+参与方: 高三(1)班 + 2名额外学员
+教师: 张老师
+地点: A101
+状态: scheduled</div>
+                    <p style="text-align: center; font-size: 12px; color: #d97706; margin-bottom: 0;">
+                        ❌ 包含技术性状态信息<br>
+                        ❌ 术语不够亲切
+                    </p>
+                </div>
+                
+                <div class="tooltip-demo after">
+                    <h3 style="text-align: center; margin-top: 0;">优化后</h3>
+                    <div class="calendar-event-demo">线性代数</div>
+                    <div class="tooltip-content">课程: 线性代数
+本节课主题: 矩阵的运算
+所属课表: 2025数学高考冲刺班
+学员: 高三(1)班 + 2名额外学员
+任课老师: 张老师
+地点: A101</div>
+                    <p style="text-align: center; font-size: 12px; color: #22c55e; margin-bottom: 0;">
+                        ✅ 移除技术性信息<br>
+                        ✅ 使用教育行业常用术语
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>💡 优化思路说明</h2>
+            
+            <div class="status info">
+                <h3>文案优化原则：</h3>
+                <ul>
+                    <li><strong>贴合场景：</strong>使用教育行业常见的用词习惯</li>
+                    <li><strong>用户友好：</strong>避免技术性术语，提升可读性</li>
+                    <li><strong>信息精简：</strong>移除对用户意义不大的技术状态</li>
+                    <li><strong>语义明确：</strong>更精确地描述信息内容</li>
+                    <li><strong>一致性：</strong>与系统整体术语保持统一</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔧 技术实现代码</h2>
+            
+            <div style="background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 6px; font-family: 'Monaco', 'Consolas', monospace; font-size: 14px; overflow-x: auto;">
+// 优化后的悬停提示信息代码
+eventMouseEnter={(info) => {
+  const props = info.event.extendedProps;
+  const participantText = props.participantsCount > 0 
+    ? `${props.className} + ${props.participantsCount}名额外学员`
+    : props.className;
+  
+  const tooltipLines = [
+    `课程: ${info.event.title}`,                    // 科目 → 课程
+    `本节课主题: ${props.lessonTitle || '未设置'}`,    // 课程主题 → 本节课主题
+    `所属课表: ${props.planName}`,                   // 所属计划 → 所属课表
+    `学员: ${participantText}`,                      // 参与方 → 学员
+    `任课老师: ${props.teacherName}`,                // 教师 → 任课老师
+    `地点: ${props.venueName}`                      // 保持不变
+    // 移除了状态字段
+  ];
+  
+  // 只读模式下不显示交互提示
+  if (!readonly) {
+    tooltipLines.push('', '点击查看详情');
+  }
+  
+  info.el.title = tooltipLines.join('\n');
+}}
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📚 用词对照说明</h2>
+            
+            <div class="status info">
+                <h3>优化后的信息结构：</h3>
+                <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                    <pre style="margin: 0; font-family: monospace; color: #374151;">┌─────────────────────────────────┐
+│ 课程: 线性代数                    │ ← 更贴合教学场景
+│ 本节课主题: 矩阵的运算             │ ← 更精确的描述
+│ 所属课表: 2025数学高考冲刺班       │ ← 与系统术语统一
+│ 学员: 高三(1)班 + 2名额外学员      │ ← 更直观明确
+│ 任课老师: 张老师                  │ ← 教育行业常用称呼
+│ 地点: A101                       │ ← 保持不变
+└─────────────────────────────────┘</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 用户体验提升</h2>
+            
+            <div class="status info">
+                <h3>优化效果：</h3>
+                <ul>
+                    <li><strong>更亲切的用词：</strong>"任课老师"比"教师"更贴近教育场景</li>
+                    <li><strong>更精确的描述：</strong>"本节课主题"比"课程主题"更准确</li>
+                    <li><strong>更直观的表达：</strong>"学员"比"参与方"更容易理解</li>
+                    <li><strong>信息的精简：</strong>移除用户不关心的技术状态</li>
+                    <li><strong>术语的统一：</strong>"所属课表"与系统整体保持一致</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📋 优化前后信息对比</h2>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <h4 style="color: #dc2626;">优化前 (6个字段)</h4>
+                    <ol style="color: #6b7280;">
+                        <li>科目: ...</li>
+                        <li>课程主题: ...</li>
+                        <li>所属计划: ...</li>
+                        <li>参与方: ...</li>
+                        <li>教师: ...</li>
+                        <li>地点: ...</li>
+                        <li style="text-decoration: line-through;">状态: scheduled</li>
+                    </ol>
+                </div>
+                <div>
+                    <h4 style="color: #16a34a;">优化后 (6个字段)</h4>
+                    <ol style="color: #374151;">
+                        <li><strong>课程</strong>: ...</li>
+                        <li><strong>本节课主题</strong>: ...</li>
+                        <li><strong>所属课表</strong>: ...</li>
+                        <li><strong>学员</strong>: ...</li>
+                        <li><strong>任课老师</strong>: ...</li>
+                        <li><strong>地点</strong>: ...</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="status success">
+            <h3>🎉 优化总结</h3>
+            <p>
+                通过精心调整悬停提示信息的用词，成功让日历视图更加 
+                <strong>贴合教育场景</strong> 和 <strong>用户习惯</strong>。
+                新的文案不仅更容易理解，也更符合教育行业的专业表达方式，
+                为用户提供了更友好的交互体验。
+            </p>
+        </div>
+    </div>
+</body>
+</html> 
