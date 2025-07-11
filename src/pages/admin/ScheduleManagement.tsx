@@ -18,8 +18,7 @@ import { toast } from "@/components/ui/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
-import { EnhancedPagination } from "@/components/ui/enhanced-pagination";
+
 import ScheduleCalendar from "@/components/ScheduleCalendar";
 import SmartScheduleWorkbench from "@/components/SmartScheduleWorkbench";
 import { 
@@ -253,7 +252,7 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
       </div>
 
       {/* 课程主题（行内编辑） */}
-      <div className="w-48 min-w-0 p-3 flex-shrink-0 truncate">
+      <div className="w-60 min-w-0 p-3 flex-shrink-0 truncate">
         {editingTitle ? (
           <input
             type="text"
@@ -294,6 +293,13 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
       {/* 教室 */}
       <div className="w-36 p-3 text-sm text-gray-700 flex-shrink-0 truncate" title={schedule.venue_name || '在线课程'}>
         {schedule.venue_name || '在线课程'}
+      </div>
+
+      {/* 所属课表 */}
+      <div className="w-60 p-3 text-sm text-gray-600 flex-shrink-0 truncate" title={schedule.plan_name || '未分配课表'}>
+        {schedule.plan_name || (
+          <span className="text-gray-400 italic">未分配</span>
+        )}
       </div>
 
       {/* 备注 */}
@@ -355,7 +361,7 @@ const DateGroupHeader: React.FC<DateGroupHeaderProps> = ({ date, scheduleCount }
 // 表格头部组件
 const ScheduleTableHeader: React.FC = () => {
   return (
-    <div className="border-b bg-gray-50 text-xs font-medium text-gray-700 sticky top-0 z-20">
+    <div className="bg-gray-50 text-xs font-medium text-gray-700 border-b-0">
       <div className="flex items-center">
         {/* 日期列 */}
         <div className="w-24 p-3 text-center bg-gray-100 border-r border-gray-200">日期</div>
@@ -364,9 +370,10 @@ const ScheduleTableHeader: React.FC = () => {
           <div className="w-24 p-3 text-center">时段</div>
           <div className="w-36 p-3">具体时间</div>
           <div className="w-32 p-3">科目</div>
-          <div className="w-48 p-3">课程主题</div>
-          <div className="w-28 p-3">教师</div>
+          <div className="w-60 p-3">课程主题</div>
+          <div className="w-28 p-3">任课老师</div>
           <div className="w-36 p-3">教室</div>
+          <div className="w-60 p-3">所属课表</div>
           <div className="flex-1 p-3">备注</div>
           <div className="w-16 p-3 text-center">操作</div>
         </div>
@@ -387,10 +394,11 @@ const ScheduleManagement = () => {
   const [venues, setVenues] = useState<DatabaseVenue[]>([]);
   const [schedulePlans, setSchedulePlans] = useState<any[]>([]);
   
-  // 分页状态 - 现在基于课程数量
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setCurrentPageSize] = useState(() => getCurrentPageSize());
+  // 无限滚动状态
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20; // 每次加载数量
   
   // 搜索和筛选状态
   const [searchTerm, setSearchTerm] = useState("");
@@ -402,6 +410,9 @@ const ScheduleManagement = () => {
   
   // 视图状态
   const [currentView, setCurrentView] = useState<'table' | 'calendar'>('table');
+  
+  // 筛选栏展开状态
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   
   // 对话框状态
   const [smartWorkbenchDialog, setSmartWorkbenchDialog] = useState(false);
@@ -436,8 +447,7 @@ const ScheduleManagement = () => {
                    profile?.user_type === 'head_teacher' || 
                    profile?.user_type === 'business_teacher';
 
-  // 计算总页数
-  const totalPages = Math.ceil(totalCount / pageSize);
+  // 无限滚动逻辑 - 移除总页数计算
 
   // 获取基础数据
   const fetchBaseData = async () => {
@@ -503,8 +513,8 @@ const ScheduleManagement = () => {
     }
   };
 
-  // 获取所有课程（分页）
-  const fetchAllSchedules = async () => {
+  // 获取初始课程列表
+  const fetchInitialSchedules = async () => {
     if (!hasAccess) return;
     
     setLoading(true);
@@ -512,7 +522,7 @@ const ScheduleManagement = () => {
       const { data, error } = await supabase
         .rpc('get_schedules_with_details', {
           p_limit: pageSize,
-          p_offset: (currentPage - 1) * pageSize,
+          p_offset: 0,
           p_search_term: searchTerm || null,
           p_class_id: filterClass !== "all" ? filterClass : null,
           p_subject_id: filterSubject !== "all" ? filterSubject : null,
@@ -557,11 +567,13 @@ const ScheduleManagement = () => {
       }));
 
       // 前端处理"在线课程"筛选
+      let filteredSchedules = formattedSchedules;
       if (filterVenue === "online") {
-        setSchedules(formattedSchedules.filter(schedule => !schedule.venue_id));
-      } else {
-        setSchedules(formattedSchedules);
+        filteredSchedules = formattedSchedules.filter(schedule => !schedule.venue_id);
       }
+
+      setSchedules(filteredSchedules);
+      setHasMore(filteredSchedules.length === pageSize);
 
       // 计算总数
       await fetchScheduleCount();
@@ -574,8 +586,84 @@ const ScheduleManagement = () => {
         description: error.message || "无法加载课程列表"
       });
       setSchedules([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 加载更多课程
+  const loadMoreSchedules = async () => {
+    if (!hasAccess || loadingMore || !hasMore) return;
+    
+    setLoadingMore(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('get_schedules_with_details', {
+          p_limit: pageSize,
+          p_offset: schedules.length,
+          p_search_term: searchTerm || null,
+          p_class_id: filterClass !== "all" ? filterClass : null,
+          p_subject_id: filterSubject !== "all" ? filterSubject : null,
+          p_teacher_id: filterTeacher !== "all" ? filterTeacher : null,
+          p_venue_id: filterVenue !== "all" && filterVenue !== "online" ? filterVenue : null,
+          p_plan_id: filterPlan !== "all" ? filterPlan : null,
+          p_date_from: null,
+          p_date_to: null
+        });
+
+      if (error) throw error;
+
+      const formattedSchedules: ScheduleWithDetails[] = (data || []).map(schedule => ({
+        id: schedule.id,
+        class_id: schedule.class_id,
+        subject_id: schedule.subject_id,
+        teacher_id: schedule.teacher_id,
+        venue_id: schedule.venue_id,
+        plan_id: schedule.plan_id || null,
+        schedule_date: schedule.schedule_date,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        duration_minutes: schedule.duration_minutes,
+        lesson_title: schedule.lesson_title,
+        lesson_description: schedule.lesson_description,
+        online_meeting_url: schedule.online_meeting_url,
+        course_hours: schedule.course_hours,
+        status: schedule.status,
+        notes: schedule.notes || '',
+        created_by: schedule.created_by,
+        created_at: schedule.created_at,
+        updated_at: schedule.updated_at,
+        // 关联数据
+        class_name: schedule.class_name || '未知班级',
+        subject_name: schedule.subject_name || '未知课程',
+        teacher_name: schedule.teacher_name || '未知教师',
+        teacher_full_name: schedule.teacher_full_name || schedule.teacher_name || '未知教师',
+        venue_name: schedule.venue_name || '',
+        // 新增计划相关字段
+        plan_name: schedule.plan_name || undefined,
+        participants_count: schedule.participants_count || 0
+      }));
+
+      // 前端处理"在线课程"筛选
+      let filteredNewSchedules = formattedSchedules;
+      if (filterVenue === "online") {
+        filteredNewSchedules = formattedSchedules.filter(schedule => !schedule.venue_id);
+      }
+
+      // 追加新数据
+      setSchedules(prev => [...prev, ...filteredNewSchedules]);
+      setHasMore(filteredNewSchedules.length === pageSize);
+
+    } catch (error: any) {
+      console.error('加载更多课程失败:', error);
+      toast({
+        variant: "destructive",
+        title: "加载失败",
+        description: error.message || "无法加载更多课程"
+      });
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -679,8 +767,8 @@ const ScheduleManagement = () => {
 
       setDeleteDialog({ open: false, schedule: null });
 
-      // 重新获取数据以更新分页
-      fetchAllSchedules();
+      // 重新获取数据
+      fetchInitialSchedules();
 
     } catch (error: any) {
       console.error('删除课程失败:', error);
@@ -791,7 +879,7 @@ const ScheduleManagement = () => {
       });
 
       setEditDialog({ open: false, schedule: null });
-      fetchAllSchedules();
+      fetchInitialSchedules();
 
     } catch (error: any) {
       console.error('更新课程失败:', error);
@@ -898,16 +986,6 @@ const ScheduleManagement = () => {
     setFilterPlan("all");
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  const handlePageSizeChange = (newPageSize: number) => {
-    setCurrentPageSize(newPageSize);
-    setPageSize(newPageSize);
-    setCurrentPage(1);
-  };
-
   // 初始化数据
   useEffect(() => {
     if (hasAccess) {
@@ -915,32 +993,108 @@ const ScheduleManagement = () => {
     }
   }, [hasAccess]);
 
-  // 筛选条件变化时重置到第一页
+  // 筛选条件变化时重置数据和状态
   useEffect(() => {
-    setCurrentPage(1);
+    setSchedules([]);
+    setHasMore(true);
+    if (hasAccess) {
+      fetchInitialSchedules();
+    }
   }, [searchTerm, filterClass, filterSubject, filterTeacher, filterVenue, filterPlan]);
 
-  // 监听筛选条件和分页变化，自动重新获取数据
+  // 当有其他筛选条件时自动展开筛选栏
+  useEffect(() => {
+    if (filterClass !== "all" || filterSubject !== "all" || filterTeacher !== "all" || filterVenue !== "all") {
+      setFiltersExpanded(true);
+    }
+  }, [filterClass, filterSubject, filterTeacher, filterVenue]);
+
+  // 动态获取当前课表标题
+  const getCurrentScheduleTitle = () => {
+    if (filterPlan === "all") {
+      return "全部课表";
+    }
+    
+    const selectedPlan = schedulePlans.find(plan => plan.id === filterPlan);
+    return selectedPlan ? selectedPlan.name : "课表列表";
+  };
+
+  // 初始数据加载
   useEffect(() => {
     if (hasAccess) {
-      if (currentView === 'calendar') {
-        fetchAllSchedules();
-      } else {
-        fetchAllSchedules();
-      }
+      fetchInitialSchedules();
     }
-  }, [
-    hasAccess, 
-    currentPage, 
-    pageSize, 
-    searchTerm, 
-    filterClass, 
-    filterSubject, 
-    filterTeacher, 
-    filterVenue, 
-    filterPlan,
-    currentView
-  ]);
+  }, [hasAccess, currentView]);
+
+  // 无限滚动监听和横向滚动同步
+  useEffect(() => {
+    const handleScroll = () => {
+      // 只在表格视图中启用无限滚动
+      if (currentView !== 'table' || loadingMore || !hasMore) return;
+
+      // 查找滚动容器
+      const scrollContainer = document.getElementById('schedules-scroll-container') as HTMLElement;
+      if (!scrollContainer) return;
+
+      const scrollTop = scrollContainer.scrollTop;
+      const scrollHeight = scrollContainer.scrollHeight;
+      const clientHeight = scrollContainer.clientHeight;
+      
+      // 检查是否滚动到接近底部（距离底部300px时开始加载）
+      if (scrollTop + clientHeight >= scrollHeight - 300) {
+        loadMoreSchedules();
+      }
+    };
+
+    const handleHorizontalScroll = () => {
+      // 同步表头和内容的横向滚动
+      const scrollContainer = document.getElementById('schedules-scroll-container') as HTMLElement;
+      const headerContainer = document.getElementById('table-header-scroll') as HTMLElement;
+      
+      if (scrollContainer && headerContainer) {
+        headerContainer.scrollLeft = scrollContainer.scrollLeft;
+      }
+    };
+
+    // 防抖处理，避免频繁触发
+    let timeoutId: NodeJS.Timeout;
+    const debouncedHandleScroll = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        handleScroll();
+        handleHorizontalScroll();
+      }, 100);
+    };
+
+    // 监听滚动容器的滚动事件
+    const scrollContainer = document.getElementById('schedules-scroll-container') as HTMLElement;
+    const headerContainer = document.getElementById('table-header-scroll') as HTMLElement;
+    
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', debouncedHandleScroll);
+    }
+
+    // 监听表头的横向滚动，同步到内容区域
+    const handleHeaderScroll = () => {
+      if (scrollContainer && headerContainer) {
+        scrollContainer.scrollLeft = headerContainer.scrollLeft;
+      }
+    };
+
+    if (headerContainer) {
+      headerContainer.addEventListener('scroll', handleHeaderScroll);
+    }
+
+    return () => {
+      if (scrollContainer) {
+        scrollContainer.removeEventListener('scroll', debouncedHandleScroll);
+      }
+      if (headerContainer) {
+        headerContainer.removeEventListener('scroll', handleHeaderScroll);
+      }
+      clearTimeout(timeoutId);
+    };
+  }, [currentView, loadingMore, hasMore, loadMoreSchedules]);
 
   // 权限检查
   if (!profile) {
@@ -1014,133 +1168,156 @@ const ScheduleManagement = () => {
       {/* 搜索和筛选区域 */}
             <Card className="border-dashed">
               <CardContent className="pt-6">
+                {/* 默认显示：搜索 + 课表筛选 + 展开按钮 */}
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="search">搜索排课</Label>
-              <div className="relative">
+                    <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  id="search"
+                      <Input
+                        id="search"
                         placeholder="输入课程标题、班级名称..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            
-                  <div className="space-y-2">
-              <Label>班级</Label>
-              <Select value={filterClass} onValueChange={setFilterClass}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择班级" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部班级</SelectItem>
-                  {classes.map((cls) => (
-                          <SelectItem key={cls.id} value={cls.id}>
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4" />
-                      {cls.name}
-                            </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-                  <div className="space-y-2">
-              <Label>课程</Label>
-              <Select value={filterSubject} onValueChange={setFilterSubject}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择课程" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部课程</SelectItem>
-                  {subjects.map((subject) => (
-                          <SelectItem key={subject.id} value={subject.id}>
-                            <div className="flex items-center gap-2">
-                              <BookOpen className="h-4 w-4" />
-                      {subject.name}
-                            </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-
-                  
-                  <div className="space-y-2">
-              <Label>教师</Label>
-              <Select value={filterTeacher} onValueChange={setFilterTeacher}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择教师" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部教师</SelectItem>
-                  {teachers.map((teacher) => (
-                          <SelectItem key={teacher.id} value={teacher.id}>
-                      {teacher.full_name || teacher.username}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-                  <div className="space-y-2">
-                    <Label>教室</Label>
-                    <Select value={filterVenue} onValueChange={setFilterVenue}>
-                <SelectTrigger>
-                        <SelectValue placeholder="选择教室" />
-                </SelectTrigger>
-                <SelectContent>
-                        <SelectItem value="all">全部教室</SelectItem>
-                        {venues.map((venue) => (
-                          <SelectItem key={venue.id} value={venue.id}>
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4" />
-                              {venue.name}
-                            </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
 
                   <div className="space-y-2">
-                    <Label>课表</Label>
+                    <Label>课表筛选</Label>
                     <Select value={filterPlan} onValueChange={setFilterPlan}>
                       <SelectTrigger>
                         <SelectValue placeholder="选择课表" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">全部计划</SelectItem>
+                        <SelectItem value="all">全部课表</SelectItem>
                         {schedulePlans.map((plan) => (
                           <SelectItem key={plan.id} value={plan.id}>
                             <div className="flex items-center gap-2">
                               <FileText className="h-4 w-4" />
                               {plan.name}
                             </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <Label>&nbsp;</Label>
-                    <Button 
-                      variant="outline" 
-                      onClick={clearFilters}
-                      className="w-full"
-                    >
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                      清除筛选
-              </Button>
-            </div>
-          </div>
-        </CardContent>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setFiltersExpanded(!filtersExpanded)}
+                        className="flex-1 relative"
+                      >
+                        <Filter className="h-4 w-4 mr-2" />
+                        {filtersExpanded ? '收起筛选' : '更多筛选'}
+                        <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${filtersExpanded ? 'rotate-180' : ''}`} />
+                        {/* 筛选状态指示器 - 只显示除搜索和课表外的其他筛选条件 */}
+                        {(filterClass !== "all" || filterSubject !== "all" || filterTeacher !== "all" || filterVenue !== "all") && (
+                          <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></div>
+                        )}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={clearFilters}
+                        className="flex-1"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        清除筛选
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 展开的完整筛选选项 */}
+                {filtersExpanded && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      <div className="space-y-2">
+                        <Label>班级</Label>
+                        <Select value={filterClass} onValueChange={setFilterClass}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择班级" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">全部班级</SelectItem>
+                            {classes.map((cls) => (
+                              <SelectItem key={cls.id} value={cls.id}>
+                                <div className="flex items-center gap-2">
+                                  <Users className="h-4 w-4" />
+                                  {cls.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label>课程</Label>
+                        <Select value={filterSubject} onValueChange={setFilterSubject}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择课程" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">全部课程</SelectItem>
+                            {subjects.map((subject) => (
+                              <SelectItem key={subject.id} value={subject.id}>
+                                <div className="flex items-center gap-2">
+                                  <BookOpen className="h-4 w-4" />
+                                  {subject.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label>老师</Label>
+                        <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择老师" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">全部老师</SelectItem>
+                            {teachers.map((teacher) => (
+                              <SelectItem key={teacher.id} value={teacher.id}>
+                                {teacher.full_name || teacher.username}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label>教室</Label>
+                        <Select value={filterVenue} onValueChange={setFilterVenue}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择教室" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">全部教室</SelectItem>
+                            {venues.map((venue) => (
+                              <SelectItem key={venue.id} value={venue.id}>
+                                <div className="flex items-center gap-2">
+                                  <MapPin className="h-4 w-4" />
+                                  {venue.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+          </CardContent>
       </Card>
           </div>
         </CardHeader>
@@ -1171,139 +1348,151 @@ const ScheduleManagement = () => {
 
 
               {/* 排课列表 */}
-              <div className="schedule-table-container relative max-h-[70vh] overflow-y-auto">
-                {/* 列表信息栏 */}
-                <div className="border rounded-t-lg bg-gray-50 p-3 border-b">
+              <div className="border rounded-lg bg-white relative">
+                {/* 列表信息栏 - 固定在顶部 */}
+                <div className="sticky top-0 z-30 bg-gray-50 p-3 border-b">
                   <div className="flex items-center justify-between">
+                    <div className="flex-1"></div>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-gray-700">课表列表</span>
+                      <span className="text-sm font-medium text-gray-700">{getCurrentScheduleTitle()}</span>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      共 {totalCount} 节课程
+                    <div className="flex-1 flex justify-end">
+                      <div className="text-sm text-gray-500">
+                        共 {totalCount} 节课程
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                                  {/* 按日期分组的课表列表 */}
-                  <div className="border-x border-b rounded-b-lg bg-white">
-                    {schedules.length === 0 ? (
-                      <div className="text-center py-12 text-gray-500">
-                        <Calendar className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                        {(searchTerm || filterClass !== "all" || filterSubject !== "all" || filterTeacher !== "all" || filterVenue !== "all" || filterPlan !== "all") ? (
-                          <div>
-                            <p className="text-lg font-medium mb-2">未找到匹配的课程</p>
-                            <p className="text-sm mb-4">尝试调整搜索条件或筛选器</p>
+                {/* 表格头部 - 固定在滚动容器外部 */}
+                {schedules.length > 0 && (
+                  <div className="sticky top-[45px] z-20 bg-white border-b">
+                    <div className="overflow-x-auto" id="table-header-scroll">
+                      <ScheduleTableHeader />
+                    </div>
+                  </div>
+                )}
+
+                {/* 滚动容器 */}
+                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto" id="schedules-scroll-container">
+                  {schedules.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <Calendar className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                      {(searchTerm || filterClass !== "all" || filterSubject !== "all" || filterTeacher !== "all" || filterVenue !== "all" || filterPlan !== "all") ? (
+                        <div>
+                          <p className="text-lg font-medium mb-2">未找到匹配的课程</p>
+                          <p className="text-sm mb-4">尝试调整搜索条件或筛选器</p>
+                          <Button
+                            variant="outline"
+                            onClick={clearFilters}
+                            className="mx-auto"
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            清除筛选条件
+                          </Button>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-lg font-medium mb-2">还没有任何课程安排</p>
+                          <p className="text-sm text-gray-400 mb-6">开始创建您的第一个课程安排</p>
+                          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                            <Button
+                              onClick={() => setSmartWorkbenchDialog(true)}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              <Zap className="h-4 w-4 mr-2" />
+                              智能排课工作台
+                            </Button>
                             <Button
                               variant="outline"
-                              onClick={clearFilters}
-                              className="mx-auto"
+                              onClick={() => setSmartWorkbenchDialog(true)}
                             >
-                              <X className="h-4 w-4 mr-2" />
-                              清除筛选条件
+                              <Plus className="h-4 w-4 mr-2" />
+                              快速创建排课
                             </Button>
                           </div>
-                        ) : (
-                          <div>
-                            <p className="text-lg font-medium mb-2">还没有任何课程安排</p>
-                            <p className="text-sm text-gray-400 mb-6">开始创建您的第一个课程安排</p>
-                            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                              <Button
-                                onClick={() => setSmartWorkbenchDialog(true)}
-                                className="bg-blue-600 hover:bg-blue-700"
-                              >
-                                <Zap className="h-4 w-4 mr-2" />
-                                智能排课工作台
-                              </Button>
-                              <Button
-                                variant="outline"
-                                onClick={() => setSmartWorkbenchDialog(true)}
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                快速创建排课
-                              </Button>
-                            </div>
-                            <p className="text-xs text-gray-400 mt-4">
-                              💡 推荐使用智能排课工作台，可以快速创建课程安排
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        {/* 表格头部 */}
-                        <ScheduleTableHeader />
+                          <p className="text-xs text-gray-400 mt-4">
+                            💡 推荐使用智能排课工作台，可以快速创建课程安排
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      {(() => {
+                        const dateGroups = groupSchedulesByDate(schedules);
+                        let globalIndex = 0;
                         
-                        {(() => {
-                          const dateGroups = groupSchedulesByDate(schedules);
-                          let globalIndex = 0;
-                          
-                          return dateGroups.map((dateGroup) => (
-                            <div key={dateGroup.date} className="border-b border-gray-100 last:border-b-0">
-                              {/* 日期分组头部 - 合并单元格效果 */}
-                              <div className="relative">
-                                <div className="absolute left-0 top-0 bottom-0 w-24 bg-gray-50 border-r border-gray-200 flex items-center justify-center">
-                                  <div className="text-center px-2">
-                                    <div className="text-sm font-semibold text-gray-800 mb-1">
-                                      {(() => {
-                                        const date = new Date(dateGroup.date);
-                                        const month = date.getMonth() + 1;
-                                        const day = date.getDate();
-                                        return `${month}/${day}`;
-                                      })()}
-                                    </div>
-                                    <div className="text-xs text-gray-500">
-                                      {new Date(dateGroup.date).toLocaleDateString('zh-CN', { weekday: 'short' })}
-                                    </div>
+                        return dateGroups.map((dateGroup) => (
+                          <div key={dateGroup.date} className="border-b border-gray-100 last:border-b-0">
+                            {/* 日期分组头部 - 合并单元格效果 */}
+                            <div className="relative">
+                              <div className="absolute left-0 top-0 bottom-0 w-24 bg-gray-50 border-r border-gray-200 flex items-center justify-center">
+                                <div className="text-center px-2">
+                                  <div className="text-sm font-semibold text-gray-800 mb-1">
+                                    {(() => {
+                                      const date = new Date(dateGroup.date);
+                                      const month = date.getMonth() + 1;
+                                      const day = date.getDate();
+                                      return `${month}/${day}`;
+                                    })()}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {new Date(dateGroup.date).toLocaleDateString('zh-CN', { weekday: 'short' })}
                                   </div>
                                 </div>
-                                
-                                {/* 课程列表 */}
-                                <div className="ml-24">
-                                  {dateGroup.schedules.map((schedule, index) => {
-                                    const currentIndex = globalIndex++;
-                                    return (
-                                      <OptimizedScheduleItem 
-                                        key={schedule.id}
-                                        schedule={schedule}
-                                        index={currentIndex}
-                                        isFirstInGroup={index === 0}
-                                        isLastInGroup={index === dateGroup.schedules.length - 1}
-                                        onDelete={openDeleteDialog}
-                                        onUpdateTitle={handleUpdateScheduleTitle}
-                                        formatTime={formatTime}
-                                        venues={venues}
-                                        onUpdateVenue={(scheduleId, venueId, venueName) => {
-                                          // 更新本地状态
-                                          setSchedules(prevSchedules => 
-                                            prevSchedules.map(s => 
-                                              s.id === scheduleId ? { ...s, venue_id: venueId, venue_name: venueName } : s
-                                            )
-                                          );
-                                        }}
-                                      />
-                                    );
-                                  })}
-                                </div>
+                              </div>
+                              
+                              {/* 课程列表 */}
+                              <div className="ml-24">
+                                {dateGroup.schedules.map((schedule, index) => {
+                                  const currentIndex = globalIndex++;
+                                  return (
+                                    <OptimizedScheduleItem 
+                                      key={schedule.id}
+                                      schedule={schedule}
+                                      index={currentIndex}
+                                      isFirstInGroup={index === 0}
+                                      isLastInGroup={index === dateGroup.schedules.length - 1}
+                                      onDelete={openDeleteDialog}
+                                      onUpdateTitle={handleUpdateScheduleTitle}
+                                      formatTime={formatTime}
+                                      venues={venues}
+                                      onUpdateVenue={(scheduleId, venueId, venueName) => {
+                                        // 更新本地状态
+                                        setSchedules(prevSchedules => 
+                                          prevSchedules.map(s => 
+                                            s.id === scheduleId ? { ...s, venue_id: venueId, venue_name: venueName } : s
+                                          )
+                                        );
+                                      }}
+                                    />
+                                  );
+                                })}
                               </div>
                             </div>
-                          ));
-                        })()}
-                      </div>
-                    )}
-                  </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* 分页组件 - 仅在表格视图中显示 */}
-              {currentView === 'table' && totalCount > 0 && (
-                <div className="mt-6">
-                  <EnhancedPagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    pageSize={pageSize}
-                    totalItems={totalCount}
-                    onPageChange={handlePageChange}
-                    onPageSizeChange={handlePageSizeChange}
-                  />
+              {/* 无限滚动加载指示器 */}
+              {currentView === 'table' && loadingMore && (
+                <div className="mt-6 flex justify-center py-4">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                    <span className="text-sm">加载更多...</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* 滚动到底部提示 */}
+              {currentView === 'table' && !hasMore && schedules.length > 0 && (
+                <div className="mt-6 text-center py-4 text-gray-500 text-sm">
+                  已显示全部 {schedules.length} 节课程
                 </div>
               )}
             </>
@@ -1588,11 +1777,7 @@ const ScheduleManagement = () => {
         onOpenChange={setSmartWorkbenchDialog}
         onScheduleCreated={() => {
           // 刷新排课列表
-          if (currentView === 'calendar') {
-            fetchAllSchedules();
-          } else {
-            fetchAllSchedules();
-          }
+          fetchInitialSchedules();
         }}
       />
     </div>
