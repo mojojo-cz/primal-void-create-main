@@ -267,7 +267,7 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
         {formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}
       </div>
 
-      {/* 科目 */}
+      {/* 课程 */}
       <div className="w-32 p-3 flex-shrink-0">
         <div className="flex items-center gap-1">
           <BookOpen className="h-3 w-3 text-gray-400" />
@@ -277,7 +277,7 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
         </div>
       </div>
 
-      {/* 课程主题（行内编辑） */}
+      {/* 本节课主题（行内编辑） */}
       <div className="w-60 min-w-0 p-3 flex-shrink-0 truncate">
         {editingTitle ? (
           <input
@@ -421,8 +421,8 @@ const ScheduleTableHeader: React.FC = () => {
         <div className="flex-1 flex items-center">
           <div className="w-24 p-3 text-center">时段</div>
           <div className="w-36 p-3">具体时间</div>
-          <div className="w-32 p-3">科目</div>
-          <div className="w-60 p-3">课程主题</div>
+          <div className="w-32 p-3">课程</div>
+          <div className="w-60 p-3">本节课主题</div>
           <div className="w-28 p-3">任课老师</div>
           <div className="w-36 p-3">教室</div>
           <div className="w-60 p-3">所属课表</div>
@@ -969,7 +969,7 @@ const ScheduleManagement = () => {
 
       toast({
         title: "更新成功",
-        description: "课程主题已更新"
+        description: "本节课主题已更新"
       });
 
     } catch (error: any) {

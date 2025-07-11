@@ -1136,7 +1136,7 @@ export default function SmartScheduleWorkbench({
       // 成功反馈
       toast({
         title: "添加成功",
-        description: `课程已添加到预览列表，请设置课程主题`,
+        description: `课程已添加到预览列表，请设置本节课主题`,
         duration: 2000
       });
       
@@ -1356,14 +1356,14 @@ export default function SmartScheduleWorkbench({
     }
   };
 
-  // 开始编辑课程主题
+  // 开始编辑本节课主题
   const startEditingTitle = (scheduleId: string, currentTitle: string) => {
     setEditingTitleId(scheduleId);
     // 如果是空值，清空输入框；否则使用当前标题
     setEditingTitleValue(currentTitle || '');
   };
 
-  // 保存课程主题
+  // 保存本节课主题
   const saveEditingTitle = async (scheduleId: string, newTitle: string) => {
     const trimmedTitle = newTitle.trim();
     
@@ -1377,7 +1377,7 @@ export default function SmartScheduleWorkbench({
     setEditingTitleId(null);
   };
 
-  // 取消编辑课程主题
+  // 取消编辑本节课主题
   const cancelEditingTitle = () => {
     setEditingTitleId(null);
   };
@@ -1699,7 +1699,7 @@ export default function SmartScheduleWorkbench({
       toast({
         variant: "destructive",
         title: "验证失败",
-        description: "请填写必填字段：日期、时间、课程主题"
+        description: "请填写必填字段：日期、时间、本节课主题"
       });
       return;
     }
@@ -2916,12 +2916,12 @@ export default function SmartScheduleWorkbench({
                  </CardHeader>
                  <CardContent className="space-y-4">
                    <div>
-                     <Label htmlFor="lesson-title">课程主题 *</Label>
+                     <Label htmlFor="lesson-title">本节课主题 *</Label>
                   <Input
                        id="lesson-title"
                        value={editForm.lesson_title}
                        onChange={(e) => setEditForm(prev => ({ ...prev, lesson_title: e.target.value }))}
-                       placeholder="请输入课程主题"
+                       placeholder="请输入本节课主题"
                        className="mt-1"
                   />
                 </div>
