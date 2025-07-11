@@ -231,19 +231,19 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
       }`}
     >
       {/* 时段标识 */}
-      <div className="w-16 p-3 text-center flex-shrink-0">
+      <div className="w-24 p-3 text-center flex-shrink-0">
         <span className={`text-xs font-medium px-2 py-1 rounded-md border ${getTimePeriodInfo(schedule.start_time).className}`}>
           {getTimePeriodInfo(schedule.start_time).text}
         </span>
       </div>
 
       {/* 具体时间 */}
-      <div className="w-32 p-3 text-sm text-gray-600 flex-shrink-0">
+      <div className="w-36 p-3 text-sm text-gray-600 flex-shrink-0">
         {formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}
       </div>
 
       {/* 科目 */}
-      <div className="w-28 p-3 flex-shrink-0">
+      <div className="w-32 p-3 flex-shrink-0">
         <div className="flex items-center gap-1">
           <BookOpen className="h-3 w-3 text-gray-400" />
           <span className="text-sm text-gray-800 truncate" title={schedule.subject_name || '未知课程'}>
@@ -253,7 +253,7 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
       </div>
 
       {/* 课程主题（行内编辑） */}
-      <div className="flex-1 min-w-0 p-3">
+      <div className="w-48 min-w-0 p-3 flex-shrink-0 truncate">
         {editingTitle ? (
           <input
             type="text"
@@ -276,8 +276,8 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
         ) : (
           <button
             onClick={startEditingTitle}
-            className="text-sm text-left w-full hover:text-blue-600 transition-colors"
-            title="点击编辑课程主题"
+            className="text-sm text-left w-full hover:text-blue-600 transition-colors truncate"
+            title={`${schedule.lesson_title || '点击设置本节课主题'} (点击编辑)`}
           >
             {schedule.lesson_title || (
               <span className="text-gray-400 italic">点击设置本节课主题</span>
@@ -287,13 +287,20 @@ const OptimizedScheduleItem: React.FC<OptimizedScheduleItemProps> = ({
       </div>
 
       {/* 教师 */}
-      <div className="w-24 p-3 text-sm text-gray-700 flex-shrink-0 truncate" title={schedule.teacher_full_name || schedule.teacher_name}>
+      <div className="w-28 p-3 text-sm text-gray-700 flex-shrink-0 truncate" title={schedule.teacher_full_name || schedule.teacher_name}>
         {schedule.teacher_full_name || schedule.teacher_name}
       </div>
 
       {/* 教室 */}
-      <div className="w-32 p-3 text-sm text-gray-700 flex-shrink-0 truncate" title={schedule.venue_name || '在线课程'}>
+      <div className="w-36 p-3 text-sm text-gray-700 flex-shrink-0 truncate" title={schedule.venue_name || '在线课程'}>
         {schedule.venue_name || '在线课程'}
+      </div>
+
+      {/* 备注 */}
+      <div className="flex-1 p-3 text-sm text-gray-600 min-w-0 truncate" title={schedule.notes || ''}>
+        {schedule.notes || (
+          <span className="text-gray-400 italic">无备注</span>
+        )}
       </div>
 
       {/* 操作按钮 */}
@@ -351,15 +358,16 @@ const ScheduleTableHeader: React.FC = () => {
     <div className="border-b bg-gray-50 text-xs font-medium text-gray-700 sticky top-0 z-20">
       <div className="flex items-center">
         {/* 日期列 */}
-        <div className="w-20 p-3 text-center bg-gray-100 border-r border-gray-200">日期</div>
+        <div className="w-24 p-3 text-center bg-gray-100 border-r border-gray-200">日期</div>
         {/* 其他列 */}
         <div className="flex-1 flex items-center">
-          <div className="w-16 p-3 text-center">时段</div>
-          <div className="w-32 p-3">具体时间</div>
-          <div className="w-28 p-3">科目</div>
-          <div className="flex-1 p-3">课程主题</div>
-          <div className="w-24 p-3">教师</div>
-          <div className="w-32 p-3">教室</div>
+          <div className="w-24 p-3 text-center">时段</div>
+          <div className="w-36 p-3">具体时间</div>
+          <div className="w-32 p-3">科目</div>
+          <div className="w-48 p-3">课程主题</div>
+          <div className="w-28 p-3">教师</div>
+          <div className="w-36 p-3">教室</div>
+          <div className="flex-1 p-3">备注</div>
           <div className="w-16 p-3 text-center">操作</div>
         </div>
       </div>
@@ -1233,7 +1241,7 @@ const ScheduleManagement = () => {
                             <div key={dateGroup.date} className="border-b border-gray-100 last:border-b-0">
                               {/* 日期分组头部 - 合并单元格效果 */}
                               <div className="relative">
-                                <div className="absolute left-0 top-0 bottom-0 w-20 bg-gray-50 border-r border-gray-200 flex items-center justify-center">
+                                <div className="absolute left-0 top-0 bottom-0 w-24 bg-gray-50 border-r border-gray-200 flex items-center justify-center">
                                   <div className="text-center px-2">
                                     <div className="text-sm font-semibold text-gray-800 mb-1">
                                       {(() => {
@@ -1250,7 +1258,7 @@ const ScheduleManagement = () => {
                                 </div>
                                 
                                 {/* 课程列表 */}
-                                <div className="ml-20">
+                                <div className="ml-24">
                                   {dateGroup.schedules.map((schedule, index) => {
                                     const currentIndex = globalIndex++;
                                     return (
