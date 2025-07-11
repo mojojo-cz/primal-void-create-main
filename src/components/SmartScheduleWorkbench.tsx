@@ -1122,7 +1122,7 @@ export default function SmartScheduleWorkbench({
         schedule_date: scheduleDate,
         start_time: startTime,
         end_time: endTime,
-        lesson_title: '未设置本节课主题',
+        lesson_title: '', // 使用空字符串，由显示组件处理占位符
         teacher_id: teacherId,
         subject_id: selectedSubjectId,
         venue_id: venueId,
@@ -1208,7 +1208,7 @@ export default function SmartScheduleWorkbench({
             schedule_date: currentDate.toISOString().split('T')[0],
             start_time: startTime,
             end_time: endTime,
-            lesson_title: '未设置本节课主题',
+            lesson_title: '', // 使用空字符串，由显示组件处理占位符
             teacher_id: teacherId,
             subject_id: selectedSubjectId,
             venue_id: venueId,
@@ -1228,7 +1228,7 @@ export default function SmartScheduleWorkbench({
           schedule_date: currentDate.toISOString().split('T')[0],
           start_time: startTime,
           end_time: endTime,
-          lesson_title: '未设置本节课主题',
+          lesson_title: '', // 使用空字符串，由显示组件处理占位符
           teacher_id: teacherId,
           subject_id: selectedSubjectId,
           venue_id: venueId,
@@ -1304,19 +1304,23 @@ export default function SmartScheduleWorkbench({
 
   // 复制课程功能
   const copySchedule = (schedule: PreviewScheduleItem) => {
+    const originalTitle = schedule.lesson_title || '';
+    const copiedTitle = originalTitle ? originalTitle + ' (副本)' : '';
+    
     const copiedSchedule: PreviewScheduleItem = {
       ...schedule,
       id: 'preview_' + Date.now() + '_copy',
-      lesson_title: schedule.lesson_title + ' (副本)',
+      lesson_title: copiedTitle,
       isNew: true,
       isEdited: false
     };
     
     setPreviewSchedules(prev => [...prev, copiedSchedule]);
     
+    const displayTitle = originalTitle || '未设置主题的课程';
     toast({
       title: "复制成功",
-      description: `课程"${schedule.lesson_title}"已复制到预览列表`,
+      description: `课程"${displayTitle}"已复制到预览列表`,
       duration: 2000
     });
   };
@@ -1355,32 +1359,21 @@ export default function SmartScheduleWorkbench({
   // 开始编辑课程主题
   const startEditingTitle = (scheduleId: string, currentTitle: string) => {
     setEditingTitleId(scheduleId);
-    if (currentTitle === '未设置本节课主题' || currentTitle === '未设置主题') {
-      setEditingTitleValue('');
-    } else {
-    setEditingTitleValue(currentTitle);
-    }
+    // 如果是空值，清空输入框；否则使用当前标题
+    setEditingTitleValue(currentTitle || '');
   };
 
   // 保存课程主题
   const saveEditingTitle = async (scheduleId: string, newTitle: string) => {
     const trimmedTitle = newTitle.trim();
     
-    // 如果输入为空，则将主题重置为默认占位符，不显示错误
-    if (trimmedTitle === '') {
-      await editPreviewItem(scheduleId, { 
-        lesson_title: '未设置本节课主题',
-        isEdited: true 
-      });
-    } else {
-      // 否则，更新为新主题
-      await editPreviewItem(scheduleId, { 
+    // 直接保存输入的内容，空值时保存为空字符串（显示组件会自动处理占位符）
+    await editPreviewItem(scheduleId, { 
       lesson_title: trimmedTitle,
-      isEdited: true
+      isEdited: true 
     });
-    }
     
-    // 无论结果如何，都关闭编辑状态
+    // 关闭编辑状态
     setEditingTitleId(null);
   };
 
@@ -2407,13 +2400,13 @@ export default function SmartScheduleWorkbench({
                     />
                 ) : (
                   <div 
-                className={`flex-1 text-sm font-medium truncate cursor-pointer hover:text-blue-600 ${
-                  (schedule.lesson_title === '未设置本节课主题' || !schedule.lesson_title) ? 'text-gray-400 italic' : 'text-gray-900'
+                className={`flex-1 text-sm font-medium truncate cursor-pointer hover:text-blue-600 transition-colors ${
+                  !schedule.lesson_title ? 'text-gray-400 italic' : 'text-gray-900'
                     }`}
                     onClick={() => startEditingTitle(schedule.id, schedule.lesson_title)}
-                title="点击设置本节课主题"
+                title={!schedule.lesson_title ? '点击设置本节课主题' : `${schedule.lesson_title} (点击编辑)`}
                   >
-                {schedule.lesson_title || '未设置本节课主题'}
+                {!schedule.lesson_title ? '点击设置本节课主题' : schedule.lesson_title}
                   </div>
                 )}
               </div>
