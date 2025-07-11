@@ -144,6 +144,7 @@ export default function SmartScheduleWorkbench({
   
   const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<'single' | 'batch'>('batch');
+  const [isConflictChecking, setIsConflictChecking] = useState(false);
   
   // 课表相关状态
   const [selectedPlan, setSelectedPlan] = useState<SchedulePlanWithStats | null>(null);
@@ -334,6 +335,7 @@ export default function SmartScheduleWorkbench({
       if (conflictCheckTimeoutRef.current) {
         clearTimeout(conflictCheckTimeoutRef.current);
       }
+      setIsConflictChecking(false);
     };
   }, []);
 
@@ -585,6 +587,20 @@ export default function SmartScheduleWorkbench({
     return checkedSchedules;
   };
 
+  // 包装冲突检测功能，添加状态管理
+  const runConflictChecksWithStatus = async (currentSchedules: PreviewScheduleItem[]): Promise<PreviewScheduleItem[]> => {
+    setIsConflictChecking(true);
+    try {
+      const result = await runConflictChecks(currentSchedules);
+      return result;
+    } catch (error) {
+      console.error('冲突检测失败:', error);
+      return currentSchedules;
+    } finally {
+      setIsConflictChecking(false);
+    }
+  };
+
   // =============================================================================
   // 课表管理
   // =============================================================================
@@ -695,7 +711,7 @@ export default function SmartScheduleWorkbench({
       }));
       
       // 运行冲突检测并设置预览列表
-      const checkedSchedules = await runConflictChecks(schedules);
+      const checkedSchedules = await runConflictChecksWithStatus(schedules);
       setPreviewSchedules(checkedSchedules);
       
     } catch (error) {
@@ -1127,7 +1143,7 @@ export default function SmartScheduleWorkbench({
       // 乐观更新：在后台进行冲突检测
       setTimeout(async () => {
         try {
-          const checkedPreview = await runConflictChecks(updatedPreview);
+          const checkedPreview = await runConflictChecksWithStatus(updatedPreview);
           setPreviewSchedules(checkedPreview);
         } catch (error) {
           console.error('后台冲突检测失败:', error);
@@ -1230,7 +1246,7 @@ export default function SmartScheduleWorkbench({
       // 乐观更新：在后台进行冲突检测
       setTimeout(async () => {
         try {
-          const checkedPreview = await runConflictChecks(updatedPreview);
+          const checkedPreview = await runConflictChecksWithStatus(updatedPreview);
           setPreviewSchedules(checkedPreview);
         } catch (error) {
           console.error('后台冲突检测失败:', error);
@@ -1266,7 +1282,7 @@ export default function SmartScheduleWorkbench({
     if (updatedPreview.length > 0) {
         conflictCheckTimeoutRef.current = setTimeout(async () => {
         try {
-          const checkedPreview = await runConflictChecks(updatedPreview);
+          const checkedPreview = await runConflictChecksWithStatus(updatedPreview);
             // 使用函数式更新确保基于最新状态
             setPreviewSchedules(currentPreview => {
               // 只有当前预览列表长度与检测时的长度一致时才更新
@@ -1324,14 +1340,14 @@ export default function SmartScheduleWorkbench({
         }
         return item;
       });
-      const checkedSchedules = await runConflictChecks(updatedSchedules);
+      const checkedSchedules = await runConflictChecksWithStatus(updatedSchedules);
       setPreviewSchedules(checkedSchedules);
     } else {
       // 如果不涉及时间更新，直接应用更新
       const updatedSchedules = previewSchedules.map(item => 
         item.id === id ? { ...item, ...updates, isEdited: true } : item
       );
-      const checkedSchedules = await runConflictChecks(updatedSchedules);
+      const checkedSchedules = await runConflictChecksWithStatus(updatedSchedules);
       setPreviewSchedules(checkedSchedules);
     }
   };
@@ -1585,6 +1601,7 @@ export default function SmartScheduleWorkbench({
 
   // 重置工作台
   const resetWorkbench = () => {
+    setIsConflictChecking(false);
     setSelectedPlan(null);
     setIsCreatingNewPlan(false);
     setIsEditingExistingPlan(false);
@@ -2534,6 +2551,7 @@ export default function SmartScheduleWorkbench({
                 onClick={handleSavePlan} 
                 disabled={
                   loading || 
+                  isConflictChecking ||
                   previewSchedules.length === 0 || 
                   (!selectedPlan && !isCreatingNewPlan) ||
                   previewSchedules.some(schedule => schedule.teacher_conflict_info || schedule.venue_conflict_info)
@@ -2542,6 +2560,8 @@ export default function SmartScheduleWorkbench({
                   "min-w-32",
                   previewSchedules.some(schedule => schedule.teacher_conflict_info || schedule.venue_conflict_info)
                     ? "bg-red-600 hover:bg-red-700"
+                    : isConflictChecking
+                    ? "bg-orange-600 hover:bg-orange-700"
                     : "bg-green-600 hover:bg-green-700"
                 )}
               >
@@ -2549,6 +2569,11 @@ export default function SmartScheduleWorkbench({
                   <>
                     <span className="animate-spin mr-2">⏳</span>
                     保存中...
+                  </>
+                ) : isConflictChecking ? (
+                  <>
+                    <span className="animate-spin mr-2">🔍</span>
+                    正在进行冲突检测...
                   </>
                 ) : previewSchedules.some(schedule => schedule.teacher_conflict_info || schedule.venue_conflict_info) ? (
                   <>
