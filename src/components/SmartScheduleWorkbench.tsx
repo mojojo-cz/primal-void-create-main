@@ -1769,6 +1769,28 @@ export default function SmartScheduleWorkbench({
   };
 
   // =============================================================================
+  // 工具函数
+  // =============================================================================
+
+  // 自动计算结束时间（开始时间 + 2小时）
+  const calculateEndTime = (startTime: string): string => {
+    if (!startTime) return '';
+    
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const startDate = new Date();
+    startDate.setHours(hours, minutes, 0, 0);
+    
+    // 添加2小时
+    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+    
+    // 格式化为 HH:MM
+    const endHours = String(endDate.getHours()).padStart(2, '0');
+    const endMinutes = String(endDate.getMinutes()).padStart(2, '0');
+    
+    return `${endHours}:${endMinutes}`;
+  };
+
+  // =============================================================================
   // 渲染函数
   // =============================================================================
 
@@ -2100,7 +2122,15 @@ export default function SmartScheduleWorkbench({
                 id="start-time"
                 type="time"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => {
+                  const newStartTime = e.target.value;
+                  setStartTime(newStartTime);
+                  // 自动设置结束时间为开始时间的2小时后
+                  if (newStartTime) {
+                    const newEndTime = calculateEndTime(newStartTime);
+                    setEndTime(newEndTime);
+                  }
+                }}
                 className={startTime >= endTime ? "border-red-500" : ""}
               />
               {startTime >= endTime && (
@@ -2197,7 +2227,15 @@ export default function SmartScheduleWorkbench({
                 id="batch-start-time"
                 type="time"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => {
+                  const newStartTime = e.target.value;
+                  setStartTime(newStartTime);
+                  // 自动设置结束时间为开始时间的2小时后
+                  if (newStartTime) {
+                    const newEndTime = calculateEndTime(newStartTime);
+                    setEndTime(newEndTime);
+                  }
+                }}
                 className={startTime >= endTime ? "border-red-500" : ""}
         />
               {startTime >= endTime && (
@@ -2849,7 +2887,15 @@ export default function SmartScheduleWorkbench({
                          id="start-time"
                     type="time"
                          value={editForm.start_time}
-                         onChange={(e) => setEditForm(prev => ({ ...prev, start_time: e.target.value }))}
+                         onChange={(e) => {
+                           const newStartTime = e.target.value;
+                           setEditForm(prev => ({ 
+                             ...prev, 
+                             start_time: newStartTime,
+                             // 自动设置结束时间为开始时间的2小时后
+                             end_time: newStartTime ? calculateEndTime(newStartTime) : prev.end_time
+                           }));
+                         }}
                          className="mt-1"
                   />
                 </div>
