@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全局冲突检测修复验证</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border-color: #17a2b8;
+            color: #0c5460;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .test-step {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .conflict-example {
+            background: linear-gradient(45deg, #ff6b6b, #ffa500);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .code {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+        }
+        h1 { color: #333; }
+        h2 { color: #555; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        h3 { color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 全局冲突检测修复验证</h1>
+        
+        <div class="status success">
+            <h3>✅ 问题已修复</h3>
+            <p>发现并修复了全局冲突检测不工作的根本原因：数据库函数名称不匹配</p>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 问题诊断结果</h2>
+            
+            <div class="status error">
+                <h3>❌ 原始问题</h3>
+                <p><strong>函数名不匹配：</strong></p>
+                <ul>
+                    <li>数据库中的函数：<code>check_schedule_conflict</code>（单数）</li>
+                    <li>前端调用的函数：<code>check_schedule_conflicts</code>（复数）</li>
+                    <li>结果：RPC调用失败，全局冲突检测完全不工作</li>
+                </ul>
+            </div>
+
+            <div class="status success">
+                <h3>✅ 修复方案</h3>
+                <p>创建了新的数据库函数 <code>check_schedule_conflicts</code>，返回前端期望的JSON格式：</p>
+                <div class="code">
+{
+  "teacher_conflict": {
+    "schedule_id": "uuid",
+    "lesson_title": "冲突课程名称",
+    "plan_name": "所属课表名称"
+  },
+  "venue_conflict": {
+    "schedule_id": "uuid", 
+    "lesson_title": "冲突课程名称",
+    "plan_name": "所属课表名称"
+  }
+}
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🧪 您提到的冲突案例</h2>
+            
+            <div class="conflict-example">
+                ⚠️ 时间冲突案例：
+                <br>• 课程A: 15:00-15:30 线性代数 (lee老师)
+                <br>• 课程B: 15:15-15:30 线性代数 (lee老师)
+                <br>重叠时间：15:15-15:30 (15分钟)
+            </div>
+
+            <div class="status info">
+                <h3>🔍 冲突检测逻辑验证</h3>
+                <p><strong>前端预览列表检测：</strong></p>
+                <div class="code">
+const isOverlapping = 
+  schedule.schedule_date === otherSchedule.schedule_date &&
+  schedule.end_time > otherSchedule.start_time &&
+  schedule.start_time < otherSchedule.end_time;
+
+// 您的案例：
+// '15:30' > '15:15' ✓ true
+// '15:00' < '15:30' ✓ true  
+// → isOverlapping = true ✓ 应该检测到冲突
+                </div>
+
+                <p><strong>数据库全局检测：</strong></p>
+                <div class="code">
+AND (s.start_time, s.end_time) OVERLAPS (p_start_time, p_end_time)
+
+// PostgreSQL OVERLAPS 测试：
+// ('15:00:00', '15:30:00') OVERLAPS ('15:15:00', '15:30:00') = true ✓
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📋 现在请测试验证</h2>
+            
+            <div class="test-step">
+                <h3>1️⃣ 打开智能排课工作台</h3>
+                <p>进入系统 → 管理员面板 → 排课管理 → 智能排课工作台</p>
+            </div>
+
+            <div class="test-step">
+                <h3>2️⃣ 创建冲突课程</h3>
+                <p><strong>重要：确保选择同一个教师</strong></p>
+                <ul>
+                    <li>课程A：15:00-15:30，选择任意教师（如 lee）</li>
+                    <li>课程B：15:15-15:30，选择<strong>相同教师</strong></li>
+                </ul>
+            </div>
+
+            <div class="test-step">
+                <h3>3️⃣ 观察冲突警告</h3>
+                <p>应该看到以下效果：</p>
+                <ul>
+                    <li>🔴 预览列表中的课程显示红色警告图标 ⚠️</li>
+                    <li>🔴 课程卡片背景变为红色</li>
+                    <li>🔴 保存按钮变为红色并显示"存在冲突，无法保存"</li>
+                    <li>🔴 鼠标悬停在警告图标上显示冲突详情</li>
+                </ul>
+            </div>
+
+            <div class="test-step">
+                <h3>4️⃣ 测试教室冲突</h3>
+                <p>同样的步骤，但选择：</p>
+                <ul>
+                    <li>不同教师，但<strong>相同教室</strong></li>
+                    <li>应该看到教室冲突警告</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🛡️ 全局冲突检测覆盖范围</h2>
+            
+            <div class="status info">
+                <p><strong>现在可以检测的冲突类型：</strong></p>
+                <ul>
+                    <li>✅ 同一教师在相同时间段的冲突</li>
+                    <li>✅ 同一教室在相同时间段的冲突</li>
+                    <li>✅ 跨课表的全局冲突检测</li>
+                    <li>✅ 预览列表内部的冲突检测</li>
+                    <li>✅ 部分时间重叠检测（如您的案例）</li>
+                    <li>✅ 边界时间检测（9:00-10:00 vs 10:00-11:00 = 无冲突）</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="status warning">
+            <h3>💡 如果仍然没有看到冲突警告</h3>
+            <p>请检查以下几点：</p>
+            <ol>
+                <li><strong>教师/教室必须相同：</strong>冲突检测只在相同资源时触发</li>
+                <li><strong>等待异步检测：</strong>冲突检测在后台异步执行，可能需要1-2秒</li>
+                <li><strong>检查控制台错误：</strong>打开开发者工具查看是否有错误信息</li>
+                <li><strong>日期必须相同：</strong>确保两个课程在同一天</li>
+            </ol>
+        </div>
+
+        <div class="status success">
+            <h3>🎉 修复总结</h3>
+            <p>
+                通过创建正确的数据库函数 <code>check_schedule_conflicts</code>，
+                全局冲突检测现在应该能够正常工作，包括您提到的 
+                <strong>15:00-15:30 vs 15:15-15:30</strong> 这样的部分时间重叠案例。
+            </p>
+        </div>
+    </div>
+</body>
+</html> 

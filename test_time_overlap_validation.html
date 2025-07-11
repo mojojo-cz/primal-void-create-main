@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时间重叠检测逻辑验证</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-case { 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+        }
+        .conflict { background-color: #ffe6e6; border-color: #ff9999; }
+        .no-conflict { background-color: #e6ffe6; border-color: #99ff99; }
+        .result { font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>时间重叠检测逻辑验证</h1>
+    <p>测试智能排课工作台中的时间重叠检测算法是否正确工作</p>
+    
+    <div id="test-results"></div>
+
+    <script>
+        // 复制智能排课工作台中的时间重叠检测逻辑
+        function checkTimeOverlap(schedule1, schedule2) {
+            // 前端预览列表内部冲突检测逻辑
+            const isOverlapping = 
+                schedule1.schedule_date === schedule2.schedule_date &&
+                schedule1.end_time > schedule2.start_time &&
+                schedule1.start_time < schedule2.end_time;
+            
+            return isOverlapping;
+        }
+
+        // 测试用例
+        const testCases = [
+            {
+                name: "用户提到的案例：9:00-10:00 vs 9:30-10:00",
+                schedule1: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                schedule2: { schedule_date: "2025-01-31", start_time: "09:30", end_time: "10:00" },
+                expected: true
+            },
+            {
+                name: "完全重叠：9:00-10:00 vs 9:00-10:00",
+                schedule1: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                schedule2: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                expected: true
+            },
+            {
+                name: "部分重叠：9:00-10:00 vs 9:30-10:30",
+                schedule1: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                schedule2: { schedule_date: "2025-01-31", start_time: "09:30", end_time: "10:30" },
+                expected: true
+            },
+            {
+                name: "包含关系：9:00-10:00 vs 9:15-9:45",
+                schedule1: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                schedule2: { schedule_date: "2025-01-31", start_time: "09:15", end_time: "09:45" },
+                expected: true
+            },
+            {
+                name: "边界接触：9:00-10:00 vs 10:00-11:00",
+                schedule1: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                schedule2: { schedule_date: "2025-01-31", start_time: "10:00", end_time: "11:00" },
+                expected: false
+            },
+            {
+                name: "完全分离：9:00-10:00 vs 11:00-12:00",
+                schedule1: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                schedule2: { schedule_date: "2025-01-31", start_time: "11:00", end_time: "12:00" },
+                expected: false
+            },
+            {
+                name: "不同日期：9:00-10:00 (1月31日) vs 9:30-10:00 (2月1日)",
+                schedule1: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                schedule2: { schedule_date: "2025-02-01", start_time: "09:30", end_time: "10:00" },
+                expected: false
+            },
+            {
+                name: "时间格式测试：09:00 vs 9:00",
+                schedule1: { schedule_date: "2025-01-31", start_time: "09:00", end_time: "10:00" },
+                schedule2: { schedule_date: "2025-01-31", start_time: "9:00", end_time: "9:30" },
+                expected: true
+            }
+        ];
+
+        // 运行测试
+        function runTests() {
+            const resultsDiv = document.getElementById('test-results');
+            let allPassed = true;
+
+            testCases.forEach((testCase, index) => {
+                const result = checkTimeOverlap(testCase.schedule1, testCase.schedule2);
+                const passed = result === testCase.expected;
+                
+                if (!passed) allPassed = false;
+
+                const testDiv = document.createElement('div');
+                testDiv.className = `test-case ${passed ? 'no-conflict' : 'conflict'}`;
+                testDiv.innerHTML = `
+                    <h3>测试 ${index + 1}: ${testCase.name}</h3>
+                    <p><strong>课程A:</strong> ${testCase.schedule1.schedule_date} ${testCase.schedule1.start_time}-${testCase.schedule1.end_time}</p>
+                    <p><strong>课程B:</strong> ${testCase.schedule2.schedule_date} ${testCase.schedule2.start_time}-${testCase.schedule2.end_time}</p>
+                    <p><strong>预期结果:</strong> ${testCase.expected ? '冲突' : '无冲突'}</p>
+                    <p><strong>实际结果:</strong> ${result ? '冲突' : '无冲突'}</p>
+                    <div class="result ${passed ? 'success' : 'error'}">
+                        ${passed ? '✅ 测试通过' : '❌ 测试失败'}
+                    </div>
+                `;
+                
+                resultsDiv.appendChild(testDiv);
+            });
+
+            // 总结
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = `test-case ${allPassed ? 'no-conflict' : 'conflict'}`;
+            summaryDiv.innerHTML = `
+                <h2>测试总结</h2>
+                <p><strong>总测试数:</strong> ${testCases.length}</p>
+                <p><strong>通过率:</strong> ${testCases.filter((_, i) => checkTimeOverlap(testCases[i].schedule1, testCases[i].schedule2) === testCases[i].expected).length}/${testCases.length}</p>
+                <div class="result">
+                    ${allPassed ? '✅ 所有测试通过！时间重叠检测逻辑正确' : '❌ 有测试失败！需要检查逻辑'}
+                </div>
+            `;
+            resultsDiv.appendChild(summaryDiv);
+        }
+
+        // PostgreSQL OVERLAPS 函数模拟（用于对比）
+        function postgresOverlaps(start1, end1, start2, end2) {
+            // PostgreSQL OVERLAPS 逻辑：(start1, end1) OVERLAPS (start2, end2)
+            // 如果两个时间段有任何重叠，返回 true
+            return start1 < end2 && start2 < end1;
+        }
+
+        // 添加 PostgreSQL OVERLAPS 对比测试
+        function addPostgresComparison() {
+            const resultsDiv = document.getElementById('test-results');
+            
+            const compareDiv = document.createElement('div');
+            compareDiv.className = 'test-case';
+            compareDiv.innerHTML = '<h2>与 PostgreSQL OVERLAPS 函数对比</h2>';
+            
+            testCases.forEach((testCase, index) => {
+                const frontendResult = checkTimeOverlap(testCase.schedule1, testCase.schedule2);
+                const postgresResult = postgresOverlaps(
+                    testCase.schedule1.start_time, 
+                    testCase.schedule1.end_time,
+                    testCase.schedule2.start_time, 
+                    testCase.schedule2.end_time
+                ) && testCase.schedule1.schedule_date === testCase.schedule2.schedule_date;
+                
+                const match = frontendResult === postgresResult;
+                
+                const compDiv = document.createElement('p');
+                compDiv.innerHTML = `
+                    <strong>测试 ${index + 1}:</strong> 
+                    前端: ${frontendResult ? '冲突' : '无冲突'} | 
+                    PostgreSQL: ${postgresResult ? '冲突' : '无冲突'} | 
+                    ${match ? '✅ 一致' : '❌ 不一致'}
+                `;
+                compareDiv.appendChild(compDiv);
+            });
+            
+            resultsDiv.appendChild(compareDiv);
+        }
+
+        // 页面加载完成后运行测试
+        document.addEventListener('DOMContentLoaded', function() {
+            runTests();
+            addPostgresComparison();
+        });
+    </script>
+</body>
+</html> 
