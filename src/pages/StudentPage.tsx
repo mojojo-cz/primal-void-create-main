@@ -1,14 +1,21 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, GraduationCap, User, PlayCircle, Clock, CheckCircle, X, Menu, RotateCcw, Trash2, LogOut, ChevronRight, Shield, ArrowUp } from "lucide-react";
+import { BookOpen, GraduationCap, User, PlayCircle, Clock, CheckCircle, X, Menu, RotateCcw, Trash2, LogOut, ChevronRight, Shield, ArrowUp, Calendar, MapPin, FileText, ChevronDown, Download } from "lucide-react";
 import UserAvatarDropdown from "@/components/UserAvatarDropdown";
 import { getGlobalSettings } from "@/utils/systemSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { useScrollToTop } from "@/hooks/useScrollToTop";
 import {
@@ -41,8 +48,9 @@ import { StudentPageSkeleton } from "@/components/ui/student-page-skeleton";
 import KeyActivation from "@/components/KeyActivation";
 import UpgradePage from "@/pages/UpgradePage";
 import { formatDateForDisplay, toSafeISOString } from '@/utils/timezone';
+import * as XLSX from 'xlsx';
 
-type ActiveTab = "learning" | "courses" | "profile" | "upgrade";
+type ActiveTab = "learning" | "courses" | "schedule" | "profile" | "upgrade";
 
 interface Course {
   id: string;
@@ -69,11 +77,53 @@ interface LearningCourse {
   last_learning_section_title?: string;
 }
 
+// 学员课表数据结构
+interface StudentSchedule {
+  schedule_id: string;
+  schedule_date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  period: string;
+  subject_name: string;
+  lesson_title: string;
+  lesson_description: string;
+  teacher_name: string;
+  teacher_full_name: string;
+  venue_name: string;
+  venue_type: string;
+  class_name: string;
+  plan_name: string;
+  participation_source: 'class' | 'plan' | 'schedule';
+  participation_type: string;
+  status: string;
+  notes: string;
+}
+
 const StudentPage = () => {
   const { profile, user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const systemSettings = getGlobalSettings();
-  const [activeTab, setActiveTab] = useState<ActiveTab>("learning");
+  
+  // 从URL参数读取初始activeTab值，默认为"learning"
+  const getInitialTab = (): ActiveTab => {
+    const tabFromUrl = searchParams.get('tab') as ActiveTab;
+    const validTabs: ActiveTab[] = ["learning", "courses", "schedule", "profile", "upgrade"];
+    return validTabs.includes(tabFromUrl) ? tabFromUrl : "learning";
+  };
+  
+  const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab());
+  
+  // 处理标签页切换，同时更新URL参数
+  const handleTabChange = (newTab: ActiveTab) => {
+    setActiveTab(newTab);
+    // 更新URL参数，保持其他参数不变
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('tab', newTab);
+    setSearchParams(newParams, { replace: true });
+  };
+  
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [learningCourses, setLearningCourses] = useState<LearningCourse[]>([]);
@@ -82,6 +132,18 @@ const StudentPage = () => {
   const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(null);
   const [updatingCourseId, setUpdatingCourseId] = useState<string | null>(null);
   const [removingCourseId, setRemovingCourseId] = useState<string | null>(null);
+  
+  // 课表相关状态
+  const [schedules, setSchedules] = useState<StudentSchedule[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [selectedSchedule, setSelectedSchedule] = useState<StudentSchedule | null>(null);
+  const [scheduleDetailOpen, setScheduleDetailOpen] = useState(false);
+  const [scheduleTab, setScheduleTab] = useState<'pending' | 'all'>('pending'); // 默认显示待上课程
+  const [selectedSchedulePlan, setSelectedSchedulePlan] = useState<string>('all'); // 默认显示全部课表
+  const [availableSchedulePlans, setAvailableSchedulePlans] = useState<Array<{value: string, label: string}>>([]);
+  const [courseFieldWidth, setCourseFieldWidth] = useState<number>(320); // 课程字段动态宽度，默认320px
+  const [venueFieldWidth, setVenueFieldWidth] = useState<number>(120); // 教室字段动态宽度，默认120px
+  const [planFieldWidth, setPlanFieldWidth] = useState<number>(200); // 所属课表字段动态宽度，默认200px
 
   // 数据缓存和加载状态管理
   const dataCache = useRef<{
@@ -328,6 +390,52 @@ const StudentPage = () => {
     }
   }, [user]);
 
+  // 监听URL参数变化，同步activeTab状态
+  useEffect(() => {
+    const newTab = getInitialTab();
+    if (newTab !== activeTab) {
+      setActiveTab(newTab);
+    }
+  }, [searchParams]);
+
+  // 当切换到课表页面时获取课表数据
+  useEffect(() => {
+    if (activeTab === 'schedule' && user?.id) {
+      fetchStudentSchedule();
+    }
+  }, [activeTab, user?.id]);
+
+  // 计算过滤后的课表数据
+  const filteredSchedules = useMemo(() => {
+    let filtered = schedules;
+    
+    // 根据选中的课表过滤
+    if (selectedSchedulePlan !== 'all') {
+      filtered = schedules.filter(schedule => {
+        const schedulePlan = schedule.plan_name || schedule.class_name;
+        return schedulePlan === selectedSchedulePlan;
+      });
+    }
+    
+    // 根据待上/全部课程过滤
+    if (scheduleTab === 'pending') {
+      filtered = filtered.filter(schedule => {
+        const now = new Date();
+        const scheduleEndTime = new Date(`${schedule.schedule_date}T${schedule.end_time}`);
+        return scheduleEndTime > now;
+      });
+    }
+    
+    return filtered;
+  }, [schedules, selectedSchedulePlan, scheduleTab]);
+
+  // 当课表tab切换或课表选择切换时重新计算字段宽度
+  useEffect(() => {
+    if (filteredSchedules.length > 0) {
+      calculateFieldWidths(filteredSchedules);
+    }
+  }, [filteredSchedules]);
+
   // 保留原有的函数但修改为使用新的数据获取逻辑
   const fetchCourses = async () => {
     try {
@@ -375,6 +483,208 @@ const StudentPage = () => {
     }
   };
 
+  // 获取学员课表
+  const fetchStudentSchedule = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setScheduleLoading(true);
+      
+      const { data, error } = await supabase.rpc('get_student_schedule', {
+        p_student_id: null // 传null表示查看自己的课表
+      });
+
+      if (error) throw error;
+
+      const scheduleData: StudentSchedule[] = (data || []).map((item: any) => ({
+        schedule_id: item.schedule_id,
+        schedule_date: item.schedule_date,
+        start_time: item.start_time,
+        end_time: item.end_time,
+        duration_minutes: item.duration_minutes,
+        period: item.period,
+        subject_name: item.subject_name || '未知课程',
+        lesson_title: item.lesson_title || '无主题',
+        lesson_description: item.lesson_description || '',
+        teacher_name: item.teacher_name || '',
+        teacher_full_name: item.teacher_full_name || item.teacher_name || '未分配老师',
+        venue_name: item.venue_name || '在线课程',
+        venue_type: item.venue_type || 'online',
+        class_name: item.class_name || '',
+        plan_name: item.plan_name || '',
+        participation_source: item.participation_source,
+        participation_type: item.participation_type,
+        status: item.status,
+        notes: item.notes || ''
+      }));
+
+      setSchedules(scheduleData);
+      
+      // 提取所有可用的课表选项
+      const planOptions = new Set<string>();
+      scheduleData.forEach(schedule => {
+        if (schedule.plan_name && schedule.plan_name.trim()) {
+          planOptions.add(schedule.plan_name);
+        } else if (schedule.class_name && schedule.class_name.trim()) {
+          planOptions.add(schedule.class_name);
+        }
+      });
+      
+      const availablePlans = [
+        { value: 'all', label: '全部课表' },
+        ...Array.from(planOptions).map(plan => ({ value: plan, label: plan }))
+      ];
+      
+      setAvailableSchedulePlans(availablePlans);
+      
+      // 计算各字段宽度
+      calculateFieldWidths(scheduleData);
+    } catch (error: any) {
+      console.error('获取课表失败:', error);
+      toast({
+        variant: "destructive",
+        title: "获取课表失败",
+        description: error.message || "无法加载课表信息，请稍后重试"
+      });
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  // 计算各字段动态宽度
+  const calculateFieldWidths = (schedules: StudentSchedule[]) => {
+    if (schedules.length === 0) {
+      setCourseFieldWidth(320); // 默认宽度
+      setVenueFieldWidth(120);
+      setPlanFieldWidth(200);
+      return;
+    }
+
+    // 计算字符宽度的工具函数
+    const calculateTextWidth = (text: string, hasIcon: boolean = true) => {
+      const chineseCharCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+      const englishCharCount = text.length - chineseCharCount;
+      const textWidth = chineseCharCount * 14 + englishCharCount * 7;
+      const iconWidth = hasIcon ? 24 : 0; // 图标宽度
+      const spacing = hasIcon ? 8 : 0; // 间距
+      return textWidth + iconWidth + spacing;
+    };
+
+    // 获取最长的课程名称
+    const maxCourseText = schedules.reduce((max, schedule) => {
+      const courseText = schedule.lesson_title && schedule.lesson_title.trim() && schedule.lesson_title !== '无主题'
+        ? `${schedule.subject_name} - ${schedule.lesson_title}`
+        : schedule.subject_name;
+      return courseText.length > max.length ? courseText : max;
+    }, '');
+
+    // 获取最长的教室名称
+    const maxVenueText = schedules.reduce((max, schedule) => {
+      const venueText = schedule.venue_name || '在线课程';
+      return venueText.length > max.length ? venueText : max;
+    }, '');
+
+    // 获取最长的所属课表名称
+    const maxPlanText = schedules.reduce((max, schedule) => {
+      const planText = schedule.plan_name || schedule.class_name || '未分配';
+      return planText.length > max.length ? planText : max;
+    }, '');
+
+    // 计算课程字段宽度
+    const courseWidth = calculateTextWidth(maxCourseText);
+    const finalCourseWidth = Math.min(Math.max(courseWidth, 160), 600);
+
+    // 计算教室字段宽度
+    const venueWidth = calculateTextWidth(maxVenueText);
+    const finalVenueWidth = Math.min(Math.max(venueWidth, 80), 300);
+
+    // 计算所属课表字段宽度
+    const planWidth = calculateTextWidth(maxPlanText);
+    const finalPlanWidth = Math.min(Math.max(planWidth, 120), 400);
+
+    setCourseFieldWidth(finalCourseWidth);
+    setVenueFieldWidth(finalVenueWidth);
+    setPlanFieldWidth(finalPlanWidth);
+  };
+
+  // 课表详情处理
+  const handleScheduleClick = (schedule: StudentSchedule) => {
+    setSelectedSchedule(schedule);
+    setScheduleDetailOpen(true);
+  };
+
+  // 导出课表为Excel
+  const exportScheduleToExcel = () => {
+    // 检查是否有数据
+    if (filteredSchedules.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "导出失败",
+        description: "当前筛选条件下没有课表数据可导出",
+      });
+      return;
+    }
+
+    // 按日期+时间排序
+    const sortedSchedules = [...filteredSchedules].sort((a, b) => {
+      const dateTimeA = new Date(`${a.schedule_date}T${a.start_time}`);
+      const dateTimeB = new Date(`${b.schedule_date}T${b.start_time}`);
+      return dateTimeA.getTime() - dateTimeB.getTime();
+    });
+
+    // 准备Excel数据
+    const excelData = sortedSchedules.map(schedule => ({
+      '日期': formatDateForDisplay(schedule.schedule_date, true),
+      '星期': new Date(schedule.schedule_date).toLocaleDateString('zh-CN', { weekday: 'long' }),
+      '时段': schedule.period,
+      '时间': `${schedule.start_time.slice(0, 5)} - ${schedule.end_time.slice(0, 5)}`,
+      '课程': schedule.lesson_title && schedule.lesson_title.trim() && schedule.lesson_title !== '无主题'
+        ? `${schedule.subject_name} - ${schedule.lesson_title}`
+        : schedule.subject_name,
+      '任课老师': schedule.teacher_full_name || '未安排',
+      '教室': schedule.venue_name || '在线课程',
+      '所属课表': schedule.plan_name || schedule.class_name || '未分配',
+      '时长(分钟)': schedule.duration_minutes
+    }));
+
+    // 创建工作簿
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // 设置列宽
+    const colWidths = [
+      { wch: 12 }, // 日期
+      { wch: 8 },  // 星期
+      { wch: 8 },  // 时段
+      { wch: 15 }, // 时间
+      { wch: 30 }, // 课程
+      { wch: 12 }, // 任课老师
+      { wch: 15 }, // 教室
+      { wch: 20 }, // 所属课表
+      { wch: 10 }  // 时长
+    ];
+    ws['!cols'] = colWidths;
+
+    // 添加工作表
+    XLSX.utils.book_append_sheet(wb, ws, '课表');
+
+    // 生成文件名
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const planName = selectedSchedulePlan === 'all' ? '全部课表' : selectedSchedulePlan;
+    const tabName = scheduleTab === 'pending' ? '待上课程' : '全部课程';
+    const fileName = `${planName}_${tabName}_${dateStr}.xlsx`;
+
+    // 下载文件
+    XLSX.writeFile(wb, fileName);
+
+    // 显示成功提示
+    toast({
+      title: "导出成功",
+      description: `课表已导出为 ${fileName}`,
+    });
+  };
+
   // 开始学习课程（添加到学习中，状态为未开始）
   const handleStartLearning = async (courseId: string) => {
     if (!user?.id) {
@@ -392,7 +702,7 @@ const StudentPage = () => {
         description: "该课程已在您的学习列表中，正在跳转到学习中页面"
       });
       // 如果课程已在学习列表中，直接跳转到学习中页面
-      setActiveTab("learning");
+      handleTabChange("learning");
       return;
     }
 
@@ -423,7 +733,7 @@ const StudentPage = () => {
       await smartFetchData(true); // 强制刷新数据
       
       // 自动跳转到"学习中"页面
-      setActiveTab("learning");
+      handleTabChange("learning");
       
     } catch (error: any) {
       console.error('添加课程到学习中失败:', error);
@@ -435,7 +745,7 @@ const StudentPage = () => {
           description: "该课程已在您的学习列表中，正在跳转到学习中页面"
         });
         // 即使课程已存在，也跳转到学习中页面
-        setActiveTab("learning");
+        handleTabChange("learning");
       } else {
         toast({
           variant: "destructive",
@@ -737,6 +1047,7 @@ const StudentPage = () => {
   const navItems = [
     { id: "learning", label: "学习中", icon: <PlayCircle className="h-5 w-5" /> },
     { id: "courses", label: "我的课程", icon: <BookOpen className="h-5 w-5" /> },
+    { id: "schedule", label: "我的课表", icon: <Calendar className="h-5 w-5" /> },
     { id: "profile", label: "个人信息", icon: <User className="h-5 w-5" /> }
   ];
 
@@ -1030,10 +1341,372 @@ const StudentPage = () => {
         );
       }
     }
+
+    // 我的课表页面
+    if (activeTab === 'schedule') {
+      if (scheduleLoading) {
+        return (
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-gray-500">正在加载课表...</p>
+          </div>
+        );
+      }
+
+      if (schedules.length > 0) {
+        return (
+          <div className="space-y-4">
+            {/* 我的课表 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  我的课表
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-purple-50 rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600 mb-1">
+                      {availableSchedulePlans.length > 0 ? availableSchedulePlans.length - 1 : 0}
+                    </div>
+                    <div className="text-sm text-purple-600">总课表数</div>
+                  </div>
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600 mb-1">
+                      {schedules.length}
+                    </div>
+                    <div className="text-sm text-blue-600">总课节数</div>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600 mb-1">
+                      {(() => {
+                        const now = new Date();
+                        const today = now.toISOString().split('T')[0];
+                        const currentTime = now.toTimeString().slice(0, 5);
+                        
+                        return schedules.filter(schedule => {
+                          const scheduleDate = schedule.schedule_date;
+                          const scheduleTime = schedule.end_time.slice(0, 5);
+                          
+                          // 如果是今天，比较时间；如果是过去的日期，算作已上课
+                          if (scheduleDate === today) {
+                            return scheduleTime <= currentTime;
+                          } else {
+                            return scheduleDate < today;
+                          }
+                        }).length;
+                      })()}
+                    </div>
+                    <div className="text-sm text-green-600">已上课节</div>
+                  </div>
+                  <div className="text-center p-4 bg-orange-50 rounded-lg">
+                    <div className="text-2xl font-bold text-orange-600 mb-1">
+                      {(() => {
+                        const now = new Date();
+                        const today = now.toISOString().split('T')[0];
+                        const currentTime = now.toTimeString().slice(0, 5);
+                        
+                        return schedules.filter(schedule => {
+                          const scheduleDate = schedule.schedule_date;
+                          const scheduleTime = schedule.end_time.slice(0, 5);
+                          
+                          // 如果是今天，比较时间；如果是未来的日期，算作未上课
+                          if (scheduleDate === today) {
+                            return scheduleTime > currentTime;
+                          } else {
+                            return scheduleDate > today;
+                          }
+                        }).length;
+                      })()}
+                    </div>
+                    <div className="text-sm text-orange-600">未上课节</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 课表列表 */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <Select value={selectedSchedulePlan} onValueChange={setSelectedSchedulePlan}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="选择课表" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableSchedulePlans.map((plan) => (
+                            <SelectItem key={plan.value} value={plan.value}>
+                              {plan.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={exportScheduleToExcel}
+                        className="gap-2"
+                        disabled={filteredSchedules.length === 0}
+                      >
+                        <Download className="h-4 w-4" />
+                        导出课表
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setScheduleTab('pending')}
+                        className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${
+                          scheduleTab === 'pending'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        待上课程
+                      </button>
+                      <button
+                        onClick={() => setScheduleTab('all')}
+                        className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${
+                          scheduleTab === 'all'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        全部课程
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="border rounded-lg bg-white">
+                  {(() => {
+                    // 按日期分组课程的工具函数
+                    const groupSchedulesByDate = (schedules: StudentSchedule[]) => {
+                      const groups: { [key: string]: StudentSchedule[] } = {};
+                      
+                      schedules.forEach(schedule => {
+                        const date = schedule.schedule_date;
+                        if (!groups[date]) {
+                          groups[date] = [];
+                        }
+                        groups[date].push(schedule);
+                      });
+                      
+                      // 按日期排序，每个日期内按时间排序
+                      return Object.keys(groups)
+                        .sort()
+                        .map(date => ({
+                          date,
+                          schedules: groups[date].sort((a, b) => a.start_time.localeCompare(b.start_time))
+                        }));
+                    };
+
+                    // 按日期+时间排序（使用已计算的过滤数据）
+                    const sortedSchedules = [...filteredSchedules].sort((a, b) => {
+                      const dateTimeA = new Date(`${a.schedule_date}T${a.start_time}`);
+                      const dateTimeB = new Date(`${b.schedule_date}T${b.start_time}`);
+                      return dateTimeA.getTime() - dateTimeB.getTime();
+                    });
+
+                    // 按日期分组
+                    const dateGroups = groupSchedulesByDate(sortedSchedules);
+                    
+                    // 处理过滤后课程列表为空的情况
+                    if (sortedSchedules.length === 0) {
+                      const getEmptyStateMessage = () => {
+                        if (selectedSchedulePlan !== 'all' && scheduleTab === 'pending') {
+                          return {
+                            title: '暂无待上课程',
+                            description: `在 ${availableSchedulePlans.find(p => p.value === selectedSchedulePlan)?.label} 中没有待上课程`
+                          };
+                        } else if (selectedSchedulePlan !== 'all') {
+                          return {
+                            title: '暂无课表',
+                            description: `在 ${availableSchedulePlans.find(p => p.value === selectedSchedulePlan)?.label} 中没有课程`
+                          };
+                        } else if (scheduleTab === 'pending') {
+                          return {
+                            title: '暂无待上课程',
+                            description: '您的待上课程已全部完成'
+                          };
+                        } else {
+                          return {
+                            title: '暂无课表',
+                            description: '您还没有安排的课程'
+                          };
+                        }
+                      };
+                      
+                      const emptyState = getEmptyStateMessage();
+                      
+                      return (
+                        <div className="text-center py-16">
+                          <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium">{emptyState.title}</h3>
+                          <p className="text-gray-500 mt-1">{emptyState.description}</p>
+                        </div>
+                      );
+                    }
+                    
+                    return dateGroups.map((dateGroup, groupIndex) => {
+                      const isEvenDate = groupIndex % 2 === 0;
+                      const isFirstGroup = groupIndex === 0;
+                      const isLastGroup = groupIndex === dateGroups.length - 1;
+                      
+                      return (
+                        <div key={dateGroup.date} className={`border-b border-gray-100 last:border-b-0 ${
+                          isFirstGroup ? 'rounded-t-lg overflow-hidden' : ''
+                        } ${
+                          isLastGroup ? 'rounded-b-lg overflow-hidden' : ''
+                        }`}>
+                          {/* 日期分组 - 合并单元格效果 */}
+                          <div className="relative">
+                            {/* 左侧日期单元格 */}
+                            <div className={`absolute left-0 top-0 bottom-0 w-16 sm:w-20 md:w-24 border-r border-gray-200 flex items-center justify-center ${
+                              isEvenDate ? 'bg-white' : 'bg-gray-50'
+                            } ${
+                              isFirstGroup ? 'rounded-tl-lg' : ''
+                            } ${
+                              isLastGroup ? 'rounded-bl-lg' : ''
+                            }`}>
+                              <div className="text-center px-2">
+                                <div className="text-xs sm:text-sm font-semibold text-gray-800 mb-1">
+                                  {(() => {
+                                    const date = new Date(dateGroup.date);
+                                    const month = date.getMonth() + 1;
+                                    const day = date.getDate();
+                                    return `${month}/${day}`;
+                                  })()}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {new Date(dateGroup.date).toLocaleDateString('zh-CN', { weekday: 'short' })}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* 右侧课程列表 */}
+                            <div className="ml-16 sm:ml-20 md:ml-24">
+                              {dateGroup.schedules.map((schedule, index) => {
+                                const isFirstInGroup = index === 0;
+                                const isLastInGroup = index === dateGroup.schedules.length - 1;
+                                const isFirstOverall = isFirstGroup && isFirstInGroup;
+                                const isLastOverall = isLastGroup && isLastInGroup;
+                                
+                                return (
+                                  <div
+                                    key={schedule.schedule_id}
+                                    className={`border-b border-gray-100 last:border-b-0 p-3 hover:shadow-sm cursor-pointer transition-all duration-200 hover:border-primary/20 ${
+                                      isEvenDate 
+                                        ? 'bg-white hover:bg-gray-50/50' 
+                                        : 'bg-gray-50 hover:bg-gray-100/50'
+                                    } ${
+                                      isFirstOverall ? 'rounded-tr-lg' : ''
+                                    } ${
+                                      isLastOverall ? 'rounded-br-lg' : ''
+                                    }`}
+                                    onClick={() => handleScheduleClick(schedule)}
+                                  >
+                                  <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
+                                    {/* 时段 */}
+                                    <div className="flex-shrink-0">
+                                      <span 
+                                        className={`inline-block px-1 sm:px-1.5 md:px-2 py-0.5 sm:py-1 rounded-md border text-xs font-medium ${
+                                          schedule.period === '上午' 
+                                            ? 'text-orange-600 bg-orange-50 border-orange-200' 
+                                            : schedule.period === '下午' 
+                                            ? 'text-blue-600 bg-blue-50 border-blue-200' 
+                                            : 'text-purple-600 bg-purple-50 border-purple-200'
+                                        }`}
+                                      >
+                                        {schedule.period}
+                                      </span>
+                                    </div>
+
+                                    {/* 具体时间 */}
+                                    <div className="flex-shrink-0 w-16 sm:w-20 md:w-24">
+                                      <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+                                        {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+                                      </div>
+                                    </div>
+
+                                    {/* 课程 */}
+                                    <div className="flex-shrink-0" style={{ width: `${courseFieldWidth}px` }}>
+                                      <div className="flex items-center gap-1">
+                                        <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 flex-shrink-0" />
+                                        <span className="text-xs sm:text-sm font-medium truncate">
+                                          {schedule.lesson_title && schedule.lesson_title.trim() && schedule.lesson_title !== '无主题'
+                                            ? `${schedule.subject_name} - ${schedule.lesson_title}`
+                                            : schedule.subject_name
+                                          }
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* 任课老师 */}
+                                    <div className="flex-shrink-0 w-16 sm:w-20 md:w-24">
+                                      <div className="flex items-center gap-1">
+                                        <User className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 flex-shrink-0" />
+                                        <span className="text-xs sm:text-sm text-gray-600 truncate" title={schedule.teacher_full_name}>
+                                          {schedule.teacher_full_name || '未安排'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* 教室 */}
+                                    <div className="flex-shrink-0" style={{ width: `${venueFieldWidth}px` }}>
+                                      <div className="flex items-center gap-1">
+                                        <MapPin className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 flex-shrink-0" />
+                                        <span className="text-xs sm:text-sm text-gray-600 truncate" title={schedule.venue_name}>
+                                          {schedule.venue_name || '在线课程'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* 所属课表 */}
+                                    <div className="flex-shrink-0" style={{ width: `${planFieldWidth}px` }}>
+                                      <div className="flex items-center gap-1">
+                                        <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 flex-shrink-0" />
+                                        <span className="text-xs sm:text-sm text-gray-600 truncate" title={schedule.plan_name || schedule.class_name}>
+                                          {schedule.plan_name || schedule.class_name || '未分配'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      } else {
+        return (
+          <div className="text-center py-16">
+            <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium">暂无课表</h3>
+            <p className="text-gray-500 mt-1">您还没有安排的课程</p>
+          </div>
+        );
+      }
+    }
     
     // 升级学员页面
     if (activeTab === 'upgrade') {
-      return <UpgradePage onActivationSuccess={() => setActiveTab('profile')} />;
+      return <UpgradePage onActivationSuccess={() => handleTabChange('profile')} />;
     }
     
     // 个人信息页面
@@ -1228,6 +1901,58 @@ const StudentPage = () => {
 
   return (
     <div className="min-h-screen">
+      {/* 课表详情对话框 */}
+      <AlertDialog open={scheduleDetailOpen} onOpenChange={setScheduleDetailOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              课程详情
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          {selectedSchedule && (
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="space-y-4 pt-6">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">课程名称</span>
+                    <span className="text-sm font-medium">{selectedSchedule.subject_name}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">本节主题</span>
+                    <span className="text-sm font-medium">{selectedSchedule.lesson_title || '无主题'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">日期</span>
+                    <span className="text-sm font-medium">{formatDateForDisplay(selectedSchedule.schedule_date, true)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">时间</span>
+                    <span className="text-sm font-medium">
+                      {selectedSchedule.start_time.slice(0, 5)} - {selectedSchedule.end_time.slice(0, 5)} 
+                      <span className="text-gray-500 ml-1">({selectedSchedule.duration_minutes}分钟)</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">任课老师</span>
+                    <span className="text-sm font-medium">{selectedSchedule.teacher_full_name}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">上课地点</span>
+                    <span className="text-sm font-medium">{selectedSchedule.venue_name}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setScheduleDetailOpen(false)}>
+              关闭
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* 移动端遮罩层 */}
       <div 
         className={`mobile-sidebar-overlay ${isMobileSidebarOpen ? 'active' : ''}`}
@@ -1286,7 +2011,7 @@ const StudentPage = () => {
                 <button
                   key={item.id}
                   onClick={() => {
-                    setActiveTab(item.id as ActiveTab);
+                    handleTabChange(item.id as ActiveTab);
                     setIsMobileSidebarOpen(false);
                   }}
                   className={`sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg w-full text-left ${
@@ -1313,7 +2038,7 @@ const StudentPage = () => {
               {profile?.user_type === 'trial_user' && (
                 <button
                   onClick={() => {
-                    setActiveTab('upgrade');
+                    handleTabChange('upgrade');
                     setIsMobileSidebarOpen(false);
                   }}
                   className={`sidebar-nav-item flex items-center gap-3 px-4 py-3 rounded-lg w-full text-left ${
