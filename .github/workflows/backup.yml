@@ -1,0 +1,56 @@
+name: Supabase DB Backup
+
+on:
+  # 允许您在 Actions 选项卡中手动触发此工作流程
+  workflow_dispatch:
+  
+  # 定时执行计划：每天的 UTC 时间 00:00 运行
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  backup:
+    # 使用最新的 Ubuntu 系统作为运行环境
+    runs-on: ubuntu-latest
+
+    steps:
+      # 第 1 步：检出您的仓库代码，以便后续可以提交备份
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 第 2 步：安装 PostgreSQL 客户端，它包含了 pg_dump 工具
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      # 第 3 步：强制系统优先使用 IPv4，解决 GitHub Actions 可能存在的网络路由问题
+      - name: Force IPv4 preference
+        run: echo "precedence ::ffff:0:0/96  100" | sudo tee -a /etc/gai.conf
+
+      # 第 4 步：创建用于存放备份文件的目录
+      - name: Create backup directory
+        run: mkdir -p ./backups
+
+      # 第 5 步：使用 pg_dump 直接执行备份
+      - name: Perform database backup with pg_dump
+        env:
+          # 从 Secrets 中安全地读取数据库连接字符串
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # 使用 pg_dump --schema-only 来备份数据库结构
+          pg_dump --schema-only --quote-all-identifiers -d "$SUPABASE_DB_URL" > ./backups/schema.sql
+          # 使用 pg_dump --data-only 来备份数据
+          pg_dump --data-only --quote-all-identifiers -d "$SUPABASE_DB_URL" > ./backups/data.sql
+
+      # 第 6 步：将生成的备份文件提交并推送到本仓库
+      - name: Commit and push backup files
+        run: |
+          git config --global user.name "GitHub Actions Backup Bot"
+          git config --global user.email "actions@github.com"
+          git add ./backups/
+          # 仅当文件有变化时才提交，避免产生空的提交记录
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: database backup $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            git push
+          else
+            echo "No changes to commit."
+          fi
