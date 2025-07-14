@@ -174,18 +174,27 @@ const VideoManagement = () => {
   });
   const [editVideoSubmitting, setEditVideoSubmitting] = useState(false);
 
+  // 自然排序比较函数（处理数字排序问题）
+  const naturalSort = (a: string, b: string): number => {
+    return a.localeCompare(b, undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  };
+
   // 获取视频列表
   const fetchVideos = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("minio_videos")
-        .select("*")
-        .order("title", { ascending: true });
+        .select("*");
       
       if (error) throw error;
       
-      setVideos(data || []);
+      // 在前端进行自然排序，确保数字正确排序
+      const sortedData = (data || []).sort((a, b) => naturalSort(a.title, b.title));
+      setVideos(sortedData);
       setCurrentPage(1);
     } catch (error: any) {
       toast({
