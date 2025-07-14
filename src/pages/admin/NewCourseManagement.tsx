@@ -239,7 +239,7 @@ const NewCourseManagement = () => {
       const { data, error } = await supabase
         .from('minio_videos')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('title', { ascending: true });
       
       if (error) throw error;
       setVideoLibrary(data || []);
