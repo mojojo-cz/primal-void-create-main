@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables, TablesInsert } from "@/integrations/supabase/types";
+import { Tables, TablesInsert } from "@/types/database.types";
 import { Plus, Search, Edit, Trash2, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import ImageUpload from "@/components/ui/image-upload";
 
@@ -86,7 +86,6 @@ const statusColorMap: Record<string, string> = {
 const NewCourseManagement = () => {
   const [courses, setCourses] = useState<CourseWithChapters[]>([]);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -327,8 +326,7 @@ const NewCourseManagement = () => {
       // 局部更新：添加新课程到列表顶部
       setCourses(prev => [{...data, chapters: []}, ...prev]);
       
-      setOpen(false);
-      setForm(defaultForm);
+      closeCourseEditDialog();
       toast({
         title: "创建成功",
         description: "课程已创建"
