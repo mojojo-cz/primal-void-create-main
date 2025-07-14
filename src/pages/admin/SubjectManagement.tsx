@@ -219,6 +219,42 @@ const SubjectManagement = () => {
   // 删除课程
   const handleDeleteSubject = async (subjectId: string) => {
     try {
+      // 第一步：检查是否有课表计划引用此课程
+      const { data: schedulePlans, error: checkError } = await supabase
+        .from('schedule_plans')
+        .select('id, title')
+        .eq('subject_id', subjectId);
+
+      if (checkError) throw checkError;
+
+      if (schedulePlans && schedulePlans.length > 0) {
+        const planTitles = schedulePlans.map(plan => plan.title).join('、');
+        toast({
+          variant: "destructive",
+          title: "无法删除课程",
+          description: `该课程正在被 ${schedulePlans.length} 个课表使用：${planTitles}。请先删除相关课表或将课表改为其他课程后再试。`,
+        });
+        return;
+      }
+
+      // 第二步：检查是否有排课记录引用此课程
+      const { data: schedules, error: scheduleCheckError } = await supabase
+        .from('schedules')
+        .select('id')
+        .eq('subject_id', subjectId);
+
+      if (scheduleCheckError) throw scheduleCheckError;
+
+      if (schedules && schedules.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "无法删除课程",
+          description: `该课程正在被 ${schedules.length} 个排课使用。请先删除相关排课记录后再试。`,
+        });
+        return;
+      }
+
+      // 第三步：执行删除
       const { error } = await supabase
         .from('subjects')
         .delete()
@@ -234,10 +270,31 @@ const SubjectManagement = () => {
       fetchSubjects();
     } catch (error: any) {
       console.error('删除课程失败:', error);
+      
+      // 处理特定的数据库错误
+      let errorMessage = "无法删除课程";
+      let errorDescription = "删除失败，请稍后重试";
+
+      if (error.message?.includes('foreign key constraint')) {
+        if (error.message?.includes('schedule_plans_subject_id_fkey')) {
+          errorMessage = "课程正在使用中";
+          errorDescription = "该课程被课表计划引用，请先删除相关课表或修改课表设置";
+        } else if (error.message?.includes('schedules_subject_id_fkey')) {
+          errorMessage = "课程正在使用中";
+          errorDescription = "该课程被排课记录引用，请先删除相关排课";
+        } else {
+          errorMessage = "课程正在使用中";
+          errorDescription = "该课程被其他数据引用，请先清理关联数据";
+        }
+      } else if (error.message?.includes('permission')) {
+        errorMessage = "权限不足";
+        errorDescription = "您没有删除课程的权限";
+      }
+
       toast({
         variant: "destructive",
-        title: "删除失败",
-        description: error.message || "无法删除课程"
+        title: errorMessage,
+        description: errorDescription
       });
     }
   };
