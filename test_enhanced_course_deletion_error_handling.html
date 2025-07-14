@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>优化后的课程删除错误处理测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .improvement-section {
+            margin-bottom: 40px;
+        }
+
+        .improvement-title {
+            font-size: 1.8rem;
+            color: #1f2937;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .comparison-item {
+            background: #f9fafb;
+            border-radius: 15px;
+            padding: 25px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .comparison-item.before {
+            border-color: #f87171;
+            background: #fef2f2;
+        }
+
+        .comparison-item.after {
+            border-color: #34d399;
+            background: #f0fdfa;
+        }
+
+        .comparison-item h3 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .error-message {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .error-message.old {
+            border-color: #f87171;
+            color: #dc2626;
+        }
+
+        .error-message.new {
+            border-color: #34d399;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin-top: 15px;
+        }
+
+        .feature-list li {
+            padding: 5px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .feature-list li::before {
+            content: '✅';
+            font-size: 1.2rem;
+        }
+
+        .test-scenarios {
+            background: #f8fafc;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .scenario {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .scenario:last-child {
+            margin-bottom: 0;
+        }
+
+        .scenario h4 {
+            color: #1f2937;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .scenario-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .old-behavior, .new-behavior {
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .old-behavior {
+            background: #fef2f2;
+            border: 1px solid #f87171;
+        }
+
+        .new-behavior {
+            background: #f0fdfa;
+            border: 1px solid #34d399;
+        }
+
+        .debugging-section {
+            background: #1f2937;
+            color: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .debug-log {
+            background: #111827;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            margin-top: 15px;
+            overflow-x: auto;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+        }
+
+        .log-start { color: #60a5fa; }
+        .log-check { color: #34d399; }
+        .log-warning { color: #fbbf24; }
+        .log-error { color: #f87171; }
+        .log-success { color: #10b981; }
+
+        .improvements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .improvement-card {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .improvement-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .improvement-card h4 {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: #1f2937;
+        }
+
+        .improvement-card .emoji {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .testing-guide {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .testing-guide h3 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+
+        .test-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 25px;
+        }
+
+        .test-step {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .test-step h5 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+
+        .test-step p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .scenario-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 课程删除错误处理全面优化</h1>
+            <p>从简单错误提示到智能解决方案指导的完美升级</p>
+        </div>
+
+        <div class="content">
+            <!-- 核心改进对比 -->
+            <div class="improvement-section">
+                <h2 class="improvement-title">📊 关键改进对比</h2>
+                <div class="comparison-grid">
+                    <div class="comparison-item before">
+                        <h3>❌ 优化前</h3>
+                        <div class="error-message old">
+                            <strong>无法删除课程</strong><br>
+                            删除失败，请稍后重试
+                        </div>
+                        <p><strong>问题：</strong></p>
+                        <ul style="margin-top: 10px; list-style: none;">
+                            <li>• 🤔 错误信息过于简单</li>
+                            <li>• 😵 不知道具体原因</li>
+                            <li>• 🤷 没有解决步骤指导</li>
+                            <li>• 😤 需要技术支持协助</li>
+                        </ul>
+                    </div>
+
+                    <div class="comparison-item after">
+                        <h3>✅ 优化后</h3>
+                        <div class="error-message new">
+                            <div style="background: #fef2f2; border: 1px solid #f87171; border-radius: 8px; padding: 15px;">
+                                <strong>该课程正在被 2 个课表 使用：</strong><br>
+                                <div style="background: #fff5f5; border-left: 4px solid #ef4444; padding: 10px; margin: 10px 0; font-size: 0.9rem;">
+                                    <strong>课表名称：</strong>高等数学基础班、数学强化训练班
+                                </div>
+                                <div style="margin-top: 15px;">
+                                    <strong style="color: #dc2626;">解决步骤：</strong>
+                                    <ol style="margin: 5px 0 0 20px; font-size: 0.9rem;">
+                                        <li>前往 "排课管理" 页面</li>
+                                        <li>找到相关课表并删除，或</li>
+                                        <li>将课表中的课程改为其他课程</li>
+                                        <li>然后再回来删除此课程</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                        <ul class="feature-list">
+                            <li>🎯 精确的错误定位</li>
+                            <li>📋 具体的关联数据展示</li>
+                            <li>📝 详细的解决步骤</li>
+                            <li>🚀 用户可自主解决问题</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 新增功能亮点 -->
+            <div class="improvement-section">
+                <h2 class="improvement-title">🌟 新增功能亮点</h2>
+                <div class="improvements-grid">
+                    <div class="improvement-card">
+                        <span class="emoji">🔍</span>
+                        <h4>智能调试日志</h4>
+                        <p>详细的控制台日志帮助开发者和管理员快速定位问题根源</p>
+                    </div>
+                    
+                    <div class="improvement-card">
+                        <span class="emoji">📋</span>
+                        <h4>关联数据展示</h4>
+                        <p>具体显示哪些课表或排课正在使用该课程，信息一目了然</p>
+                    </div>
+                    
+                    <div class="improvement-card">
+                        <span class="emoji">📝</span>
+                        <h4>分步解决指导</h4>
+                        <p>为每种错误类型提供具体的操作步骤，用户可按步骤自行解决</p>
+                    </div>
+                    
+                    <div class="improvement-card">
+                        <span class="emoji">🎨</span>
+                        <h4>友好界面设计</h4>
+                        <p>使用JSX组件构建的富文本错误提示，视觉效果更佳</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 调试日志展示 -->
+            <div class="debugging-section">
+                <h3>🛠️ 智能调试日志系统</h3>
+                <p>新增的调试日志帮助快速定位问题，以下是删除课程时的典型日志输出：</p>
+                <div class="debug-log">
+                    <div class="log-entry log-start">🔍 开始删除课程检查: course-123-abc</div>
+                    <div class="log-entry log-check">📋 检查课表计划关联...</div>
+                    <div class="log-entry log-check">📋 课表计划检查结果: [{id: "plan-1", title: "高等数学基础班"}, {id: "plan-2", title: "数学强化训练班"}]</div>
+                    <div class="log-entry log-warning">⚠️ 发现课表计划关联: 高等数学基础班、数学强化训练班</div>
+                    <div class="log-entry" style="color: #94a3b8;">// 如果没有关联，会继续检查排课记录</div>
+                    <div class="log-entry log-check">📅 检查排课记录关联...</div>
+                    <div class="log-entry log-check">📅 排课记录检查结果: []</div>
+                    <div class="log-entry log-start">🗑️ 开始执行删除操作...</div>
+                    <div class="log-entry log-success">✅ 课程删除成功</div>
+                </div>
+            </div>
+
+            <!-- 测试场景 -->
+            <div class="test-scenarios">
+                <h3>🧪 主要测试场景</h3>
+                
+                <div class="scenario">
+                    <h4>场景1：课程被课表计划使用</h4>
+                    <div class="scenario-content">
+                        <div class="old-behavior">
+                            <strong>原来的提示：</strong><br>
+                            "无法删除课程"<br>
+                            <em>用户不知道具体原因</em>
+                        </div>
+                        <div class="new-behavior">
+                            <strong>现在的提示：</strong><br>
+                            • 显示被 X 个课表使用<br>
+                            • 列出具体课表名称<br>
+                            • 提供4步解决方案<br>
+                            • 可视化的指导界面
+                        </div>
+                    </div>
+                </div>
+
+                <div class="scenario">
+                    <h4>场景2：课程被排课记录使用</h4>
+                    <div class="scenario-content">
+                        <div class="old-behavior">
+                            <strong>原来的提示：</strong><br>
+                            "删除失败，请稍后重试"<br>
+                            <em>完全没有指导性</em>
+                        </div>
+                        <div class="new-behavior">
+                            <strong>现在的提示：</strong><br>
+                            • 显示被 X 个排课使用<br>
+                            • 列出具体排课信息<br>
+                            • 提供筛选和删除指导<br>
+                            • 包含日期和课程标题
+                        </div>
+                    </div>
+                </div>
+
+                <div class="scenario">
+                    <h4>场景3：网络或权限错误</h4>
+                    <div class="scenario-content">
+                        <div class="old-behavior">
+                            <strong>原来的处理：</strong><br>
+                            "删除失败，请稍后重试"<br>
+                            <em>所有错误都是相同提示</em>
+                        </div>
+                        <div class="new-behavior">
+                            <strong>现在的处理：</strong><br>
+                            • 网络错误：检查连接指导<br>
+                            • 权限错误：联系管理员<br>
+                            • 数据不存在：刷新页面<br>
+                            • 针对性的解决方案
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 测试指南 -->
+            <div class="testing-guide">
+                <h3>🧪 测试验证指南</h3>
+                <p>按照以下步骤测试优化后的删除课程功能：</p>
+                
+                <div class="test-steps">
+                    <div class="test-step">
+                        <h5>1️⃣ 准备测试数据</h5>
+                        <p>创建一个课程，并在排课管理中添加相关的课表计划或排课记录</p>
+                    </div>
+                    
+                    <div class="test-step">
+                        <h5>2️⃣ 尝试删除课程</h5>
+                        <p>在课程管理页面点击删除按钮，观察错误提示是否详细</p>
+                    </div>
+                    
+                    <div class="test-step">
+                        <h5>3️⃣ 查看控制台日志</h5>
+                        <p>打开浏览器开发者工具，查看详细的调试日志输出</p>
+                    </div>
+                    
+                    <div class="test-step">
+                        <h5>4️⃣ 按步骤解决</h5>
+                        <p>按照错误提示中的解决步骤，清理关联数据后重新尝试删除</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 技术特性总结 -->
+            <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 30px; border-radius: 15px; text-align: center; margin-top: 30px;">
+                <h3>🎉 优化成果总结</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 25px;">
+                    <div>
+                        <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 10px;">🎯</div>
+                        <div style="font-size: 1.1rem; font-weight: 600;">精确错误定位</div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">智能识别具体错误类型</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 10px;">📋</div>
+                        <div style="font-size: 1.1rem; font-weight: 600;">关联数据展示</div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">显示具体的课表和排课信息</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 10px;">📝</div>
+                        <div style="font-size: 1.1rem; font-weight: 600;">解决方案指导</div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">详细的分步解决指导</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 2.5rem; font-weight: bold; margin-bottom: 10px;">🚀</div>
+                        <div style="font-size: 1.1rem; font-weight: 600;">用户体验提升</div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">用户可自主解决问题</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课程删除字段修复测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .issue-section {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .fix-section {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .issue-title, .fix-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .issue-title {
+            color: #dc2626;
+        }
+
+        .fix-title {
+            color: #059669;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+
+        .error-highlight {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .success-highlight {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .before, .after {
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .before {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+
+        .after {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+        }
+
+        .field-diff {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .field-diff h4 {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: #1f2937;
+        }
+
+        .field-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .field-row:last-child {
+            border-bottom: none;
+        }
+
+        .field-name {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+
+        .field-type {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .testing-steps {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 25px;
+        }
+
+        .testing-steps h3 {
+            color: #1d4ed8;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .step {
+            background: white;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step strong {
+            color: #1d4ed8;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 课程删除字段修复</h1>
+            <p>解决 schedule_plans.title 字段不存在的问题</p>
+        </div>
+
+        <div class="content">
+            <!-- 问题说明 -->
+            <div class="issue-section">
+                <div class="issue-title">
+                    <span>❌</span> 发现的问题
+                </div>
+                <p>用户尝试删除课程时遇到数据库字段错误：</p>
+                
+                <div class="error-highlight">
+                    <strong>错误信息：</strong><br>
+                    <code>column schedule_plans.title does not exist</code><br>
+                    <strong>错误代码：</strong> 42703 (undefined_column)
+                </div>
+
+                <p><strong>问题分析：</strong></p>
+                <ul style="margin-top: 10px; margin-left: 20px;">
+                    <li>代码中查询了不存在的 <code>title</code> 字段</li>
+                    <li>实际的数据库表使用 <code>name</code> 字段存储课表名称</li>
+                    <li>导致删除课程时的关联检查失败</li>
+                </ul>
+            </div>
+
+            <!-- 修复方案 -->
+            <div class="fix-section">
+                <div class="fix-title">
+                    <span>✅</span> 修复方案
+                </div>
+                <p>将查询中的字段名从 <code>title</code> 更正为 <code>name</code>：</p>
+
+                <div class="comparison-grid">
+                    <div class="before">
+                        <h4>修复前 (错误)</h4>
+                        <div class="code-block">const { data: schedulePlans } = await supabase
+  .from('schedule_plans')
+  .select('id, title')  // ❌ 错误字段名
+  .eq('subject_id', subjectId);</div>
+                    </div>
+
+                    <div class="after">
+                        <h4>修复后 (正确)</h4>
+                        <div class="code-block">const { data: schedulePlans } = await supabase
+  .from('schedule_plans')
+  .select('id, name')   // ✅ 正确字段名
+  .eq('subject_id', subjectId);</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据库表结构 -->
+            <div class="field-diff">
+                <h4>📋 schedule_plans 表结构</h4>
+                <div class="field-row">
+                    <span class="field-name">id</span>
+                    <span class="field-type">UUID (主键)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">name</span>
+                    <span class="field-type">TEXT (课表名称) ✅ 使用此字段</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">description</span>
+                    <span class="field-type">TEXT (可选)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">class_id</span>
+                    <span class="field-type">UUID (外键)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">subject_id</span>
+                    <span class="field-type">UUID (外键)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">teacher_id</span>
+                    <span class="field-type">UUID (外键)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">venue_id</span>
+                    <span class="field-type">UUID (外键，可选)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">start_date</span>
+                    <span class="field-type">DATE (可选)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">end_date</span>
+                    <span class="field-type">DATE (可选)</span>
+                </div>
+                <div class="field-row">
+                    <span class="field-name">status</span>
+                    <span class="field-type">TEXT (默认: active)</span>
+                </div>
+            </div>
+
+            <!-- 相关代码修改 -->
+            <div class="fix-section">
+                <div class="fix-title">
+                    <span>🔄</span> 相关代码修改
+                </div>
+                
+                <h4>1. 查询字段修正</h4>
+                <div class="code-block">// 从
+const planTitles = schedulePlans.map(plan => plan.title).join('、');
+
+// 改为
+const planNames = schedulePlans.map(plan => plan.name).join('、');</div>
+
+                <h4>2. 显示文本更新</h4>
+                <div class="code-block">// 错误提示中的课表名称显示
+&lt;strong&gt;课表名称：&lt;/strong&gt;{planNames}</div>
+
+                <h4>3. 调试日志优化</h4>
+                <div class="code-block">console.log('⚠️ 发现课表计划关联:', planNames);</div>
+            </div>
+
+            <!-- 测试步骤 -->
+            <div class="testing-steps">
+                <h3><span>🧪</span> 测试验证步骤</h3>
+                
+                <div class="step">
+                    <strong>步骤 1:</strong> 确保您有一个已经被课表计划使用的课程
+                </div>
+                
+                <div class="step">
+                    <strong>步骤 2:</strong> 在课程管理页面尝试删除该课程
+                </div>
+                
+                <div class="step">
+                    <strong>步骤 3:</strong> 检查是否显示详细的错误信息而不是数据库错误
+                </div>
+                
+                <div class="step">
+                    <strong>步骤 4:</strong> 打开浏览器控制台查看调试日志是否正常显示
+                </div>
+                
+                <div class="step">
+                    <strong>步骤 5:</strong> 确认错误提示中显示了具体的课表名称
+                </div>
+            </div>
+
+            <!-- 预期结果 -->
+            <div class="success-highlight">
+                <h4>🎯 预期结果</h4>
+                <p>修复后，删除课程时应该看到类似这样的友好提示：</p>
+                <div style="margin-top: 10px; padding: 10px; background: white; border-radius: 6px; border: 1px solid #d1d5db;">
+                    <strong>无法删除课程</strong><br>
+                    该课程正在被 <strong>2 个课表</strong> 使用：<br>
+                    <span style="background: #fff5f5; padding: 5px; border-radius: 4px;">课表名称：高等数学基础班、数学强化训练班</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

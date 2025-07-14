@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/use-toast";
-import { Plus, Search, Edit, Trash2, RefreshCw, BookOpen } from "lucide-react";
+import { Plus, Search, Edit, Trash2, RefreshCw, BookOpen, AlertTriangle, ExternalLink } from "lucide-react";
 import { EnhancedPagination } from "@/components/ui/enhanced-pagination";
 import { getCurrentPageSize, setPageSize } from "@/utils/userPreferences";
 
@@ -54,6 +54,15 @@ const SubjectManagement = () => {
   const [editDialog, setEditDialog] = useState<{ open: boolean; subject: Subject | null }>({
     open: false,
     subject: null
+  });
+  const [errorDialog, setErrorDialog] = useState<{ 
+    open: boolean; 
+    title: string; 
+    content: React.ReactNode;
+  }>({ 
+    open: false, 
+    title: '', 
+    content: null 
   });
   
   // 表单状态
@@ -219,49 +228,165 @@ const SubjectManagement = () => {
   // 删除课程
   const handleDeleteSubject = async (subjectId: string) => {
     try {
+      console.log('🔍 开始删除课程检查:', subjectId);
+      
       // 第一步：检查是否有课表计划引用此课程
+      console.log('📋 检查课表计划关联...');
       const { data: schedulePlans, error: checkError } = await supabase
         .from('schedule_plans')
-        .select('id, title')
+        .select('id, name')
         .eq('subject_id', subjectId);
 
-      if (checkError) throw checkError;
+      if (checkError) {
+        console.error('❌ 检查课表计划失败:', checkError);
+        throw checkError;
+      }
+
+      console.log('📋 课表计划检查结果:', schedulePlans);
 
       if (schedulePlans && schedulePlans.length > 0) {
-        const planTitles = schedulePlans.map(plan => plan.title).join('、');
-        toast({
-          variant: "destructive",
+        const planNames = schedulePlans.map(plan => plan.name).join('、');
+        console.log('⚠️ 发现课表计划关联:', planNames);
+        
+        setErrorDialog({
+          open: true,
           title: "无法删除课程",
-          description: `该课程正在被 ${schedulePlans.length} 个课表使用：${planTitles}。请先删除相关课表或将课表改为其他课程后再试。`,
+          content: (
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-700">
+                    该课程正在被 <span className="font-semibold text-amber-700">{schedulePlans.length} 个课表</span> 使用，无法直接删除。
+                  </p>
+                </div>
+              </div>
+              
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="flex items-center space-x-2 mb-2">
+                  <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
+                  <span className="text-sm font-medium text-amber-800">关联的课表：</span>
+                </div>
+                <p className="text-sm text-amber-700 ml-4">{planNames}</p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-blue-800 mb-2 flex items-center">
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  解决方案
+                </h4>
+                <ol className="text-sm text-blue-700 space-y-1.5 ml-4">
+                  <li className="flex items-start">
+                    <span className="bg-blue-200 text-blue-800 rounded-full w-5 h-5 text-xs flex items-center justify-center mr-2 mt-0.5">1</span>
+                    前往 <span className="font-medium">"排课管理"</span> 页面
+                  </li>
+                  <li className="flex items-start">
+                    <span className="bg-blue-200 text-blue-800 rounded-full w-5 h-5 text-xs flex items-center justify-center mr-2 mt-0.5">2</span>
+                    找到相关课表并删除，或将课程改为其他课程
+                  </li>
+                  <li className="flex items-start">
+                    <span className="bg-blue-200 text-blue-800 rounded-full w-5 h-5 text-xs flex items-center justify-center mr-2 mt-0.5">3</span>
+                    然后返回此页面重新删除课程
+                  </li>
+                </ol>
+              </div>
+            </div>
+          )
         });
         return;
       }
 
       // 第二步：检查是否有排课记录引用此课程
+      console.log('📅 检查排课记录关联...');
       const { data: schedules, error: scheduleCheckError } = await supabase
         .from('schedules')
-        .select('id')
-        .eq('subject_id', subjectId);
+        .select('id, lesson_title, schedule_date')
+        .eq('subject_id', subjectId)
+        .limit(10); // 限制查询数量，避免数据过多
 
-      if (scheduleCheckError) throw scheduleCheckError;
+      if (scheduleCheckError) {
+        console.error('❌ 检查排课记录失败:', scheduleCheckError);
+        throw scheduleCheckError;
+      }
+
+      console.log('📅 排课记录检查结果:', schedules);
 
       if (schedules && schedules.length > 0) {
-        toast({
-          variant: "destructive",
+        console.log('⚠️ 发现排课记录关联');
+        
+        setErrorDialog({
+          open: true,
           title: "无法删除课程",
-          description: `该课程正在被 ${schedules.length} 个排课使用。请先删除相关排课记录后再试。`,
+          content: (
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-700">
+                    该课程正在被 <span className="font-semibold text-red-700">{schedules.length} 个排课记录</span> 使用，无法直接删除。
+                  </p>
+                </div>
+              </div>
+              
+              {schedules.length <= 5 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                    <span className="text-sm font-medium text-red-800">排课记录列表：</span>
+                  </div>
+                  <div className="ml-4 space-y-1">
+                    {schedules.map((schedule) => (
+                      <p key={schedule.id} className="text-sm text-red-700">
+                        • {schedule.lesson_title || '未命名课程'} ({schedule.schedule_date})
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-blue-800 mb-2 flex items-center">
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  解决方案
+                </h4>
+                <ol className="text-sm text-blue-700 space-y-1.5 ml-4">
+                  <li className="flex items-start">
+                    <span className="bg-blue-200 text-blue-800 rounded-full w-5 h-5 text-xs flex items-center justify-center mr-2 mt-0.5">1</span>
+                    前往 <span className="font-medium">"排课管理"</span> 页面
+                  </li>
+                  <li className="flex items-start">
+                    <span className="bg-blue-200 text-blue-800 rounded-full w-5 h-5 text-xs flex items-center justify-center mr-2 mt-0.5">2</span>
+                    使用课程筛选功能找到相关排课记录
+                  </li>
+                  <li className="flex items-start">
+                    <span className="bg-blue-200 text-blue-800 rounded-full w-5 h-5 text-xs flex items-center justify-center mr-2 mt-0.5">3</span>
+                    逐一删除这些排课记录
+                  </li>
+                  <li className="flex items-start">
+                    <span className="bg-blue-200 text-blue-800 rounded-full w-5 h-5 text-xs flex items-center justify-center mr-2 mt-0.5">4</span>
+                    然后返回此页面重新删除课程
+                  </li>
+                </ol>
+              </div>
+            </div>
+          )
         });
         return;
       }
 
       // 第三步：执行删除
+      console.log('🗑️ 开始执行删除操作...');
       const { error } = await supabase
         .from('subjects')
         .delete()
         .eq('id', subjectId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ 删除操作失败:', error);
+        throw error;
+      }
 
+      console.log('✅ 课程删除成功');
       toast({
         title: "删除成功",
         description: "课程已删除"
@@ -269,32 +394,88 @@ const SubjectManagement = () => {
 
       fetchSubjects();
     } catch (error: any) {
-      console.error('删除课程失败:', error);
+      console.error('💥 删除课程失败:', error);
       
       // 处理特定的数据库错误
       let errorMessage = "无法删除课程";
       let errorDescription = "删除失败，请稍后重试";
+      let detailedSteps = null;
 
       if (error.message?.includes('foreign key constraint')) {
+        console.log('🔍 检测到外键约束错误:', error.message);
+        
         if (error.message?.includes('schedule_plans_subject_id_fkey')) {
-          errorMessage = "课程正在使用中";
-          errorDescription = "该课程被课表计划引用，请先删除相关课表或修改课表设置";
+          errorMessage = "课程正在被课表使用";
+          errorDescription = "该课程被课表计划引用，必须先处理关联数据";
+          detailedSteps = [
+            "前往 \"排课管理\" 页面",
+            "查找使用此课程的课表",
+            "删除相关课表或将课表改为其他课程",
+            "然后重新尝试删除此课程"
+          ];
         } else if (error.message?.includes('schedules_subject_id_fkey')) {
-          errorMessage = "课程正在使用中";
-          errorDescription = "该课程被排课记录引用，请先删除相关排课";
+          errorMessage = "课程正在被排课使用";
+          errorDescription = "该课程被排课记录引用，必须先处理关联数据";
+          detailedSteps = [
+            "前往 \"排课管理\" 页面",
+            "使用课程筛选功能找到相关排课",
+            "删除所有相关的排课记录",
+            "然后重新尝试删除此课程"
+          ];
         } else {
-          errorMessage = "课程正在使用中";
+          errorMessage = "课程正在被其他数据使用";
           errorDescription = "该课程被其他数据引用，请先清理关联数据";
+          detailedSteps = [
+            "检查课程是否被课表使用",
+            "检查课程是否被排课记录使用", 
+            "清理所有关联数据",
+            "然后重新尝试删除"
+          ];
         }
       } else if (error.message?.includes('permission')) {
         errorMessage = "权限不足";
-        errorDescription = "您没有删除课程的权限";
+        errorDescription = "您没有删除课程的权限，请联系管理员";
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        errorMessage = "网络连接错误";
+        errorDescription = "请检查网络连接，然后重试";
+      } else if (error.code === 'PGRST116') {
+        errorMessage = "课程不存在";
+        errorDescription = "该课程可能已被删除，请刷新页面";
       }
 
-      toast({
-        variant: "destructive",
+      // 显示详细的错误信息
+      setErrorDialog({
+        open: true,
         title: errorMessage,
-        description: errorDescription
+        content: (
+          <div className="space-y-4">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">{errorDescription}</p>
+              </div>
+            </div>
+            
+            {detailedSteps && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-blue-800 mb-2 flex items-center">
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  解决方案
+                </h4>
+                <ol className="text-sm text-blue-700 space-y-1.5 ml-4">
+                  {detailedSteps.map((step, index) => (
+                    <li key={index} className="flex items-start">
+                      <span className="bg-blue-200 text-blue-800 rounded-full w-5 h-5 text-xs flex items-center justify-center mr-2 mt-0.5">
+                        {index + 1}
+                      </span>
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        )
       });
     }
   };
@@ -661,6 +842,29 @@ const SubjectManagement = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 错误提示对话框 */}
+      <AlertDialog open={errorDialog.open} onOpenChange={(open) => setErrorDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center space-x-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <span>{errorDialog.title}</span>
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>{errorDialog.content}</div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction 
+              onClick={() => setErrorDialog({ open: false, title: '', content: null })}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              我知道了
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
