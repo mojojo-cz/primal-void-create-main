@@ -619,19 +619,11 @@ const NewCourseManagement = () => {
       });
     } else {
       // 计算新考点的order值
-      let maxOrder = 0;
-      courses.forEach(course => {
-        course.chapters.forEach(chapter => {
-          if (chapter.id === chapterId) {
-            maxOrder = Math.max(maxOrder, ...chapter.keyPoints.map(kp => kp.order));
-          }
-        });
-      });
       setKeyPointForm({
         id: '',
         title: '',
         description: '',
-        order: maxOrder + 1,
+        order: getNextKeyPointOrder(chapterId),
         video_id: '',
         video: null,
       });
@@ -670,6 +662,25 @@ const NewCourseManagement = () => {
         play_url_expires_at: null,
       } : null
     }));
+  };
+
+  // 计算指定章节的下一个考点排序号
+  const getNextKeyPointOrder = (chapterId: string, updatedCourses?: CourseWithChapters[]): number => {
+    const coursesToUse = updatedCourses || courses;
+    let maxOrder = 0;
+    
+    for (const course of coursesToUse) {
+      for (const chapter of course.chapters) {
+        if (chapter.id === chapterId) {
+          if (chapter.keyPoints.length > 0) {
+            maxOrder = Math.max(maxOrder, ...chapter.keyPoints.map(kp => kp.order));
+          }
+          break;
+        }
+      }
+    }
+    
+    return maxOrder + 1;
   };
 
   // 检查考点排序值是否重复
@@ -738,25 +749,41 @@ const NewCourseManagement = () => {
         if (error) throw error;
         
         // 局部更新：添加新考点到对应章节
-        setCourses(prev => prev.map(course => ({
-          ...course,
-          chapters: course.chapters.map(chapter =>
-            chapter.id === keyPointDialog.chapterId
-              ? {
-                  ...chapter,
-                  keyPoints: [...chapter.keyPoints, {
-                    id: data.id,
-                    title: data.title,
-                    description: data.description,
-                    order: data.order,
-                    chapter_id: data.chapter_id,
-                    video_id: data.video_id,
-                    video: keyPointForm.video
-                  }].sort((a, b) => a.order - b.order)
-                }
-              : chapter
-          )
-        })));
+        setCourses(prev => {
+          const updatedCourses = prev.map(course => ({
+            ...course,
+            chapters: course.chapters.map(chapter =>
+              chapter.id === keyPointDialog.chapterId
+                ? {
+                    ...chapter,
+                    keyPoints: [...chapter.keyPoints, {
+                      id: data.id,
+                      title: data.title,
+                      description: data.description,
+                      order: data.order,
+                      chapter_id: data.chapter_id,
+                      video_id: data.video_id,
+                      video: keyPointForm.video
+                    }].sort((a, b) => a.order - b.order)
+                  }
+                : chapter
+            )
+          }));
+          
+          // 使用更新后的数据立即重置表单
+          setTimeout(() => {
+            setKeyPointForm({
+              id: '',
+              title: '',
+              description: '',
+              order: getNextKeyPointOrder(keyPointDialog.chapterId, updatedCourses),
+              video_id: '',
+              video: null,
+            });
+          }, 0);
+          
+          return updatedCourses;
+        });
       } else if (keyPointDialog.mode === 'edit' && keyPointForm.id) {
         const { data, error } = await supabase.from('key_points').update({
           title: keyPointForm.title,
@@ -781,11 +808,20 @@ const NewCourseManagement = () => {
         })));
       }
       
-      closeKeyPointDialog();
-      toast({
-        title: "操作成功",
-        description: keyPointDialog.mode === 'add' ? "考点已添加" : "考点已更新"
-      });
+      // 添加模式：不关闭对话框，表单重置已在状态更新时处理
+      if (keyPointDialog.mode === 'add') {
+        toast({
+          title: "添加成功",
+          description: "考点已添加，可继续添加下一个考点"
+        });
+      } else {
+        // 编辑模式：保持原有行为，关闭对话框
+        closeKeyPointDialog();
+        toast({
+          title: "更新成功",
+          description: "考点已更新"
+        });
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -1300,20 +1336,31 @@ const NewCourseManagement = () => {
               )}
             </div>
             
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeKeyPointDialog}>取消</Button>
-              <Button 
-                type="submit" 
-                disabled={
-                  isKeyPointOrderDuplicate(
-                    keyPointForm.order, 
-                    keyPointDialog.chapterId, 
-                    keyPointDialog.mode === 'edit' ? keyPointForm.id : undefined
-                  )
-                }
-              >
-                {keyPointDialog.mode === 'add' ? '添加考点' : '保存考点'}
-              </Button>
+            <DialogFooter className="flex flex-col gap-2">
+              {keyPointDialog.mode === 'add' && (
+                <div className="text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-md border border-blue-200">
+                  💡 提示：添加考点后对话框将保持打开，方便您连续添加多个考点
+                </div>
+              )}
+              <div className="flex justify-between gap-2">
+                <Button type="button" variant="outline" onClick={closeKeyPointDialog}>
+                  {keyPointDialog.mode === 'add' ? '完成添加' : '取消'}
+                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    type="submit" 
+                    disabled={
+                      isKeyPointOrderDuplicate(
+                        keyPointForm.order, 
+                        keyPointDialog.chapterId, 
+                        keyPointDialog.mode === 'edit' ? keyPointForm.id : undefined
+                      )
+                    }
+                  >
+                    {keyPointDialog.mode === 'add' ? '添加考点' : '保存考点'}
+                  </Button>
+                </div>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>
