@@ -45,10 +45,17 @@ const KeyActivation = ({ onActivationSuccess }: KeyActivationProps) => {
       console.log('开始激活密钥:', activationKey.trim());
       console.log('当前用户:', user?.id);
 
+      // 检查当前session状态
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      console.log('当前session:', sessionData, sessionError);
+
+      // 检查用户状态
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      console.log('当前用户验证:', userData, userError);
+
       const { data, error } = await supabase.functions.invoke('activate-key', {
         body: { 
-          activation_key: activationKey.trim(),
-          user_id: user?.id
+          activation_key: activationKey.trim()
         }
       });
 
@@ -113,6 +120,26 @@ const KeyActivation = ({ onActivationSuccess }: KeyActivationProps) => {
     }
   };
 
+  // 测试身份验证
+  const testAuth = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('test-auth', {
+        body: {}
+      });
+      
+      console.log('测试身份验证结果:', { data, error });
+      
+      if (data) {
+        toast({
+          title: "身份验证测试结果",
+          description: `User: ${data.user ? data.user.email : 'null'}, Auth: ${data.authHeader}`
+        });
+      }
+    } catch (error) {
+      console.error('测试身份验证失败:', error);
+    }
+  };
+
   // 处理回车键激活
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -166,6 +193,17 @@ const KeyActivation = ({ onActivationSuccess }: KeyActivationProps) => {
                 激活
               </>
             )}
+          </Button>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            onClick={testAuth}
+            variant="outline"
+            size="sm"
+            className="text-xs"
+          >
+            测试身份验证
           </Button>
         </div>
 
