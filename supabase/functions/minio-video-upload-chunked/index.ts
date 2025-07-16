@@ -2,14 +2,29 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { Client } from "npm:minio@8.0.1";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// MinIO配置
-const minioClient = new Client({
-  endPoint: 'minio.xianrankaoyan.vip',
-  port: 9000,
-  useSSL: true,
-  accessKey: 'WRJDY2MYP6RF0Y5EO4M2',
-  secretKey: 'jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7'
-});
+// MinIO配置 - 从环境变量读取
+const getMinIOConfig = () => {
+  const endPoint = Deno.env.get('MINIO_ENDPOINT');
+  const port = parseInt(Deno.env.get('MINIO_PORT') || '9000');
+  const useSSL = Deno.env.get('MINIO_USE_SSL') === 'true';
+  const accessKey = Deno.env.get('MINIO_ACCESS_KEY');
+  const secretKey = Deno.env.get('MINIO_SECRET_KEY');
+  const bucketName = Deno.env.get('MINIO_BUCKET_NAME') || 'videos';
+
+  // 验证必需的环境变量
+  if (!endPoint || !accessKey || !secretKey) {
+    throw new Error('缺少必需的MinIO环境变量: MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY');
+  }
+
+  return {
+    endPoint,
+    port,
+    useSSL,
+    accessKey,
+    secretKey,
+    bucketName
+  };
+};
 
 // Supabase配置
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -95,6 +110,16 @@ async function initMultipartUpload(data: ChunkUploadRequest) {
     throw new Error('文件名不能为空');
   }
 
+  // 获取MinIO配置并初始化客户端
+  const minioConfig = getMinIOConfig();
+  const minioClient = new Client({
+    endPoint: minioConfig.endPoint,
+    port: minioConfig.port,
+    useSSL: minioConfig.useSSL,
+    accessKey: minioConfig.accessKey,
+    secretKey: minioConfig.secretKey
+  });
+
   // 生成唯一的对象名
   const timestamp = Date.now();
   const randomStr = Math.random().toString(36).substring(2, 15);
@@ -103,7 +128,7 @@ async function initMultipartUpload(data: ChunkUploadRequest) {
   console.log(`初始化分片上传: ${objectName}`);
 
   // 初始化MinIO分片上传
-  const uploadId = await minioClient.initiateNewMultipartUpload('videos', objectName, {
+  const uploadId = await minioClient.initiateNewMultipartUpload(minioConfig.bucketName, objectName, {
     'Content-Type': getContentType(filename)
   });
 
@@ -123,6 +148,16 @@ async function uploadChunk(data: ChunkUploadRequest) {
     throw new Error('缺少必需的参数');
   }
 
+  // 获取MinIO配置并初始化客户端
+  const minioConfig = getMinIOConfig();
+  const minioClient = new Client({
+    endPoint: minioConfig.endPoint,
+    port: minioConfig.port,
+    useSSL: minioConfig.useSSL,
+    accessKey: minioConfig.accessKey,
+    secretKey: minioConfig.secretKey
+  });
+
   console.log(`上传分片 ${chunkNumber}, uploadId: ${uploadId}`);
 
   // 解码base64数据
@@ -130,7 +165,7 @@ async function uploadChunk(data: ChunkUploadRequest) {
   
   // 上传分片到MinIO
   const etag = await minioClient.uploadPart(
-    'videos',
+    minioConfig.bucketName,
     objectName,
     uploadId,
     chunkNumber,
@@ -153,6 +188,16 @@ async function completeMultipartUpload(data: ChunkUploadRequest) {
     throw new Error('缺少必需的参数');
   }
 
+  // 获取MinIO配置并初始化客户端
+  const minioConfig = getMinIOConfig();
+  const minioClient = new Client({
+    endPoint: minioConfig.endPoint,
+    port: minioConfig.port,
+    useSSL: minioConfig.useSSL,
+    accessKey: minioConfig.accessKey,
+    secretKey: minioConfig.secretKey
+  });
+
   console.log(`完成分片上传: ${objectName}, uploadId: ${uploadId}`);
 
   // 构建分片信息
@@ -162,10 +207,10 @@ async function completeMultipartUpload(data: ChunkUploadRequest) {
   }));
 
   // 完成MinIO分片上传
-  await minioClient.completeMultipartUpload('videos', objectName, uploadId, parts);
+  await minioClient.completeMultipartUpload(minioConfig.bucketName, objectName, uploadId, parts);
 
   // 生成文件URL
-      const videoUrl = `https://minio.xianrankaoyan.vip:9000/videos/${objectName}`;
+  const videoUrl = `https://${minioConfig.endPoint}:${minioConfig.port}/${minioConfig.bucketName}/${objectName}`;
 
   // 计算文件大小估算
   const fileSize = parts.length * 5 * 1024 * 1024; // 假设每个分片5MB

@@ -751,23 +751,23 @@ const NewCourseManagement = () => {
         // 局部更新：添加新考点到对应章节
         setCourses(prev => {
           const updatedCourses = prev.map(course => ({
-            ...course,
-            chapters: course.chapters.map(chapter =>
-              chapter.id === keyPointDialog.chapterId
-                ? {
-                    ...chapter,
-                    keyPoints: [...chapter.keyPoints, {
-                      id: data.id,
-                      title: data.title,
-                      description: data.description,
-                      order: data.order,
-                      chapter_id: data.chapter_id,
-                      video_id: data.video_id,
-                      video: keyPointForm.video
-                    }].sort((a, b) => a.order - b.order)
-                  }
-                : chapter
-            )
+          ...course,
+          chapters: course.chapters.map(chapter =>
+            chapter.id === keyPointDialog.chapterId
+              ? {
+                  ...chapter,
+                  keyPoints: [...chapter.keyPoints, {
+                    id: data.id,
+                    title: data.title,
+                    description: data.description,
+                    order: data.order,
+                    chapter_id: data.chapter_id,
+                    video_id: data.video_id,
+                    video: keyPointForm.video
+                  }].sort((a, b) => a.order - b.order)
+                }
+              : chapter
+          )
           }));
           
           // 使用更新后的数据立即重置表单
@@ -816,11 +816,11 @@ const NewCourseManagement = () => {
         });
       } else {
         // 编辑模式：保持原有行为，关闭对话框
-        closeKeyPointDialog();
-        toast({
+      closeKeyPointDialog();
+      toast({
           title: "更新成功",
           description: "考点已更新"
-        });
+      });
       }
     } catch (error: any) {
       toast({
@@ -1347,18 +1347,18 @@ const NewCourseManagement = () => {
                   {keyPointDialog.mode === 'add' ? '完成添加' : '取消'}
                 </Button>
                 <div className="flex gap-2">
-                  <Button 
-                    type="submit" 
-                    disabled={
-                      isKeyPointOrderDuplicate(
-                        keyPointForm.order, 
-                        keyPointDialog.chapterId, 
-                        keyPointDialog.mode === 'edit' ? keyPointForm.id : undefined
-                      )
-                    }
-                  >
-                    {keyPointDialog.mode === 'add' ? '添加考点' : '保存考点'}
-                  </Button>
+              <Button 
+                type="submit" 
+                disabled={
+                  isKeyPointOrderDuplicate(
+                    keyPointForm.order, 
+                    keyPointDialog.chapterId, 
+                    keyPointDialog.mode === 'edit' ? keyPointForm.id : undefined
+                  )
+                }
+              >
+                {keyPointDialog.mode === 'add' ? '添加考点' : '保存考点'}
+              </Button>
                 </div>
               </div>
             </DialogFooter>

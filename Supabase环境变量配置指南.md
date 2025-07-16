@@ -10,11 +10,11 @@
 
 | 变量名 | 值 | 说明 |
 |-------|----|----|
-| `MINIO_ENDPOINT` | `minio.xianrankaoyan.vip` | MinIO服务器地址 |
+| `MINIO_ENDPOINT` | `your-minio-server.example.com` | MinIO服务器地址 |
 | `MINIO_PORT` | `9000` | MinIO服务器端口 |
 | `MINIO_USE_SSL` | `true` | 是否使用SSL |
-| `MINIO_ACCESS_KEY` | `WRJDY2MYP6RF0Y5EO4M2` | MinIO访问密钥 |
-| `MINIO_SECRET_KEY` | `jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7` | MinIO秘密密钥 |
+| `MINIO_ACCESS_KEY` | `YOUR_MINIO_ACCESS_KEY` | MinIO访问密钥 |
+| `MINIO_SECRET_KEY` | `YOUR_MINIO_SECRET_KEY` | MinIO秘密密钥 |
 | `MINIO_BUCKET_NAME` | `videos` | 默认存储桶名称 |
 
 ## 🛠 配置步骤
@@ -23,7 +23,7 @@
 
 1. **登录Supabase控制台**
    - 访问：https://supabase.com/dashboard
-   - 选择项目：`XRKY` (ID: sxsyprzckdnfyhadodhj)
+   - 选择您的项目
 
 2. **进入Edge Functions设置**
    - 点击左侧菜单：`Settings`
@@ -35,7 +35,7 @@
    点击 "Add new variable" 按钮，逐一添加：
    
    变量名: MINIO_ENDPOINT
-   值: minio.xianrankaoyan.vip
+   值: your-minio-server.example.com
    
    变量名: MINIO_PORT  
    值: 9000
@@ -44,10 +44,10 @@
    值: true
    
    变量名: MINIO_ACCESS_KEY
-   值: WRJDY2MYP6RF0Y5EO4M2
+   值: YOUR_MINIO_ACCESS_KEY
    
    变量名: MINIO_SECRET_KEY
-   值: jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7
+   值: YOUR_MINIO_SECRET_KEY
    
    变量名: MINIO_BUCKET_NAME
    值: videos
@@ -65,14 +65,14 @@
 ```bash
 # 确保已登录并链接到正确项目
 supabase login
-supabase link --project-ref sxsyprzckdnfyhadodhj
+supabase link --project-ref YOUR_PROJECT_REF
 
 # 设置环境变量
-supabase secrets set MINIO_ENDPOINT=minio.xianrankaoyan.vip
+supabase secrets set MINIO_ENDPOINT=your-minio-server.example.com
 supabase secrets set MINIO_PORT=9000
 supabase secrets set MINIO_USE_SSL=true
-supabase secrets set MINIO_ACCESS_KEY=WRJDY2MYP6RF0Y5EO4M2
-supabase secrets set MINIO_SECRET_KEY='jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7'
+supabase secrets set MINIO_ACCESS_KEY=YOUR_MINIO_ACCESS_KEY
+supabase secrets set MINIO_SECRET_KEY='YOUR_MINIO_SECRET_KEY'
 supabase secrets set MINIO_BUCKET_NAME=videos
 ```
 
@@ -87,7 +87,7 @@ supabase secrets set MINIO_BUCKET_NAME=videos
 ```bash
 # 基础连通性测试
 curl -X POST \
-  "https://sxsyprzckdnfyhadodhj.supabase.co/functions/v1/minio-url-refresh" \
+  "https://YOUR_PROJECT_ID.supabase.co/functions/v1/minio-url-refresh" \
   -H "Authorization: Bearer YOUR_ANON_KEY" \
   -H "Content-Type: application/json" \
   -d '{"action": "check", "batchSize": 1}'
@@ -154,25 +154,10 @@ supabase functions logs minio-url-refresh --follow
 2. 点击 `minio-url-refresh`
 3. 查看 `Logs` 选项卡
 
-## 🔄 配置更新后的操作
+## 🔒 安全注意事项
 
-1. **等待生效**：环境变量更新后需要1-2分钟生效时间
-2. **验证部署**：确认Edge Function重新部署成功
-3. **测试功能**：在管理员界面测试URL检查和刷新功能
-4. **监控日志**：观察是否还有错误信息
-
-## 📞 技术支持
-
-如果按照以上步骤操作后仍有问题：
-
-1. **检查项目权限**：确认您有Supabase项目的管理员权限
-2. **联系管理员**：如果是团队项目，联系项目所有者
-3. **查看文档**：参考Supabase官方环境变量配置文档
-4. **获取帮助**：在Supabase社区或支持渠道寻求帮助
-
----
-
-**重要提醒**：
-- 环境变量包含敏感信息，请妥善保管
-- 配置完成后务必测试功能是否正常
-- 定期检查和更新访问密钥以确保安全性 
+⚠️ **重要提醒**：
+- 永远不要在代码或文档中硬编码真实的API密钥
+- 定期轮换MinIO访问凭证
+- 监控异常访问活动
+- 使用最小权限原则 

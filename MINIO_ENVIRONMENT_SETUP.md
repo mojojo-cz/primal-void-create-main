@@ -16,7 +16,7 @@
 ### 1. 在Supabase控制台设置环境变量
 
 1. 登录 [Supabase控制台](https://supabase.com/dashboard)
-2. 选择项目：`XRKY` (sxsyprzckdnfyhadodhj)
+2. 选择您的项目
 3. 进入 **Settings** → **Edge Functions**
 4. 找到 **Environment Variables** 部分
 5. 添加以下环境变量：
@@ -25,11 +25,11 @@
 
 | 变量名 | 值 | 说明 |
 |-------|----|----|
-| `MINIO_ENDPOINT` | `minio.xianrankaoyan.vip` | MinIO服务器地址 |
+| `MINIO_ENDPOINT` | `your-minio-server.example.com` | MinIO服务器地址 |
 | `MINIO_PORT` | `9000` | MinIO服务器端口 |
 | `MINIO_USE_SSL` | `true` | 是否使用SSL |
-| `MINIO_ACCESS_KEY` | `WRJDY2MYP6RF0Y5EO4M2` | MinIO访问密钥 |
-| `MINIO_SECRET_KEY` | `jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7` | MinIO秘密密钥 |
+| `MINIO_ACCESS_KEY` | `YOUR_MINIO_ACCESS_KEY` | MinIO访问密钥 |
+| `MINIO_SECRET_KEY` | `YOUR_MINIO_SECRET_KEY` | MinIO秘密密钥 |
 | `MINIO_BUCKET_NAME` | `videos` | 默认存储桶名称 |
 
 ### 3. 配置步骤详细说明
@@ -44,7 +44,7 @@
 #### 方式2：通过Supabase CLI（推荐）
 ```bash
 # 设置MinIO端点
-supabase secrets set MINIO_ENDPOINT=minio.xianrankaoyan.vip
+supabase secrets set MINIO_ENDPOINT=your-minio-server.example.com
 
 # 设置MinIO端口
 supabase secrets set MINIO_PORT=9000
@@ -53,10 +53,10 @@ supabase secrets set MINIO_PORT=9000
 supabase secrets set MINIO_USE_SSL=true
 
 # 设置访问密钥
-supabase secrets set MINIO_ACCESS_KEY=WRJDY2MYP6RF0Y5EO4M2
+supabase secrets set MINIO_ACCESS_KEY=YOUR_MINIO_ACCESS_KEY
 
 # 设置秘密密钥
-supabase secrets set MINIO_SECRET_KEY='jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7'
+supabase secrets set MINIO_SECRET_KEY='YOUR_MINIO_SECRET_KEY'
 
 # 设置存储桶名称
 supabase secrets set MINIO_BUCKET_NAME=videos
@@ -71,14 +71,14 @@ supabase secrets set MINIO_BUCKET_NAME=videos
 ```bash
 # GET请求 - 测试服务信息
 curl -X GET \
-  https://sxsyprzckdnfyhadodhj.supabase.co/functions/v1/minio-presigned-upload \
-  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs"
+  https://YOUR_PROJECT_ID.supabase.co/functions/v1/minio-presigned-upload \
+  -H "apikey: YOUR_SUPABASE_ANON_KEY"
 
 # POST请求 - 测试预签名URL生成
 curl -X POST \
-  https://sxsyprzckdnfyhadodhj.supabase.co/functions/v1/minio-presigned-upload \
+  https://YOUR_PROJECT_ID.supabase.co/functions/v1/minio-presigned-upload \
   -H "Content-Type: application/json" \
-  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4c3lwcnpja2RuZnloYWRvZGhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NTUyMDQsImV4cCI6MjA2MzEzMTIwNH0.7_hXOZTGPx29KGCYCgTYNLi8Ys-eHOAb0o8htiJd_Rs" \
+  -H "apikey: YOUR_SUPABASE_ANON_KEY" \
   -d '{"fileName": "test.mp4", "contentType": "video/mp4"}'
 ```
 

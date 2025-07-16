@@ -13,6 +13,30 @@ mc
 uploads/
 
 # ===================================================================
+# 🔒 SECURITY: Test files and temporary files
+# ===================================================================
+# 测试HTML文件（通常包含硬编码的API密钥用于调试）
+test_*.html
+debug_*.html
+chunked_upload_*.html
+*_test.html
+*_debug.html
+
+# 临时测试文件
+test-*.html
+test-*.js
+*test.js
+
+# MinIO配置测试文件
+check_minio_*.html
+minio_test_*
+
+# 调试和验证文件
+create_test_*
+schedule_deletion_*
+text_display_*
+
+# ===================================================================
 # Dependencies & Build output
 # ===================================================================
 node_modules
@@ -26,7 +50,7 @@ supabase-backup
 # ===================================================================
 # Environment Variables
 #
-# Keep .env.example in the repository, but ignore all other .env files.
+# Keep env.example in the repository, but ignore all other .env files.
 # This ensures that developers know what variables are needed,
 # without committing sensitive information.
 # ===================================================================
@@ -34,6 +58,18 @@ supabase-backup
 .env.local
 .env.*.local
 *.local
+
+# ===================================================================
+# 🔒 SECURITY: Documentation with sensitive information
+# ===================================================================
+# 脱敏前的原始文档（如果需要保留备份）
+*_原始.md
+*_backup.md
+*_sensitive.md
+
+# 包含敏感信息的临时文档
+MINIO_*_原始.md
+SUPABASE_*_原始.md
 
 # ===================================================================
 # Logs
@@ -86,3 +122,22 @@ desktop.ini
 # Vite
 .vite/
 vite.config.ts.timestamp-*
+
+# ===================================================================
+# 🔒 SECURITY: Sensitive backup and config files
+# ===================================================================
+# 备份的敏感配置
+*.key
+*.secret
+*.credentials
+config_backup_*
+secrets_*
+
+# 临时密钥文件
+temp_keys_*
+api_keys_*
+
+# 数据库导出文件（可能包含敏感数据）
+*.sql.backup
+db_export_*
+data_dump_*

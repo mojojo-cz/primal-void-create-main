@@ -2,14 +2,29 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { Client } from "npm:minio@8.0.1";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// MinIO配置
-const minioClient = new Client({
-  endPoint: 'minio.xianrankaoyan.vip',
-  port: 9000,
-  useSSL: true,
-  accessKey: 'WRJDY2MYP6RF0Y5EO4M2',
-  secretKey: 'jXYfuK+xv+u7wQRuk9GbHt+iuOCKWSlOHzrhirH7'
-});
+// MinIO配置 - 从环境变量读取
+const getMinIOConfig = () => {
+  const endPoint = Deno.env.get('MINIO_ENDPOINT');
+  const port = parseInt(Deno.env.get('MINIO_PORT') || '9000');
+  const useSSL = Deno.env.get('MINIO_USE_SSL') === 'true';
+  const accessKey = Deno.env.get('MINIO_ACCESS_KEY');
+  const secretKey = Deno.env.get('MINIO_SECRET_KEY');
+  const bucketName = Deno.env.get('MINIO_BUCKET_NAME') || 'videos';
+
+  // 验证必需的环境变量
+  if (!endPoint || !accessKey || !secretKey) {
+    throw new Error('缺少必需的MinIO环境变量: MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY');
+  }
+
+  return {
+    endPoint,
+    port,
+    useSSL,
+    accessKey,
+    secretKey,
+    bucketName
+  };
+};
 
 // Supabase配置
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -18,6 +33,18 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 Deno.serve(async (req: Request) => {
   try {
+    // 获取MinIO配置
+    const minioConfig = getMinIOConfig();
+    
+    // 初始化MinIO客户端
+    const minioClient = new Client({
+      endPoint: minioConfig.endPoint,
+      port: minioConfig.port,
+      useSSL: minioConfig.useSSL,
+      accessKey: minioConfig.accessKey,
+      secretKey: minioConfig.secretKey
+    });
+
     // 处理CORS
     if (req.method === 'OPTIONS') {
       return new Response(null, {
@@ -58,12 +85,12 @@ Deno.serve(async (req: Request) => {
     const buffer = new Uint8Array(arrayBuffer);
 
     // 上传到MinIO
-    await minioClient.putObject('videos', objectName, buffer, file.size, {
+    await minioClient.putObject(minioConfig.bucketName, objectName, buffer, file.size, {
       'Content-Type': file.type || getContentType(file.name)
     });
 
     // 生成文件URL
-    const videoUrl = `https://minio.xianrankaoyan.vip:9000/videos/${objectName}`;
+    const videoUrl = `https://${minioConfig.endPoint}:${minioConfig.port}/${minioConfig.bucketName}/${objectName}`;
 
     // 保存到数据库
     const { data: video, error } = await supabase
