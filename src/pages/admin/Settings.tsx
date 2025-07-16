@@ -44,7 +44,7 @@ import {
   getAvailablePageSizes,
   resetToDefaultPreferences
 } from "@/utils/userPreferences";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 
 // URL刷新结果类型
 interface RefreshResult {
