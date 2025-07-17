@@ -576,6 +576,68 @@ const ScheduleManagement = () => {
     }
   };
 
+  // 刷新筛选框数据（用于智能排课工作台创建课表后的数据同步）
+  const refreshFilterData = async () => {
+    try {
+      // 重新获取课表列表
+      const { data: plansData, error: plansError } = await supabase.rpc('get_schedule_plans_with_stats', {
+        p_limit: 1000,
+        p_offset: 0,
+        p_status: 'active'
+      });
+
+      if (!plansError && plansData) {
+        setSchedulePlans(plansData);
+      }
+
+      // 可选：同时刷新其他筛选框数据以确保数据一致性
+      const [subjectsResult, classesResult, teachersResult, venuesResult] = await Promise.allSettled([
+        supabase
+          .from('subjects')
+          .select('*')
+          .eq('status', 'active')
+          .order('name'),
+        
+        supabase
+          .from('classes')
+          .select('*')
+          .eq('status', 'active')
+          .order('created_at', { ascending: false }),
+        
+        supabase
+          .from('profiles')
+          .select('id, username, full_name')
+          .eq('user_type', 'teacher')
+          .order('full_name'),
+        
+        supabase
+          .from('venues')
+          .select('*')
+          .eq('status', 'available')
+          .eq('type', 'classroom')
+          .order('name')
+      ]);
+
+      // 更新成功的数据
+      if (subjectsResult.status === 'fulfilled' && !subjectsResult.value.error) {
+        setSubjects(subjectsResult.value.data || []);
+      }
+      if (classesResult.status === 'fulfilled' && !classesResult.value.error) {
+        setClasses(classesResult.value.data || []);
+      }
+      if (teachersResult.status === 'fulfilled' && !teachersResult.value.error) {
+        setTeachers(teachersResult.value.data || []);
+      }
+      if (venuesResult.status === 'fulfilled' && !venuesResult.value.error) {
+        setVenues(venuesResult.value.data || []);
+      }
+
+    } catch (error) {
+      console.error('刷新筛选框数据失败:', error);
+      // 静默失败，不影响用户体验
+    }
+  };
+
   // 获取初始课程列表
   const fetchInitialSchedules = async () => {
     if (!hasAccess) return;
@@ -827,6 +889,8 @@ const ScheduleManagement = () => {
     // 后台异步刷新真实数据，确保数据一致性
     setTimeout(() => {
       refreshSchedulesData();
+      // 同时刷新筛选框数据，确保课表计划数据的一致性
+      refreshFilterData();
     }, 2000); // 2秒后刷新，给服务器处理时间
   };
 
@@ -2211,9 +2275,12 @@ const ScheduleManagement = () => {
           if (createdSchedules) {
             // 乐观更新：直接更新本地状态
             optimisticUpdateSchedules(createdSchedules);
+            // 同时刷新筛选框数据，确保课表计划列表保持最新
+            refreshFilterData();
           } else {
             // 降级方案：重新获取数据
             fetchInitialSchedules();
+            fetchBaseData();
           }
         }}
       />
